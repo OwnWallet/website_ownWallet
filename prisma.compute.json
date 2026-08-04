@@ -1,0 +1,13 @@
+{
+  "region": "ap-southeast-1",
+  "app": {
+    "name": "website-wnwallet",
+    "framework": "bun",
+    "entry": "src/app/page.tsx",
+    "httpPort": 3000,
+    "build": {
+      "command": null,
+      "outputDirectory": "."
+    }
+  }
+}
