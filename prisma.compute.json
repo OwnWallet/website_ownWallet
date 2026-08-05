@@ -1,0 +1,9 @@
+{
+  "app": {
+    "framework": "nextjs",
+    "build": {
+      "command": "npm run build",
+      "outputDirectory": ".next/standalone"
+    }
+  }
+}
