@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { DebtSchema, DebtPaymentSchema } from "@/schemas/debt";
+import { toInstant } from "@/lib/utils";
 
 async function getUserId() {
   const session = await auth();
@@ -19,6 +20,7 @@ export async function createDebt(formData: FormData) {
   await db.orm.public.Debt.create({
     ...parsed.data,
     amount: String(parsed.data.amount),
+    dueDate: parsed.data.dueDate ? toInstant(parsed.data.dueDate) : null,
     userId,
   });
   revalidatePath("/debts");

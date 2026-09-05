@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { TransactionSchema } from "@/schemas/transaction";
+import { toInstant } from "@/lib/utils";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -21,15 +22,16 @@ export async function createTransaction(formData: FormData) {
   }
 
   const data = parsed.data;
+  const note = data.note || data.description || null;
 
   await db.transaction(async (tx: any) => {
     await tx.orm.public.Transaction.create({
       amount: String(data.amount),
       type: data.type,
       categoryId: data.categoryId,
-      note: data.note,
-      recordedAt: data.recordedAt,
-      goalId: data.goalId,
+      note,
+      recordedAt: toInstant(data.recordedAt),
+      goalId: data.goalId || null,
       userId,
     });
 
@@ -46,6 +48,7 @@ export async function createTransaction(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+  revalidatePath("/reports");
   return { success: true };
 }
 
@@ -58,12 +61,23 @@ export async function updateTransaction(id: string, formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
+  const data = parsed.data;
+  const note = data.note || data.description || null;
+
   await db.orm.public.Transaction
     .where({ id, userId })
-    .update({ ...parsed.data, amount: String(parsed.data.amount) });
+    .update({
+      amount: String(data.amount),
+      type: data.type,
+      categoryId: data.categoryId,
+      note,
+      recordedAt: toInstant(data.recordedAt),
+      goalId: data.goalId || null,
+    });
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+  revalidatePath("/reports");
   return { success: true };
 }
 
@@ -89,5 +103,6 @@ export async function deleteTransaction(id: string) {
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+  revalidatePath("/reports");
   return { success: true };
 }

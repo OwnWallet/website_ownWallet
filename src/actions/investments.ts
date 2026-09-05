@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { toInstant } from "@/lib/utils";
 import {
   InvestmentSchema,
   UpdatePriceSchema,
@@ -24,6 +25,7 @@ export async function createInvestment(formData: FormData) {
     ...parsed.data,
     quantity: String(parsed.data.quantity),
     buyPrice: String(parsed.data.buyPrice),
+    boughtAt: toInstant(parsed.data.boughtAt),
     userId,
   });
   revalidatePath("/investments");
@@ -58,6 +60,7 @@ export async function addInvestLog(investmentId: string, formData: FormData) {
     ...parsed.data,
     quantity: String(parsed.data.quantity),
     price: String(parsed.data.price),
+    recordedAt: toInstant(parsed.data.recordedAt),
     investmentId,
   });
 

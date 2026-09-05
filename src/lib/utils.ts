@@ -1,9 +1,23 @@
+import { Temporal } from "temporal-polyfill";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 // ─── Tailwind class merger ─────────────────────────────────────
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+/**
+ * Chuyển đổi Date / string / timestamp thành Temporal.Instant cho Prisma 8 DateTime
+ */
+export function toInstant(date: Date | string | number): Temporal.Instant {
+  if (date instanceof Date) {
+    return Temporal.Instant.fromEpochMilliseconds(date.getTime());
+  }
+  if (typeof date === "number") {
+    return Temporal.Instant.fromEpochMilliseconds(date);
+  }
+  return Temporal.Instant.fromEpochMilliseconds(new Date(date).getTime());
 }
 
 // ─── Currency formatting ───────────────────────────────────────
@@ -105,11 +119,26 @@ export function calcPercent(current: number, total: number): number {
   return Math.min(100, Math.round((current / total) * 100));
 }
 
-/** Lấy ngày đầu và cuối tháng hiện tại */
-export function getCurrentMonthRange(): { from: Date; to: Date } {
+/** Lấy ngày đầu và cuối tháng hiện tại theo timezone người dùng */
+export function getCurrentMonthRange(
+  timezone = "Asia/Ho_Chi_Minh"
+): { from: Date; to: Date } {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const [year, month] = formatter.format(now).split("-").map(Number);
+
+  const tzOffset = -new Date(
+    `${year}-${String(month).padStart(2, "0")}-01T00:00:00`
+  ).getTimezoneOffset();
+
+  const from = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0) - tzOffset * 60_000);
+  const to = new Date(Date.UTC(year, month, 0, 23, 59, 59) - tzOffset * 60_000);
+
   return { from, to };
 }
 

@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { toInstant } from "@/lib/utils";
 import { ConfirmImportSchema } from "@/schemas/ai-import";
 import { revalidatePath } from "next/cache";
 
@@ -96,7 +97,7 @@ export async function confirmAiImport(
       amount: String(t.amount),
       type: t.type,
       note: t.note ?? "",
-      recordedAt: new Date(t.recordedAt),
+      recordedAt: toInstant(t.recordedAt),
       categoryId: catId,
       userId,
     };

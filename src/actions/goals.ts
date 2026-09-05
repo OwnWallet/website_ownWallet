@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { GoalSchema, GoalContributionSchema } from "@/schemas/goal";
+import { toInstant } from "@/lib/utils";
 
 async function getUserId() {
   const session = await auth();
@@ -19,6 +20,7 @@ export async function createGoal(formData: FormData) {
   await db.orm.public.Goal.create({
     ...parsed.data,
     targetAmount: String(parsed.data.targetAmount),
+    deadline: parsed.data.deadline ? toInstant(parsed.data.deadline) : null,
     userId,
   });
   revalidatePath("/goals");
@@ -44,7 +46,7 @@ export async function contributeToGoal(goalId: string, formData: FormData) {
       type: "EXPENSE",
       categoryId: savingsCategory!.id,
       note: parsed.data.note ?? `Nạp vào "${goal.name}"`,
-      recordedAt: parsed.data.recordedAt,
+      recordedAt: toInstant(parsed.data.recordedAt),
       goalId,
       userId,
     });
