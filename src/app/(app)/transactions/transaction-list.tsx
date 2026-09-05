@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatDateTime, toDate } from "@/lib/utils";
 import { deleteTransaction } from "@/actions/transactions";
 import {
   Search,
@@ -80,7 +80,7 @@ export function TransactionList({ initialTransactions, categories }: Props) {
       }
 
       // Time filter
-      const txDate = new Date(tx.recordedAt);
+      const txDate = toDate(tx.recordedAt);
       if (selectedTime === "TODAY" && txDate < startOfToday) return false;
       if (selectedTime === "WEEK" && txDate < startOfWeek) return false;
       if (selectedTime === "MONTH" && txDate < startOfMonth) return false;

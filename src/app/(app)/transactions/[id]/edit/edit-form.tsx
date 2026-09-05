@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Calendar } from "lucide-react";
 import { updateTransaction } from "@/actions/transactions";
 import { TransactionSchema, type TransactionInput } from "@/schemas/transaction";
+import { toDate } from "@/lib/utils";
 
 interface Props {
   transaction: {
@@ -16,7 +17,7 @@ interface Props {
     categoryId: string;
     note?: string | null;
     description?: string | null;
-    recordedAt: Date;
+    recordedAt: any;
     goalId?: string | null;
     walletId?: string | null;
   };
@@ -34,7 +35,7 @@ export function EditTransactionForm({
   const router = useRouter();
   const [txType, setTxType] = useState<"EXPENSE" | "INCOME">(transaction.type);
 
-  const initialDate = new Date(transaction.recordedAt);
+  const initialDate = toDate(transaction.recordedAt);
   const localInitial = new Date(initialDate.getTime() - initialDate.getTimezoneOffset() * 60000)
     .toISOString()
     .slice(0, 16);

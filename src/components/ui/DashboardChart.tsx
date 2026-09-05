@@ -2,13 +2,13 @@
 
 import { useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, toDate } from "@/lib/utils";
 import { motion } from "framer-motion";
 
 interface Transaction {
   amount: string | number | { toString: () => string };
   type: string;
-  recordedAt: Date;
+  recordedAt: any;
 }
 
 interface Props {
@@ -19,7 +19,7 @@ export function DashboardChart({ transactions }: Props) {
   const data = useMemo(() => {
     // Group transactions by day
     const grouped = transactions.reduce((acc, tx) => {
-      const d = new Date(tx.recordedAt);
+      const d = toDate(tx.recordedAt);
       const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const displayDate = d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
 

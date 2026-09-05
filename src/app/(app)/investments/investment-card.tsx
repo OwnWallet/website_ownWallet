@@ -10,7 +10,7 @@ interface InvestLog {
   action: "BUY" | "SELL";
   quantity: string | number | { toString: () => string };
   price: string | number | { toString: () => string };
-  recordedAt: Date;
+  recordedAt: any;
 }
 
 interface Investment {
@@ -20,8 +20,8 @@ interface Investment {
   quantity: string | number | { toString: () => string };
   buyPrice: string | number | { toString: () => string };
   currentPrice: string | number | { toString: () => string } | null;
-  boughtAt: Date;
-  updatedAt: Date;
+  boughtAt: any;
+  updatedAt: any;
   logs: InvestLog[];
 }
 

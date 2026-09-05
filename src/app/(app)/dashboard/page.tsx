@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getCurrentMonthRange, toInstant } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getCurrentMonthRange, toInstant, toDate } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD } from "@/lib/constants";
 import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Plus, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import type { Metadata } from "next";
@@ -82,24 +82,30 @@ async function getDashboardData(userId: string) {
       id: t.id,
       amount: Number(t.amount),
       type: t.type,
-      recordedAt: t.recordedAt,
+      recordedAt: toDate(t.recordedAt).toISOString(),
     }));
 
     const plainRecentTx = recentTx.map((t: any) => ({
       ...t,
       amount: Number(t.amount),
+      recordedAt: toDate(t.recordedAt).toISOString(),
+      createdAt: toDate(t.createdAt).toISOString(),
     }));
 
     const plainDebts = debts.map((d: any) => ({
       ...d,
       amount: Number(d.amount),
       paidAmount: Number(d.paidAmount),
+      dueDate: d.dueDate ? toDate(d.dueDate).toISOString() : null,
+      createdAt: toDate(d.createdAt).toISOString(),
     }));
 
     const plainGoals = goals.map((g: any) => ({
       ...g,
       targetAmount: Number(g.targetAmount),
       savedAmount: Number(g.savedAmount),
+      deadline: g.deadline ? toDate(g.deadline).toISOString() : null,
+      createdAt: toDate(g.createdAt).toISOString(),
     }));
 
     const wallets = [
@@ -460,7 +466,7 @@ export default async function DashboardPage() {
               <div className="space-y-2.5">
                 {debts.map((d: any) => {
                   const remaining = Number(d.amount) - Number(d.paidAmount);
-                  const isOverdue = d.dueDate && new Date(d.dueDate) < new Date();
+                  const isOverdue = d.dueDate && toDate(d.dueDate) < new Date();
                   return (
                     <div key={d.id} className="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-100">
                       <div>

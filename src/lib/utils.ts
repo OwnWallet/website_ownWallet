@@ -8,16 +8,36 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Chuyển đổi Date / string / timestamp thành Temporal.Instant cho Prisma 8 DateTime
+ * Chuyển đổi an toàn bất kỳ giá trị ngày nào (Date, Temporal.Instant, string, number) thành JavaScript Date
+ * Ngăn chặn lỗi TypeError: Cannot use valueOf khi dùng Temporal.Instant với new Date()
  */
-export function toInstant(date: Date | string | number): Temporal.Instant {
-  if (date instanceof Date) {
-    return Temporal.Instant.fromEpochMilliseconds(date.getTime());
+export function toDate(date: any): Date {
+  if (!date) return new Date();
+  if (date instanceof Date) return isNaN(date.getTime()) ? new Date() : date;
+  if (typeof (date as any)?.epochMilliseconds === "number") {
+    return new Date((date as any).epochMilliseconds);
   }
-  if (typeof date === "number") {
-    return Temporal.Instant.fromEpochMilliseconds(date);
+  if (typeof (date as any)?.toString === "function" && typeof date !== "string" && typeof date !== "number") {
+    try {
+      const str = (date as any).toString();
+      const parsed = new Date(str);
+      if (!isNaN(parsed.getTime())) return parsed;
+    } catch {
+      // fallback
+    }
   }
-  return Temporal.Instant.fromEpochMilliseconds(new Date(date).getTime());
+  const parsed = new Date(date);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+/**
+ * Chuyển đổi Date / string / timestamp / Temporal.Instant thành Temporal.Instant cho Prisma 8 DateTime
+ */
+export function toInstant(date: any): Temporal.Instant {
+  if (date && typeof (date as any).epochMilliseconds === "number") {
+    return date as any;
+  }
+  return Temporal.Instant.fromEpochMilliseconds(toDate(date).getTime());
 }
 
 // ─── Currency formatting ───────────────────────────────────────
@@ -78,25 +98,25 @@ const TIME_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
 });
 
 /** @example formatDate(date) → "04/08/2026" */
-export function formatDate(date: Date | string): string {
-  return DATE_FORMATTER.format(new Date(date));
+export function formatDate(date: any): string {
+  return DATE_FORMATTER.format(toDate(date));
 }
 
 /** @example formatDateTime(date) → "04/08/2026, 18:32" */
-export function formatDateTime(date: Date | string): string {
-  return DATETIME_FORMATTER.format(new Date(date));
+export function formatDateTime(date: any): string {
+  return DATETIME_FORMATTER.format(toDate(date));
 }
 
 /** @example formatTime(date) → "18:32" */
-export function formatTime(date: Date | string): string {
-  return TIME_FORMATTER.format(new Date(date));
+export function formatTime(date: any): string {
+  return TIME_FORMATTER.format(toDate(date));
 }
 
 /**
  * Relative time — "vừa xong", "5 phút trước", "hôm qua"
  */
-export function formatRelativeTime(date: Date | string): string {
-  const d = new Date(date);
+export function formatRelativeTime(date: any): string {
+  const d = toDate(date);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60_000);

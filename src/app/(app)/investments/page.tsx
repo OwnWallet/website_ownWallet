@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, toDate } from "@/lib/utils";
 import { createInvestment } from "@/actions/investments";
 import { redirect } from "next/navigation";
 import { InvestmentCard } from "./investment-card";
@@ -35,6 +35,23 @@ export default async function InvestmentsPage() {
     const totalPnL = totalCurrentValue - totalInvested;
     const totalPnLPercent = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
     const isProfit = totalPnL >= 0;
+
+    const plainInvestments = investments.map((inv: any) => ({
+      ...inv,
+      quantity: Number(inv.quantity),
+      buyPrice: Number(inv.buyPrice),
+      currentPrice: inv.currentPrice ? Number(inv.currentPrice) : null,
+      boughtAt: toDate(inv.boughtAt).toISOString(),
+      updatedAt: toDate(inv.updatedAt).toISOString(),
+      createdAt: toDate(inv.createdAt).toISOString(),
+      logs: (inv.logs || []).map((l: any) => ({
+        ...l,
+        quantity: Number(l.quantity),
+        price: Number(l.price),
+        recordedAt: toDate(l.recordedAt).toISOString(),
+        createdAt: toDate(l.createdAt).toISOString(),
+      })),
+    }));
 
     return (
       <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">
@@ -77,7 +94,7 @@ export default async function InvestmentsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {investments.map((inv: any) => (
+            {plainInvestments.map((inv: any) => (
               <InvestmentCard key={inv.id} inv={inv} />
             ))}
           </div>

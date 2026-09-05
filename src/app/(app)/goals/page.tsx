@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, calcPercent } from "@/lib/utils";
+import { formatCurrency, calcPercent, toDate } from "@/lib/utils";
 import { createGoal, deleteGoal, contributeToGoal } from "@/actions/goals";
 import { Trash2 } from "lucide-react";
 import type { Metadata } from "next";
@@ -65,7 +65,7 @@ export default async function GoalsPage() {
 
               let daysLeft: number | null = null;
               if (goal.deadline) {
-                const diffTime = new Date(goal.deadline).getTime() - new Date().getTime();
+                const diffTime = toDate(goal.deadline).getTime() - new Date().getTime();
                 daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
               }
 

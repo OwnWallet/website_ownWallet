@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, formatDate, calcPercent } from "@/lib/utils";
+import { formatCurrency, formatDate, calcPercent, toDate } from "@/lib/utils";
 import { DebtActions } from "./debt-actions";
 import { deleteDebt } from "@/actions/debts";
 import { Trash2 } from "lucide-react";
@@ -122,7 +122,7 @@ function DebtCard({ debt }: { debt: any }) {
     statusText = "Trả 1 phần";
   }
 
-  const isOverdue = debt.dueDate && new Date(debt.dueDate) < new Date() && debt.status !== "PAID";
+  const isOverdue = debt.dueDate && toDate(debt.dueDate) < new Date() && debt.status !== "PAID";
 
   return (
     <div className="card relative flex flex-col gap-3 group">

@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { toDate } from "@/lib/utils";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -28,7 +29,13 @@ export default async function TransactionsPage() {
         .orderBy((c) => c.name.asc())
         .all(),
     ]);
-    transactions = txs;
+    transactions = txs.map((t: any) => ({
+      ...t,
+      amount: Number(t.amount),
+      recordedAt: toDate(t.recordedAt).toISOString(),
+      createdAt: toDate(t.createdAt).toISOString(),
+      updatedAt: toDate(t.updatedAt).toISOString(),
+    }));
     categories = cats;
   } catch (err) {
     console.error("Failed to load transactions:", err);

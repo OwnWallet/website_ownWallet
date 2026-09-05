@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ReportClient } from "./report-client";
-import { toInstant } from "@/lib/utils";
+import { toInstant, toDate } from "@/lib/utils";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -54,7 +54,7 @@ export default async function ReportsPage() {
     }
 
     sixMonthsTxs.forEach((tx: any) => {
-      const recDate = new Date(tx.recordedAt);
+      const recDate = toDate(tx.recordedAt);
       const amt = Number(tx.amount);
       const isIncome = tx.type === "INCOME";
 
