@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { GoalSchema, GoalContributionSchema } from "@/schemas/goal";
 
 async function getUserId() {
@@ -16,7 +16,11 @@ export async function createGoal(formData: FormData) {
   const parsed = GoalSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.goal.create({ data: { ...parsed.data, userId } });
+  await db.orm.public.Goal.create({
+    ...parsed.data,
+    targetAmount: String(parsed.data.targetAmount),
+    userId,
+  });
   revalidatePath("/goals");
   return { success: true };
 }
@@ -26,31 +30,28 @@ export async function contributeToGoal(goalId: string, formData: FormData) {
   const parsed = GoalContributionSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  const goal = await prisma.goal.findUnique({ where: { id: goalId, userId } });
+  const goal = await db.orm.public.Goal.where({ id: goalId, userId }).first();
   if (!goal) return { error: "Không tìm thấy mục tiêu" };
 
   // Tìm category savings mặc định
-  const savingsCategory = await prisma.category.findFirst({
-    where: { userId, type: "SAVINGS", isDefault: true },
-  });
+  const savingsCategory = await db.orm.public.Category
+    .where({ userId, type: "SAVINGS", isDefault: true })
+    .first();
 
-  await prisma.$transaction(async (tx) => {
-    await tx.transaction.create({
-      data: {
-        amount: parsed.data.amount,
-        type: "EXPENSE",
-        categoryId: savingsCategory!.id,
-        note: parsed.data.note ?? `Nạp vào "${goal.name}"`,
-        recordedAt: parsed.data.recordedAt,
-        goalId,
-        userId,
-      },
+  await db.transaction(async (tx: any) => {
+    await tx.orm.public.Transaction.create({
+      amount: String(parsed.data.amount),
+      type: "EXPENSE",
+      categoryId: savingsCategory!.id,
+      note: parsed.data.note ?? `Nạp vào "${goal.name}"`,
+      recordedAt: parsed.data.recordedAt,
+      goalId,
+      userId,
     });
 
-    await tx.goal.update({
-      where: { id: goalId, userId },
-      data: { savedAmount: { increment: parsed.data.amount } },
-    });
+    await tx.orm.public.Goal
+      .where({ id: goalId, userId })
+      .update({ savedAmount: String(Number(goal.savedAmount) + Number(parsed.data.amount)) });
   });
 
   revalidatePath("/goals");
@@ -60,7 +61,7 @@ export async function contributeToGoal(goalId: string, formData: FormData) {
 
 export async function deleteGoal(id: string) {
   const userId = await getUserId();
-  await prisma.goal.delete({ where: { id, userId } });
+  await db.orm.public.Goal.where({ id, userId }).delete();
   revalidatePath("/goals");
   return { success: true };
 }

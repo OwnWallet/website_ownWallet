@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { TransactionSchema } from "@/schemas/transaction";
 
 async function getUserId(): Promise<string> {
@@ -22,26 +22,25 @@ export async function createTransaction(formData: FormData) {
 
   const data = parsed.data;
 
-  await prisma.$transaction(async (tx) => {
-    // Tạo transaction
-    await tx.transaction.create({
-      data: {
-        amount: data.amount,
-        type: data.type,
-        categoryId: data.categoryId,
-        note: data.note,
-        recordedAt: data.recordedAt,
-        goalId: data.goalId,
-        userId,
-      },
+  await db.transaction(async (tx: any) => {
+    await tx.orm.public.Transaction.create({
+      amount: String(data.amount),
+      type: data.type,
+      categoryId: data.categoryId,
+      note: data.note,
+      recordedAt: data.recordedAt,
+      goalId: data.goalId,
+      userId,
     });
 
     // Nếu liên kết Goal → tăng savedAmount
     if (data.goalId) {
-      await tx.goal.update({
-        where: { id: data.goalId, userId },
-        data: { savedAmount: { increment: data.amount } },
-      });
+      const goal = await tx.orm.public.Goal.where({ id: data.goalId, userId }).first();
+      if (goal) {
+        await tx.orm.public.Goal
+          .where({ id: data.goalId, userId })
+          .update({ savedAmount: String(Number(goal.savedAmount) + Number(data.amount)) });
+      }
     }
   });
 
@@ -59,10 +58,9 @@ export async function updateTransaction(id: string, formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  await prisma.transaction.update({
-    where: { id, userId },
-    data: { ...parsed.data },
-  });
+  await db.orm.public.Transaction
+    .where({ id, userId })
+    .update({ ...parsed.data, amount: String(parsed.data.amount) });
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
@@ -72,20 +70,20 @@ export async function updateTransaction(id: string, formData: FormData) {
 export async function deleteTransaction(id: string) {
   const userId = await getUserId();
 
-  const tx = await prisma.transaction.findUnique({
-    where: { id, userId },
-  });
+  const tx = await db.orm.public.Transaction.where({ id, userId }).first();
   if (!tx) return { error: "Không tìm thấy giao dịch" };
 
-  await prisma.$transaction(async (prismaClient) => {
-    await prismaClient.transaction.delete({ where: { id, userId } });
+  await db.transaction(async (t: any) => {
+    await t.orm.public.Transaction.where({ id, userId }).delete();
 
     // Nếu có goalId → giảm savedAmount
     if (tx.goalId) {
-      await prismaClient.goal.update({
-        where: { id: tx.goalId, userId },
-        data: { savedAmount: { decrement: Number(tx.amount) } },
-      });
+      const goal = await t.orm.public.Goal.where({ id: tx.goalId, userId }).first();
+      if (goal) {
+        await t.orm.public.Goal
+          .where({ id: tx.goalId, userId })
+          .update({ savedAmount: String(Math.max(0, Number(goal.savedAmount) - Number(tx.amount))) });
+      }
     }
   });
 

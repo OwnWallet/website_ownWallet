@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { BudgetSchema } from "@/schemas/budget";
 
 async function getUserId() {
@@ -22,10 +22,10 @@ export async function upsertBudget(formData: FormData) {
 
   const { categoryId, limitAmount, month, year } = parsed.data;
 
-  await prisma.budget.upsert({
-    where: { userId_categoryId_month_year: { userId, categoryId, month, year } },
-    create: { userId, categoryId, limitAmount, month, year },
-    update: { limitAmount },
+  // Prisma 8 upsert — dựa trên unique constraint [userId, categoryId, month, year]
+  await db.orm.public.Budget.upsert({
+    create: { userId, categoryId, limitAmount: String(limitAmount), month, year },
+    update: { limitAmount: String(limitAmount) },
   });
 
   revalidatePath("/budget");
@@ -35,7 +35,7 @@ export async function upsertBudget(formData: FormData) {
 
 export async function deleteBudget(id: string) {
   const userId = await getUserId();
-  await prisma.budget.delete({ where: { id, userId } });
+  await db.orm.public.Budget.where({ id, userId }).delete();
   revalidatePath("/budget");
   return { success: true };
 }

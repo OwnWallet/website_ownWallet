@@ -1,13 +1,18 @@
 "use server";
 
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { RegisterSchema } from "@/schemas/auth";
 import { DEFAULT_CATEGORIES } from "@/lib/constants";
 import { signIn, signOut } from "@/lib/auth";
 import { AuthError } from "next-auth";
 
-export async function register(formData: FormData) {
+export type AuthState = {
+  error?: string | Record<string, string[]>;
+  success?: boolean;
+} | null;
+
+export async function register(formData: FormData): Promise<AuthState> {
   const raw = Object.fromEntries(formData);
   const parsed = RegisterSchema.safeParse(raw);
 
@@ -18,7 +23,7 @@ export async function register(formData: FormData) {
   const { name, email, password } = parsed.data;
 
   // Kiểm tra email đã tồn tại
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await db.orm.public.User.where({ email }).first();
   if (existing) {
     return { error: { email: ["Email đã được sử dụng"] } };
   }
@@ -26,26 +31,36 @@ export async function register(formData: FormData) {
   const hashedPassword = await bcrypt.hash(password, 12);
 
   // Tạo user + seed default categories trong 1 transaction
-  await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: { name, email, password: hashedPassword },
+  await db.transaction(async (tx: any) => {
+    const user = await tx.orm.public.User.create({
+      name,
+      email,
+      password: hashedPassword,
     });
 
-    await tx.category.createMany({
-      data: DEFAULT_CATEGORIES.map((cat) => ({ ...cat, userId: user.id })),
-    });
+    for (const cat of DEFAULT_CATEGORIES) {
+      await tx.orm.public.Category.create({ ...cat, userId: user.id });
+    }
   });
 
   return { success: true };
 }
 
-export async function login(formData: FormData) {
+export async function registerAction(
+  _prevState: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  return register(formData);
+}
+
+export async function login(formData: FormData): Promise<AuthState> {
   try {
     await signIn("credentials", {
       email: formData.get("email"),
       password: formData.get("password"),
       redirectTo: "/dashboard",
     });
+    return { success: true };
   } catch (err) {
     if (err instanceof AuthError) {
       switch (err.type) {
@@ -57,6 +72,13 @@ export async function login(formData: FormData) {
     }
     throw err; // Re-throw để Next.js xử lý redirect
   }
+}
+
+export async function loginAction(
+  _prevState: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  return login(formData);
 }
 
 export async function logout() {
