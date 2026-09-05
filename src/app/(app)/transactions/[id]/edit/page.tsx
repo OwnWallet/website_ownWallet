@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { toDate } from "@/lib/utils";
+import { serializeData } from "@/lib/utils";
 import { notFound, redirect } from "next/navigation";
 import { EditTransactionForm } from "./edit-form";
 import type { Metadata } from "next";
@@ -36,19 +36,11 @@ export default async function EditTransactionPage({ params }: Props) {
     notFound();
   }
 
-  const plainTx = {
-    ...transaction,
-    amount: Number(transaction.amount),
-    recordedAt: toDate(transaction.recordedAt).toISOString(),
-    createdAt: toDate(transaction.createdAt).toISOString(),
-    updatedAt: toDate(transaction.updatedAt).toISOString(),
-  };
-
   return (
     <EditTransactionForm
-      transaction={plainTx as any}
-      categories={categories}
-      goals={goals}
+      transaction={serializeData(transaction)}
+      categories={serializeData(categories)}
+      goals={serializeData(goals)}
     />
   );
 }

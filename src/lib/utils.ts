@@ -40,6 +40,43 @@ export function toInstant(date: any): Temporal.Instant {
   return Temporal.Instant.fromEpochMilliseconds(toDate(date).getTime());
 }
 
+/**
+ * Chuyển đổi đệ quy tất cả dữ liệu từ Prisma 8 (Temporal.Instant, Decimal, Date, BigInt)
+ * thành các kiểu dữ liệu nguyên thủy (string ISO, number, boolean) để truyền an toàn
+ * từ Server Components sang Client Components mà không bị Next.js báo lỗi serialization.
+ */
+export function serializeData<T = any>(data: any): T {
+  if (data === null || data === undefined) return data;
+  if (typeof (data as any)?.epochMilliseconds === "number") {
+    return toDate(data).toISOString() as any;
+  }
+  if (data instanceof Date) {
+    return data.toISOString() as any;
+  }
+  if (typeof data === "bigint") {
+    return data.toString() as any;
+  }
+  if (typeof data === "object") {
+    // Decimal detection
+    if ((data as any).constructor && ((data as any).constructor.name === "Decimal" || (data as any).isDecimal || ((data as any).d && (data as any).e))) {
+      return Number(data) as any;
+    }
+    // Temporal PlainDate/PlainDateTime/Instant check
+    if (typeof (data as any).toString === "function" && (data as any).constructor && (data as any).constructor.name?.startsWith("Plain")) {
+      return (data as any).toString() as any;
+    }
+    if (Array.isArray(data)) {
+      return data.map(serializeData) as any;
+    }
+    const res: Record<string, any> = {};
+    for (const [k, v] of Object.entries(data)) {
+      res[k] = serializeData(v);
+    }
+    return res as any;
+  }
+  return data;
+}
+
 // ─── Currency formatting ───────────────────────────────────────
 const VND_FORMATTER = new Intl.NumberFormat("vi-VN", {
   style: "currency",

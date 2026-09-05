@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { serializeData } from "@/lib/utils";
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SettingsClient } from "./settings-client";
@@ -32,7 +33,7 @@ export default async function SettingsPage() {
           <p className="text-muted text-sm mt-1">Quản lý tài khoản, danh mục chi tiêu và cấu hình hệ thống</p>
         </div>
 
-        <SettingsClient user={user as any} categories={categories as any} />
+        <SettingsClient user={serializeData(user)} categories={serializeData(categories)} />
       </div>
     );
   } catch (error) {

@@ -22,11 +22,23 @@ export async function upsertBudget(formData: FormData) {
 
   const { categoryId, limitAmount, month, year } = parsed.data;
 
-  // Prisma 8 upsert — dựa trên unique constraint [userId, categoryId, month, year]
-  await db.orm.public.Budget.upsert({
-    create: { userId, categoryId, limitAmount: String(limitAmount), month, year },
-    update: { limitAmount: String(limitAmount) },
-  });
+  const existing = await db.orm.public.Budget
+    .where({ userId, categoryId, month, year })
+    .first();
+
+  if (existing) {
+    await db.orm.public.Budget
+      .where({ id: existing.id })
+      .update({ limitAmount: String(limitAmount) });
+  } else {
+    await db.orm.public.Budget.create({
+      userId,
+      categoryId,
+      limitAmount: String(limitAmount),
+      month,
+      year,
+    });
+  }
 
   revalidatePath("/budget");
   revalidatePath("/dashboard");

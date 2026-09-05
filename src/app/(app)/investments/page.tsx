@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, toDate } from "@/lib/utils";
+import { formatCurrency, serializeData } from "@/lib/utils";
 import { createInvestment } from "@/actions/investments";
 import { redirect } from "next/navigation";
 import { InvestmentCard } from "./investment-card";
@@ -36,22 +36,7 @@ export default async function InvestmentsPage() {
     const totalPnLPercent = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
     const isProfit = totalPnL >= 0;
 
-    const plainInvestments = investments.map((inv: any) => ({
-      ...inv,
-      quantity: Number(inv.quantity),
-      buyPrice: Number(inv.buyPrice),
-      currentPrice: inv.currentPrice ? Number(inv.currentPrice) : null,
-      boughtAt: toDate(inv.boughtAt).toISOString(),
-      updatedAt: toDate(inv.updatedAt).toISOString(),
-      createdAt: toDate(inv.createdAt).toISOString(),
-      logs: (inv.logs || []).map((l: any) => ({
-        ...l,
-        quantity: Number(l.quantity),
-        price: Number(l.price),
-        recordedAt: toDate(l.recordedAt).toISOString(),
-        createdAt: toDate(l.createdAt).toISOString(),
-      })),
-    }));
+    const plainInvestments = serializeData(investments);
 
     return (
       <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">

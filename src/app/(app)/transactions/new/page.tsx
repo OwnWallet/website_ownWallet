@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { serializeData } from "@/lib/utils";
 import { NewTransactionForm } from "./transaction-form";
 import type { Metadata } from "next";
 
@@ -19,5 +20,5 @@ export default async function NewTransactionPage() {
     console.error("Failed to load categories for new transaction:", err);
   }
 
-  return <NewTransactionForm categories={categories} />;
+  return <NewTransactionForm categories={serializeData(categories)} />;
 }

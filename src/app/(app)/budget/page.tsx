@@ -2,7 +2,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatCurrency, calcPercent, getCurrentMonthRange, toInstant } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD, BUDGET_DANGER_THRESHOLD } from "@/lib/constants";
-import { upsertBudget } from "@/actions/budgets";
+import { upsertBudget, deleteBudget } from "@/actions/budgets";
+import { Trash2 } from "lucide-react";
 
 export const metadata = {
   title: "Ngân sách | wnWallet",
@@ -102,29 +103,45 @@ export default async function BudgetPage() {
                     </div>
                     <span className="font-semibold text-lg">{b.category?.name}</span>
                   </div>
-                  {isDanger ? (
-                    <span
-                      className="text-xs font-semibold px-2 py-1 rounded"
-                      style={{
-                        backgroundColor: "color-mix(in srgb, var(--color-expense) 15%, transparent)",
-                        color: "var(--color-expense)",
-                        border: "1px solid color-mix(in srgb, var(--color-expense) 30%, transparent)",
+                  <div className="flex items-center gap-2">
+                    {isDanger ? (
+                      <span
+                        className="text-xs font-semibold px-2 py-1 rounded"
+                        style={{
+                          backgroundColor: "color-mix(in srgb, var(--color-expense) 15%, transparent)",
+                          color: "var(--color-expense)",
+                          border: "1px solid color-mix(in srgb, var(--color-expense) 30%, transparent)",
+                        }}
+                      >
+                        Vượt hạn mức
+                      </span>
+                    ) : isWarning ? (
+                      <span
+                        className="text-xs font-semibold px-2 py-1 rounded"
+                        style={{
+                          backgroundColor: "color-mix(in srgb, var(--color-debt) 15%, transparent)",
+                          color: "var(--color-debt)",
+                          border: "1px solid color-mix(in srgb, var(--color-debt) 30%, transparent)",
+                        }}
+                      >
+                        Sắp vượt
+                      </span>
+                    ) : null}
+                    <form
+                      action={async () => {
+                        "use server";
+                        await deleteBudget(b.id);
                       }}
                     >
-                      Vượt hạn mức
-                    </span>
-                  ) : isWarning ? (
-                    <span
-                      className="text-xs font-semibold px-2 py-1 rounded"
-                      style={{
-                        backgroundColor: "color-mix(in srgb, var(--color-debt) 15%, transparent)",
-                        color: "var(--color-debt)",
-                        border: "1px solid color-mix(in srgb, var(--color-debt) 30%, transparent)",
-                      }}
-                    >
-                      Sắp vượt
-                    </span>
-                  ) : null}
+                      <button
+                        type="submit"
+                        title="Xóa ngân sách"
+                        className="p-1.5 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </form>
+                  </div>
                 </div>
 
                 <div>

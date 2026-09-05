@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getCurrentMonthRange, toInstant, toDate } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getCurrentMonthRange, toInstant, toDate, serializeData } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD } from "@/lib/constants";
 import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Plus, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import type { Metadata } from "next";
@@ -116,11 +116,11 @@ async function getDashboardData(userId: string) {
       income,
       expense,
       investPnL,
-      debts: plainDebts,
-      budgetsWithSpend,
-      goals: plainGoals,
-      recentTx: plainRecentTx,
-      monthTransactions: plainMonthTransactions,
+      debts: serializeData(plainDebts),
+      budgetsWithSpend: serializeData(budgetsWithSpend),
+      goals: serializeData(plainGoals),
+      recentTx: serializeData(plainRecentTx),
+      monthTransactions: serializeData(plainMonthTransactions),
       wallets,
     };
   } catch (error) {
