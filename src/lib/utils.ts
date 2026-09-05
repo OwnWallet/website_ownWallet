@@ -168,6 +168,32 @@ export function formatRelativeTime(date: any): string {
   return formatDate(d);
 }
 
+/**
+ * Trả về thông tin tiêu đề ngày đẹp tiếng Việt kèm thứ, ngày tháng và trạng thái "Hôm nay", "Hôm qua"
+ */
+export function formatDayHeader(date: any): { title: string; subtitle: string; isToday: boolean } {
+  const d = toDate(date);
+  const now = new Date();
+
+  const isSameDay = (d1: Date, d2: Date) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const dayOfWeekNames = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
+  const dayName = dayOfWeekNames[d.getDay()];
+  const formattedDay = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+
+  if (isSameDay(d, now)) {
+    return { title: "Hôm nay", subtitle: `${dayName}, ${formattedDay}`, isToday: true };
+  }
+  if (isSameDay(d, yesterday)) {
+    return { title: "Hôm qua", subtitle: `${dayName}, ${formattedDay}`, isToday: false };
+  }
+  return { title: dayName, subtitle: formattedDay, isToday: false };
+}
+
 // ─── Misc helpers ──────────────────────────────────────────────
 
 /** Tính % tiến độ, clamp 0–100 */

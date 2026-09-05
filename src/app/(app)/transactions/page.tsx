@@ -22,7 +22,7 @@ export default async function TransactionsPage() {
         .where((t) => t.userId.eq(userId))
         .include("category", (cat) => cat)
         .orderBy((t) => t.recordedAt.desc())
-        .limit(200)
+        .limit(2000)
         .all(),
       db.orm.public.Category
         .where((c) => c.userId.eq(userId))
