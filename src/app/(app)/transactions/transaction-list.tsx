@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   formatCurrency,
@@ -61,9 +61,16 @@ interface Props {
   initialTransactions: TransactionItem[];
   categories: Category[];
   wallets?: Wallet[];
+  initialMonth?: number | "ALL";
+  initialYear?: number | "ALL";
 }
 
-export function TransactionList({ initialTransactions, categories }: Props) {
+export function TransactionList({
+  initialTransactions,
+  categories,
+  initialMonth,
+  initialYear,
+}: Props) {
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState<"ALL" | "EXPENSE" | "INCOME">("ALL");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
@@ -73,9 +80,40 @@ export function TransactionList({ initialTransactions, categories }: Props) {
   const currentMonthNum = now.getMonth() + 1;
   const currentYearNum = now.getFullYear();
 
-  const [selectedMonth, setSelectedMonth] = useState<number | "ALL">(currentMonthNum);
-  const [selectedYear, setSelectedYear] = useState<number | "ALL">(currentYearNum);
-  const [quickPreset, setQuickPreset] = useState<"CUSTOM" | "THIS_MONTH" | "LAST_MONTH" | "TODAY" | "WEEK" | "ALL">("THIS_MONTH");
+  const [selectedMonth, setSelectedMonth] = useState<number | "ALL">(
+    initialMonth !== undefined ? initialMonth : currentMonthNum
+  );
+  const [selectedYear, setSelectedYear] = useState<number | "ALL">(
+    initialYear !== undefined ? initialYear : currentYearNum
+  );
+  const [quickPreset, setQuickPreset] = useState<
+    "CUSTOM" | "THIS_MONTH" | "LAST_MONTH" | "THIS_YEAR" | "TODAY" | "WEEK" | "ALL"
+  >(
+    initialMonth === "ALL" && initialYear === currentYearNum
+      ? "THIS_YEAR"
+      : initialMonth === "ALL" && initialYear === "ALL"
+      ? "ALL"
+      : initialMonth !== undefined
+      ? "CUSTOM"
+      : "THIS_MONTH"
+  );
+
+  // Sync state when props change from URL
+  useEffect(() => {
+    if (initialMonth !== undefined) {
+      setSelectedMonth(initialMonth);
+    }
+    if (initialYear !== undefined) {
+      setSelectedYear(initialYear);
+    }
+    if (initialMonth === "ALL" && initialYear === currentYearNum) {
+      setQuickPreset("THIS_YEAR");
+    } else if (initialMonth === "ALL" && initialYear === "ALL") {
+      setQuickPreset("ALL");
+    } else if (initialMonth !== undefined) {
+      setQuickPreset("CUSTOM");
+    }
+  }, [initialMonth, initialYear, currentYearNum]);
 
   // Sorting
   const [sortOption, setSortOption] = useState<"date-desc" | "date-asc" | "amount-desc" | "amount-asc">("date-desc");
@@ -99,7 +137,9 @@ export function TransactionList({ initialTransactions, categories }: Props) {
   }, [initialTransactions, currentYearNum]);
 
   // Handle Quick Presets
-  function handleQuickPreset(preset: "CUSTOM" | "THIS_MONTH" | "LAST_MONTH" | "TODAY" | "WEEK" | "ALL") {
+  function handleQuickPreset(
+    preset: "CUSTOM" | "THIS_MONTH" | "LAST_MONTH" | "THIS_YEAR" | "TODAY" | "WEEK" | "ALL"
+  ) {
     setQuickPreset(preset);
     setPage(1);
 
@@ -110,6 +150,9 @@ export function TransactionList({ initialTransactions, categories }: Props) {
       const lastMonthDate = new Date(currentYearNum, currentMonthNum - 2, 1);
       setSelectedMonth(lastMonthDate.getMonth() + 1);
       setSelectedYear(lastMonthDate.getFullYear());
+    } else if (preset === "THIS_YEAR") {
+      setSelectedMonth("ALL");
+      setSelectedYear(currentYearNum);
     } else if (preset === "ALL") {
       setSelectedMonth("ALL");
       setSelectedYear("ALL");
@@ -411,7 +454,9 @@ export function TransactionList({ initialTransactions, categories }: Props) {
               <Calendar size={16} className="text-primary" />
               <span className="text-sm font-bold text-primary">
                 {selectedMonth === "ALL"
-                  ? "Tất cả các tháng"
+                  ? selectedYear === "ALL"
+                    ? "Tất cả thời gian"
+                    : `Cả năm ${selectedYear}`
                   : `Tháng ${selectedMonth}${selectedYear !== "ALL" ? `, ${selectedYear}` : ""}`}
               </span>
             </div>
@@ -436,7 +481,7 @@ export function TransactionList({ initialTransactions, categories }: Props) {
                 }}
                 className="bg-elevated border border-border-strong rounded-lg px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-primary text-foreground cursor-pointer"
               >
-                <option value="ALL">Tất cả tháng</option>
+                <option value="ALL">Cả năm (Tất cả tháng)</option>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                   <option key={m} value={m}>
                     Tháng {m}
@@ -469,6 +514,7 @@ export function TransactionList({ initialTransactions, categories }: Props) {
             {[
               { key: "THIS_MONTH", label: "Tháng này" },
               { key: "LAST_MONTH", label: "Tháng trước" },
+              { key: "THIS_YEAR", label: "Cả năm nay" },
               { key: "TODAY", label: "Hôm nay" },
               { key: "WEEK", label: "7 ngày qua" },
               { key: "ALL", label: "Tất cả thời gian" },

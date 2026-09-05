@@ -225,6 +225,46 @@ export function getCurrentMonthRange(
   return { from, to };
 }
 
+/**
+ * Trả về khoảng thời gian bắt đầu và kết thúc lọc linh hoạt theo tháng (1-12 hoặc "ALL" cả năm) và năm
+ */
+export function getFilterDateRange(
+  monthParam?: number | string | null,
+  yearParam?: number | string | null,
+  timezone = "Asia/Ho_Chi_Minh"
+): { from: Date; to: Date; month: number | "ALL"; year: number; label: string } {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  let year = yearParam ? Number(yearParam) : currentYear;
+  if (isNaN(year) || year < 2000 || year > 2100) year = currentYear;
+
+  let month: number | "ALL" = currentMonth;
+  if (monthParam === "ALL" || monthParam === "all") {
+    month = "ALL";
+  } else if (monthParam !== undefined && monthParam !== null) {
+    const mNum = Number(monthParam);
+    if (!isNaN(mNum) && mNum >= 1 && mNum <= 12) {
+      month = mNum;
+    }
+  }
+
+  const tzOffset = -new Date(`${year}-01-01T00:00:00`).getTimezoneOffset();
+
+  if (month === "ALL") {
+    // Toàn bộ năm
+    const from = new Date(Date.UTC(year, 0, 1, 0, 0, 0) - tzOffset * 60_000);
+    const to = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999) - tzOffset * 60_000);
+    return { from, to, month: "ALL", year, label: `Năm ${year}` };
+  } else {
+    // Tháng cụ thể trong năm
+    const from = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0) - tzOffset * 60_000);
+    const to = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999) - tzOffset * 60_000);
+    return { from, to, month, year, label: `Tháng ${month}/${year}` };
+  }
+}
+
 /** Sleep (dùng trong seed / test) */
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

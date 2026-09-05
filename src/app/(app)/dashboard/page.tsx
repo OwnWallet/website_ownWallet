@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getCurrentMonthRange, toInstant, toDate, serializeData } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getFilterDateRange, toInstant, toDate, serializeData } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD } from "@/lib/constants";
 import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Plus, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import type { Metadata } from "next";
@@ -10,12 +10,25 @@ import { Card } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Tổng quan — wnWallet" };
 
-async function getDashboardData(userId: string) {
-  const { from, to } = getCurrentMonthRange();
+async function getDashboardData(
+  userId: string,
+  from: Date,
+  to: Date,
+  month: number | "ALL",
+  year: number
+) {
   const fromInstant = toInstant(from);
   const toInstantVal = toInstant(to);
 
   try {
+    let budgetQuery = db.orm.public.Budget
+      .where((b) => b.userId.eq(userId))
+      .where((b) => b.year.eq(year));
+
+    if (month !== "ALL") {
+      budgetQuery = budgetQuery.where((b) => b.month.eq(month));
+    }
+
     const [monthTransactions, investments, debts, budgets, goals, recentTx] = await Promise.all([
       db.orm.public.Transaction
         .where((t) => t.userId.eq(userId))
@@ -32,10 +45,7 @@ async function getDashboardData(userId: string) {
         .orderBy((t) => t.dueDate.asc())
         .limit(5)
         .all(),
-      db.orm.public.Budget
-        .where((t) => t.userId.eq(userId))
-        .where((t) => t.month.eq(from.getMonth() + 1))
-        .where((t) => t.year.eq(from.getFullYear()))
+      budgetQuery
         .include("category", (cat) => cat)
         .all(),
       db.orm.public.Goal
@@ -45,6 +55,8 @@ async function getDashboardData(userId: string) {
         .all(),
       db.orm.public.Transaction
         .where((t) => t.userId.eq(userId))
+        .where((t) => t.recordedAt.gte(fromInstant))
+        .where((t) => t.recordedAt.lte(toInstantVal))
         .include("category", (cat) => cat)
         .orderBy((t) => t.recordedAt.desc())
         .limit(8)
@@ -139,20 +151,25 @@ async function getDashboardData(userId: string) {
   }
 }
 
-export default async function DashboardPage() {
+interface DashboardPageProps {
+  searchParams: Promise<{
+    month?: string;
+    year?: string;
+  }>;
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const session = await auth();
   if (!session?.user?.id) return null;
 
+  const resolvedSearchParams = (await searchParams) || {};
+  const filterDate = getFilterDateRange(resolvedSearchParams.month, resolvedSearchParams.year);
+
   const { income, expense, investPnL, debts, budgetsWithSpend, goals, recentTx, monthTransactions, wallets } =
-    await getDashboardData(session.user.id);
+    await getDashboardData(session.user.id, filterDate.from, filterDate.to, filterDate.month, filterDate.year);
   const netBalance = income - expense;
 
-  const now = new Date();
-  const monthLabel = now.toLocaleDateString("vi-VN", {
-    month: "long",
-    year: "numeric",
-    timeZone: "Asia/Ho_Chi_Minh",
-  });
+  const monthLabel = filterDate.label;
 
   const kpiCards = [
     {
@@ -164,7 +181,7 @@ export default async function DashboardPage() {
       bgCard: "bg-emerald-50/60 border-emerald-200/80",
       icon: TrendingUp,
       prefix: "+",
-      desc: "Tháng này",
+      desc: filterDate.label,
     },
     {
       label: "Chi tiêu",
@@ -175,7 +192,7 @@ export default async function DashboardPage() {
       bgCard: "bg-rose-50/60 border-rose-200/80",
       icon: TrendingDown,
       prefix: "",
-      desc: "Tháng này",
+      desc: filterDate.label,
     },
     {
       label: "Số dư ròng",
@@ -282,7 +299,7 @@ export default async function DashboardPage() {
           {recentTx.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <div className="text-3xl mb-2">💳</div>
-              <p className="text-sm font-medium">Chưa có giao dịch nào trong tháng</p>
+              <p className="text-sm font-medium">Chưa có giao dịch nào trong {filterDate.label.toLowerCase()}</p>
               <Link href="/transactions/new" className="text-xs font-semibold text-orange-600 mt-2 inline-block hover:underline">
                 + Thêm giao dịch ngay
               </Link>
@@ -371,7 +388,7 @@ export default async function DashboardPage() {
           <div className="card bg-card border-border shadow-xs p-5">
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-border">
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <span>💼</span> Ngân sách tháng
+                <span>💼</span> {filterDate.month === "ALL" ? `Ngân sách năm ${filterDate.year}` : `Ngân sách ${filterDate.label.toLowerCase()}`}
               </h2>
               <Link href="/budget" className="text-xs font-semibold text-orange-600 hover:underline">
                 Quản lý →

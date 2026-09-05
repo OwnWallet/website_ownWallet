@@ -8,10 +8,42 @@ import { TransactionList } from "./transaction-list";
 
 export const metadata: Metadata = { title: "Giao dịch | wnWallet" };
 
-export default async function TransactionsPage() {
+interface TransactionsPageProps {
+  searchParams: Promise<{
+    month?: string;
+    year?: string;
+  }>;
+}
+
+export default async function TransactionsPage({ searchParams }: TransactionsPageProps) {
   const session = await auth();
   if (!session?.user?.id) return null;
   const userId = session.user.id;
+
+  const resolvedSearchParams = (await searchParams) || {};
+  let initialMonth: number | "ALL" | undefined = undefined;
+  if (resolvedSearchParams.month) {
+    if (resolvedSearchParams.month === "ALL" || resolvedSearchParams.month === "all") {
+      initialMonth = "ALL";
+    } else {
+      const parsed = parseInt(resolvedSearchParams.month, 10);
+      if (!isNaN(parsed) && parsed >= 1 && parsed <= 12) {
+        initialMonth = parsed;
+      }
+    }
+  }
+
+  let initialYear: number | "ALL" | undefined = undefined;
+  if (resolvedSearchParams.year) {
+    if (resolvedSearchParams.year === "ALL" || resolvedSearchParams.year === "all") {
+      initialYear = "ALL";
+    } else {
+      const parsed = parseInt(resolvedSearchParams.year, 10);
+      if (!isNaN(parsed) && parsed >= 2000 && parsed <= 2100) {
+        initialYear = parsed;
+      }
+    }
+  }
 
   let transactions: any[] = [];
   let categories: any[] = [];
@@ -54,6 +86,8 @@ export default async function TransactionsPage() {
       <TransactionList
         initialTransactions={transactions}
         categories={categories}
+        initialMonth={initialMonth}
+        initialYear={initialYear}
       />
     </div>
   );

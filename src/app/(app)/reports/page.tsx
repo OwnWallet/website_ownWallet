@@ -2,39 +2,64 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ReportClient } from "./report-client";
-import { toInstant, toDate } from "@/lib/utils";
+import { toInstant, toDate, getFilterDateRange } from "@/lib/utils";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Báo cáo & Phân tích — wnWallet",
 };
 
-export default async function ReportsPage() {
+interface ReportsPageProps {
+  searchParams: Promise<{
+    month?: string;
+    year?: string;
+  }>;
+}
+
+export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
 
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth(); // 0-indexed
+  const resolvedSearchParams = (await searchParams) || {};
+  const filterDate = getFilterDateRange(resolvedSearchParams.month, resolvedSearchParams.year);
+  const isYearly = filterDate.month === "ALL";
 
-  const startOfCurrentMonth = new Date(currentYear, currentMonth, 1);
-  const endOfCurrentMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+  let startCurrent: Date;
+  let endCurrent: Date;
+  let startPrevious: Date;
+  let endPrevious: Date;
+  let historyStart: Date;
 
-  const startOfLastMonth = new Date(currentYear, currentMonth - 1, 1);
-  const endOfLastMonth = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
+  if (isYearly) {
+    const yr = filterDate.year;
+    startCurrent = new Date(yr, 0, 1, 0, 0, 0, 0);
+    endCurrent = new Date(yr, 11, 31, 23, 59, 59, 999);
+    startPrevious = new Date(yr - 1, 0, 1, 0, 0, 0, 0);
+    endPrevious = new Date(yr - 1, 11, 31, 23, 59, 59, 999);
+    historyStart = startPrevious;
+  } else {
+    const yr = filterDate.year;
+    const m = filterDate.month as number; // 1-indexed
+    startCurrent = new Date(yr, m - 1, 1, 0, 0, 0, 0);
+    endCurrent = new Date(yr, m, 0, 23, 59, 59, 999);
+    startPrevious = new Date(yr, m - 2, 1, 0, 0, 0, 0);
+    endPrevious = new Date(yr, m - 1, 0, 23, 59, 59, 999);
+    historyStart = new Date(yr, m - 6, 1, 0, 0, 0, 0);
+  }
 
-  const startOf6MonthsAgo = new Date(currentYear, currentMonth - 5, 1);
-  const sixMonthsInstant = toInstant(startOf6MonthsAgo);
+  const historyInstant = toInstant(historyStart);
+  const endCurrentInstant = toInstant(endCurrent);
 
   try {
-    const [categories, sixMonthsTxs] = await Promise.all([
+    const [categories, txs] = await Promise.all([
       db.orm.public.Category
         .where((c) => c.userId.eq(userId))
         .all(),
       db.orm.public.Transaction
         .where((t) => t.userId.eq(userId))
-        .where((t) => t.recordedAt.gte(sixMonthsInstant))
+        .where((t) => t.recordedAt.gte(historyInstant))
+        .where((t) => t.recordedAt.lte(endCurrentInstant))
         .all(),
     ]);
 
@@ -45,39 +70,58 @@ export default async function ReportsPage() {
 
     const categorySpentMap = new Map<string, number>();
 
-    // 6-month monthly map
+    // Trend map
     const monthlyMap: Record<string, { month: string; income: number; expense: number }> = {};
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(currentYear, currentMonth - i, 1);
-      const label = `T${d.getMonth() + 1}/${d.getFullYear().toString().slice(-2)}`;
-      monthlyMap[label] = { month: label, income: 0, expense: 0 };
+    if (isYearly) {
+      for (let i = 1; i <= 12; i++) {
+        const label = `T${i}`;
+        monthlyMap[label] = { month: label, income: 0, expense: 0 };
+      }
+    } else {
+      const m = filterDate.month as number;
+      const yr = filterDate.year;
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(yr, m - 1 - i, 1);
+        const label = `T${d.getMonth() + 1}/${d.getFullYear().toString().slice(-2)}`;
+        monthlyMap[label] = { month: label, income: 0, expense: 0 };
+      }
     }
 
-    sixMonthsTxs.forEach((tx: any) => {
+    txs.forEach((tx: any) => {
       const recDate = toDate(tx.recordedAt);
       const amt = Number(tx.amount);
       const isIncome = tx.type === "INCOME";
 
-      // Current Month
-      if (recDate >= startOfCurrentMonth && recDate <= endOfCurrentMonth) {
+      // Current Period
+      if (recDate >= startCurrent && recDate <= endCurrent) {
         if (isIncome) currentIncome += amt;
         else {
           currentExpense += amt;
           categorySpentMap.set(tx.categoryId, (categorySpentMap.get(tx.categoryId) || 0) + amt);
         }
+
+        if (isYearly) {
+          const mLabel = `T${recDate.getMonth() + 1}`;
+          if (monthlyMap[mLabel]) {
+            if (isIncome) monthlyMap[mLabel].income += amt;
+            else monthlyMap[mLabel].expense += amt;
+          }
+        }
       }
 
-      // Last Month
-      if (recDate >= startOfLastMonth && recDate <= endOfLastMonth) {
+      // Previous Period
+      if (recDate >= startPrevious && recDate <= endPrevious) {
         if (isIncome) lastIncome += amt;
         else lastExpense += amt;
       }
 
-      // Trend
-      const label = `T${recDate.getMonth() + 1}/${recDate.getFullYear().toString().slice(-2)}`;
-      if (monthlyMap[label]) {
-        if (isIncome) monthlyMap[label].income += amt;
-        else monthlyMap[label].expense += amt;
+      // Trend for monthly view
+      if (!isYearly) {
+        const label = `T${recDate.getMonth() + 1}/${recDate.getFullYear().toString().slice(-2)}`;
+        if (monthlyMap[label]) {
+          if (isIncome) monthlyMap[label].income += amt;
+          else monthlyMap[label].expense += amt;
+        }
       }
     });
 
@@ -95,17 +139,19 @@ export default async function ReportsPage() {
       .sort((a, b) => b.value - a.value);
 
     const monthlyTrend = Object.values(monthlyMap);
-    const currentMonthLabel = `Tháng ${currentMonth + 1}/${currentYear}`;
 
     return (
       <ReportClient
-        currentMonthName={currentMonthLabel}
+        currentMonthName={filterDate.label}
         currentMonthIncome={currentIncome}
         currentMonthExpense={currentExpense}
         lastMonthIncome={lastIncome}
         lastMonthExpense={lastExpense}
         categorySpending={categorySpending}
         monthlyTrend={monthlyTrend}
+        currentMonth={filterDate.month}
+        currentYear={filterDate.year}
+        isYearly={isYearly}
       />
     );
   } catch (error) {

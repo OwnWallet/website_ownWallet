@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { logout } from "@/actions/auth";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import { SidebarTimeFilter } from "./SidebarTimeFilter";
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -15,11 +15,8 @@ import {
   Target,
   Settings,
   LogOut,
-  CreditCard,
-  PiggyBank,
-  Home,
-  X,
   Coins,
+  X,
   Sparkles,
 } from "lucide-react";
 
@@ -42,6 +39,8 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchStr = searchParams ? searchParams.toString() : "";
 
   return (
     <>
@@ -79,7 +78,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted lg:hidden transition-colors"
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted lg:hidden transition-colors cursor-pointer"
               aria-label="Đóng menu"
             >
               <X size={18} />
@@ -87,8 +86,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           )}
         </div>
 
+        {/* Sidebar Time Filter (Month & Year) */}
+        <div className="border-b border-border/70 pb-1">
+          <SidebarTimeFilter onClose={onClose} />
+        </div>
+
         {/* Navigation Items (ScrollArea) */}
-        <ScrollArea className="flex-1 px-3 py-4">
+        <ScrollArea className="flex-1 px-3 py-3">
           <div className="px-3 mb-2">
             <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">
               Menu chính
@@ -100,10 +104,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}`));
               const Icon = item.icon;
 
+              const targetHref =
+                searchStr && ["/dashboard", "/transactions", "/reports", "/budget"].includes(item.href)
+                  ? `${item.href}?${searchStr}`
+                  : item.href;
+
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={targetHref}
                   onClick={() => onClose?.()}
                   className={`
                     flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150

@@ -35,6 +35,9 @@ interface Props {
   lastMonthExpense: number;
   categorySpending: CategorySpend[];
   monthlyTrend: MonthItem[];
+  currentMonth: number | "ALL";
+  currentYear: number;
+  isYearly?: boolean;
 }
 
 export function ReportClient({
@@ -45,6 +48,9 @@ export function ReportClient({
   lastMonthExpense,
   categorySpending,
   monthlyTrend,
+  currentMonth,
+  currentYear,
+  isYearly = false,
 }: Props) {
   const [downloading, setDownloading] = useState(false);
 
@@ -60,6 +66,8 @@ export function ReportClient({
     lastMonthExpense > 0
       ? (((currentMonthExpense - lastMonthExpense) / lastMonthExpense) * 100).toFixed(1)
       : null;
+
+  const comparePeriodLabel = isYearly ? "năm trước" : "tháng trước";
 
   async function handleExportCSV() {
     try {
@@ -85,11 +93,11 @@ export function ReportClient({
   }
 
   return (
-    <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">
+    <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Báo cáo & Phân tích</h1>
+          <h1 className="text-2xl lg:text-3xl font-bold">Báo cáo & Phân tích</h1>
           <p className="text-muted text-sm mt-1">
             Tổng quan dòng tiền, tỷ trọng chi tiêu và so sánh chu kỳ tài chính
           </p>
@@ -109,78 +117,79 @@ export function ReportClient({
         </button>
       </div>
 
-      {/* MoM Performance Cards */}
+
+      {/* MoM / YoY Performance Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Income Card */}
-        <div className="card p-5 border-income/20 bg-income/5 space-y-2">
+        <div className="card p-5 border-emerald-500/20 bg-emerald-500/5 space-y-2">
           <div className="flex justify-between items-center text-xs text-muted">
-            <span className="font-semibold">Thu nhập ({currentMonthName})</span>
-            <span className="p-1 rounded-md bg-income/20 text-income">
+            <span className="font-semibold text-emerald-700 dark:text-emerald-400">Thu nhập ({currentMonthName})</span>
+            <span className="p-1 rounded-md bg-emerald-500/20 text-emerald-600">
               <TrendingUp size={14} />
             </span>
           </div>
-          <p className="text-2xl font-bold text-income">{formatCurrency(currentMonthIncome)}</p>
-          <div className="text-xs text-muted flex items-center gap-1.5 pt-1">
+          <p className="text-2xl font-bold text-emerald-600">{formatCurrency(currentMonthIncome)}</p>
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
             {incomeChange !== null ? (
               <span
                 className={`font-semibold ${
-                  Number(incomeChange) >= 0 ? "text-income" : "text-expense"
+                  Number(incomeChange) >= 0 ? "text-emerald-600" : "text-rose-600"
                 }`}
               >
                 {Number(incomeChange) >= 0 ? "+" : ""}
                 {incomeChange}%
               </span>
             ) : (
-              <span className="text-subtle">N/A</span>
+              <span className="text-muted-foreground">N/A</span>
             )}
-            <span>so với tháng trước ({formatCurrency(lastMonthIncome)})</span>
+            <span>so với {comparePeriodLabel} ({formatCurrency(lastMonthIncome)})</span>
           </div>
         </div>
 
         {/* Expense Card */}
-        <div className="card p-5 border-expense/20 bg-expense/5 space-y-2">
+        <div className="card p-5 border-rose-500/20 bg-rose-500/5 space-y-2">
           <div className="flex justify-between items-center text-xs text-muted">
-            <span className="font-semibold">Chi tiêu ({currentMonthName})</span>
-            <span className="p-1 rounded-md bg-expense/20 text-expense">
+            <span className="font-semibold text-rose-700 dark:text-rose-400">Chi tiêu ({currentMonthName})</span>
+            <span className="p-1 rounded-md bg-rose-500/20 text-rose-600">
               <TrendingDown size={14} />
             </span>
           </div>
-          <p className="text-2xl font-bold text-expense">{formatCurrency(currentMonthExpense)}</p>
-          <div className="text-xs text-muted flex items-center gap-1.5 pt-1">
+          <p className="text-2xl font-bold text-rose-600">{formatCurrency(currentMonthExpense)}</p>
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
             {expenseChange !== null ? (
               <span
                 className={`font-semibold ${
-                  Number(expenseChange) <= 0 ? "text-income" : "text-expense"
+                  Number(expenseChange) <= 0 ? "text-emerald-600" : "text-rose-600"
                 }`}
               >
                 {Number(expenseChange) > 0 ? "+" : ""}
                 {expenseChange}%
               </span>
             ) : (
-              <span className="text-subtle">N/A</span>
+              <span className="text-muted-foreground">N/A</span>
             )}
-            <span>so với tháng trước ({formatCurrency(lastMonthExpense)})</span>
+            <span>so với {comparePeriodLabel} ({formatCurrency(lastMonthExpense)})</span>
           </div>
         </div>
 
         {/* Net Savings Card */}
         <div className="card p-5 border-border-strong bg-elevated/40 space-y-2">
           <div className="flex justify-between items-center text-xs text-muted">
-            <span className="font-semibold">Tiết kiệm ròng ({currentMonthName})</span>
-            <span className="p-1 rounded-md bg-elevated text-brand">
+            <span className="font-semibold text-foreground">Tiết kiệm ròng ({currentMonthName})</span>
+            <span className="p-1 rounded-md bg-elevated text-primary">
               <BarChart3 size={14} />
             </span>
           </div>
           <p
             className={`text-2xl font-bold ${
-              netCurrent >= 0 ? "text-income" : "text-expense"
+              netCurrent >= 0 ? "text-emerald-600" : "text-rose-600"
             }`}
           >
             {netCurrent > 0 ? "+" : ""}
             {formatCurrency(netCurrent)}
           </p>
-          <div className="text-xs text-muted pt-1">
-            <span>Tháng trước: {formatCurrency(netLast)}</span>
+          <div className="text-xs text-muted-foreground pt-1">
+            <span>{isYearly ? "Năm trước" : "Tháng trước"}: {formatCurrency(netLast)}</span>
           </div>
         </div>
       </div>
@@ -229,7 +238,9 @@ export function ReportClient({
           <div>
             <h2 className="text-base font-bold flex items-center gap-2">
               <BarChart3 size={16} className="text-primary" />
-              So sánh Thu / Chi các tháng gần đây
+              {isYearly
+                ? `So sánh Thu / Chi 12 tháng năm ${currentYear}`
+                : "So sánh Thu / Chi các kỳ gần đây"}
             </h2>
             <p className="text-xs text-muted mt-0.5">Biểu đồ đối chiếu thu nhập & chi tiêu</p>
           </div>
