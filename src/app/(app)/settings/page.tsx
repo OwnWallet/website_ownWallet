@@ -5,6 +5,8 @@ import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SettingsClient } from "./settings-client";
 
+import { getAiConfig } from "@/actions/settings";
+
 export const metadata: Metadata = {
   title: "Cài đặt | wnWallet",
 };
@@ -14,12 +16,13 @@ export default async function SettingsPage() {
   if (!session?.user?.id) redirect("/login");
 
   try {
-    const [user, categories] = await Promise.all([
+    const [user, categories, aiConfig] = await Promise.all([
       db.orm.public.User.where({ id: session.user.id }).first(),
       db.orm.public.Category
         .where({ userId: session.user.id })
         .orderBy((c) => c.name.asc())
         .all(),
+      getAiConfig(),
     ]);
 
     if (!user) {
@@ -33,7 +36,11 @@ export default async function SettingsPage() {
           <p className="text-muted text-sm mt-1">Quản lý tài khoản, danh mục chi tiêu và cấu hình hệ thống</p>
         </div>
 
-        <SettingsClient user={serializeData(user)} categories={serializeData(categories)} />
+        <SettingsClient
+          user={serializeData(user)}
+          categories={serializeData(categories)}
+          initialAiConfig={aiConfig}
+        />
       </div>
     );
   } catch (error) {

@@ -8,6 +8,8 @@ import {
   updateProfile,
   createCategory,
   deleteCategory,
+  updateAiApiKey,
+  testAiApiKey,
 } from "@/actions/settings";
 import {
   ChangePasswordSchema,
@@ -29,6 +31,11 @@ import {
   Shield,
   Clock,
   Sparkles,
+  Bot,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  Cpu,
 } from "lucide-react";
 
 interface Props {
@@ -46,9 +53,77 @@ interface Props {
     icon: string | null;
     isDefault: boolean;
   }[];
+  initialAiConfig?: {
+    isConfigured: boolean;
+    maskedKey: string;
+    model: string;
+  };
 }
 
-export function SettingsClient({ user, categories }: Props) {
+export function SettingsClient({ user, categories, initialAiConfig }: Props) {
+  // AI Config Form
+  const [aiConfig, setAiConfig] = useState(
+    initialAiConfig || { isConfigured: false, maskedKey: "", model: "gemini-3.6-flash" }
+  );
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [modelInput, setModelInput] = useState(aiConfig.model || "gemini-3.6-flash");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isSavingAi, setIsSavingAi] = useState(false);
+  const [isTestingAi, setIsTestingAi] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [aiSaveSuccess, setAiSaveSuccess] = useState(false);
+  const [aiSaveError, setAiSaveError] = useState<string | null>(null);
+
+  async function handleSaveAiKey(e: React.FormEvent) {
+    e.preventDefault();
+    if (!apiKeyInput.trim()) {
+      setAiSaveError("Vui lòng nhập API Key.");
+      return;
+    }
+    setIsSavingAi(true);
+    setAiSaveError(null);
+    setAiSaveSuccess(false);
+    setAiTestResult(null);
+
+    const fd = new FormData();
+    fd.append("apiKey", apiKeyInput.trim());
+    fd.append("model", modelInput);
+
+    const res = await updateAiApiKey(fd);
+    setIsSavingAi(false);
+
+    if (res?.error) {
+      setAiSaveError(res.error);
+    } else {
+      setAiSaveSuccess(true);
+      const masked =
+        apiKeyInput.trim().length > 12
+          ? `${apiKeyInput.trim().slice(0, 6)}••••••••${apiKeyInput.trim().slice(-4)}`
+          : "••••••••";
+      setAiConfig({
+        isConfigured: true,
+        maskedKey: masked,
+        model: modelInput,
+      });
+      setApiKeyInput("");
+      setTimeout(() => setAiSaveSuccess(false), 3000);
+    }
+  }
+
+  async function handleTestAiKey() {
+    setIsTestingAi(true);
+    setAiTestResult(null);
+    setAiSaveError(null);
+
+    const res = await testAiApiKey(apiKeyInput.trim() || undefined);
+    setIsTestingAi(false);
+
+    if (res?.success) {
+      setAiTestResult({ success: true, message: res.message });
+    } else {
+      setAiTestResult({ success: false, message: res.error });
+    }
+  }
   // Profile Form
   const [profileSuccess, setProfileSuccess] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -355,7 +430,141 @@ export function SettingsClient({ user, categories }: Props) {
         </div>
       </section>
 
-      {/* ── 3. Categories Management ── */}
+      {/* ── 3. AI Gemini Configuration ── */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bot size={18} className="text-orange-600" />
+            <h2 className="text-lg font-bold">Cấu hình AI (Google Gemini)</h2>
+          </div>
+          {aiConfig.isConfigured ? (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+              <Check size={12} /> Đang hoạt động ({aiConfig.maskedKey})
+            </span>
+          ) : (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center gap-1.5">
+              <AlertCircle size={12} /> Chưa cấu hình API Key
+            </span>
+          )}
+        </div>
+
+        <div className="card space-y-4 p-5">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            API Key được sử dụng cho tính năng <strong>AI Import</strong> tự động trích xuất sao kê ngân hàng (PDF, Excel, hóa đơn hình ảnh) và phân loại thu chi thông minh.
+          </p>
+
+          <form onSubmit={handleSaveAiKey} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* API Key Input */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-muted mb-1.5">
+                  Gemini API Key <span className="text-danger">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showApiKey ? "text" : "password"}
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder={
+                      aiConfig.isConfigured
+                        ? `Khóa hiện tại: ${aiConfig.maskedKey} (nhập để đổi mới)`
+                        : "Dán mã API Key tại đây (VD: AIzaSy... hoặc AQ.Ab...)"
+                    }
+                    className="w-full bg-elevated border border-border-strong rounded-lg pl-3 pr-10 py-2 text-xs outline-none focus:border-primary text-foreground font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                    title={showApiKey ? "Ẩn khóa" : "Hiện khóa"}
+                  >
+                    {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Model selection */}
+              <div>
+                <label className="block text-xs font-medium text-muted mb-1.5 flex items-center gap-1">
+                  <Cpu size={12} /> Model AI
+                </label>
+                <select
+                  value={modelInput}
+                  onChange={(e) => setModelInput(e.target.value)}
+                  className="w-full bg-elevated border border-border-strong rounded-lg px-2.5 py-2 text-xs outline-none focus:border-primary text-foreground cursor-pointer"
+                >
+                  <option value="gemini-3.6-flash">gemini-3.6-flash (Khuyến nghị 2026)</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Hint & external link */}
+            <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-1 bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-border/80">
+              <span>💡 Bạn có thể tạo hoặc lấy API Key miễn phí từ Google tại:</span>
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noreferrer"
+                className="text-orange-600 font-semibold hover:underline inline-flex items-center gap-0.5 ml-1"
+              >
+                Google AI Studio <ExternalLink size={11} />
+              </a>
+            </div>
+
+            {/* Test result message */}
+            {aiTestResult && (
+              <div
+                className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
+                  aiTestResult.success
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "bg-rose-50 text-rose-800 border border-rose-200"
+                }`}
+              >
+                {aiTestResult.success ? <Check size={14} /> : <AlertCircle size={14} />}
+                <span>{aiTestResult.message}</span>
+              </div>
+            )}
+
+            {/* Save error / success */}
+            {aiSaveError && (
+              <p className="text-xs text-danger flex items-center gap-1">
+                <AlertCircle size={14} /> {aiSaveError}
+              </p>
+            )}
+            {aiSaveSuccess && (
+              <p className="text-xs text-income flex items-center gap-1">
+                <Check size={14} /> Đã cập nhật và lưu API Key thành công!
+              </p>
+            )}
+
+            {/* Buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={handleTestAiKey}
+                disabled={isTestingAi || (!apiKeyInput.trim() && !aiConfig.isConfigured)}
+                className="btn-secondary py-2 px-4 text-xs inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isTestingAi && <Loader2 size={13} className="animate-spin" />}
+                <span>{isTestingAi ? "Đang kiểm tra kết nối..." : "Kiểm tra kết nối AI"}</span>
+              </button>
+
+              <button
+                type="submit"
+                disabled={isSavingAi}
+                className="btn-primary py-2 px-5 text-xs inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                {isSavingAi && <Loader2 size={13} className="animate-spin" />}
+                <span>{isSavingAi ? "Đang lưu..." : "Lưu API Key"}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      {/* ── 4. Categories Management ── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
