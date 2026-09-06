@@ -17,6 +17,8 @@ function LoginForm() {
       "Email của bạn chưa được cấp quyền truy cập (không nằm trong danh sách Whitelist). Vui lòng đăng nhập bằng email đã được cấp quyền.";
   } else if (urlError === "OAuthSignin" || urlError === "OAuthCallbackError") {
     urlErrorMessage = "Đã xảy ra lỗi khi xác thực với Google. Vui lòng kiểm tra lại.";
+  } else if (urlError === "Configuration") {
+    urlErrorMessage = "Cấu hình xác thực trên server chưa đầy đủ (thiếu biến môi trường AUTH_SECRET, AUTH_GOOGLE_ID hoặc AUTH_GOOGLE_SECRET).";
   }
 
   const errorMessage =
