@@ -88,7 +88,7 @@ export async function parseDocument(
     );
   }
 
-  const model = getGeminiModel();
+  const model = await getGeminiModel();
   const systemPrompt = buildSystemPrompt(availableCategories);
 
   let rawGeminiResponse: string;

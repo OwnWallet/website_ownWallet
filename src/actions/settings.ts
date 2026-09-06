@@ -8,6 +8,7 @@ import fs from "fs/promises";
 import path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { resetGeminiClient } from "@/lib/ai/gemini";
+import { getSystemSetting, setSystemSetting } from "@/lib/system-settings";
 import {
   ChangePasswordSchema,
   UpdateProfileSchema,
@@ -120,9 +121,9 @@ export async function deleteCategory(id: string) {
 
 export async function getAiConfig() {
   await getUserId();
-  const apiKey = process.env.GEMINI_API_KEY || "";
-  const model = process.env.GEMINI_MODEL || "gemini-3.6-flash";
-  const isConfigured = Boolean(apiKey && apiKey.trim().length > 10);
+  const apiKey = (await getSystemSetting("GEMINI_API_KEY", process.env.GEMINI_API_KEY || "")).trim();
+  const model = (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.6-flash")).trim();
+  const isConfigured = Boolean(apiKey && apiKey.length > 10);
 
   let maskedKey = "";
   if (apiKey) {
@@ -164,34 +165,45 @@ export async function updateAiApiKey(formData: FormData) {
   const model = rawModel;
 
   try {
-    const envPath = path.join(process.cwd(), ".env.local");
-    let content = "";
-    try {
-      content = await fs.readFile(envPath, "utf-8");
-    } catch {
-      content = "";
-    }
+    // 1. Lưu bền vững vào cơ sở dữ liệu PostgreSQL (hoạt động tốt trên Vercel, Serverless, Docker)
+    await setSystemSetting("GEMINI_API_KEY", apiKey);
+    await setSystemSetting("GEMINI_MODEL", model);
 
-    const keyRegex = /^GEMINI_API_KEY=.*$/m;
-    if (keyRegex.test(content)) {
-      content = content.replace(keyRegex, `GEMINI_API_KEY="${apiKey}"`);
-    } else {
-      content += `\nGEMINI_API_KEY="${apiKey}"\n`;
-    }
-
-    const modelRegex = /^GEMINI_MODEL=.*$/m;
-    if (modelRegex.test(content)) {
-      content = content.replace(modelRegex, `GEMINI_MODEL="${model}"`);
-    } else {
-      content += `\nGEMINI_MODEL="${model}"\n`;
-    }
-
-    await fs.writeFile(envPath, content, "utf-8");
-
-    // Update in-memory runtime
+    // 2. Cập nhật in-memory runtime
     process.env.GEMINI_API_KEY = apiKey;
     process.env.GEMINI_MODEL = model;
     resetGeminiClient(apiKey);
+
+    // 3. Thử đồng bộ vào file .env.local nếu môi trường hỗ trợ ghi file (local development)
+    try {
+      const envPath = path.join(process.cwd(), ".env.local");
+      let content = "";
+      try {
+        content = await fs.readFile(envPath, "utf-8");
+      } catch {
+        content = "";
+      }
+
+      const keyRegex = /^GEMINI_API_KEY=.*$/m;
+      if (keyRegex.test(content)) {
+        content = content.replace(keyRegex, `GEMINI_API_KEY="${apiKey}"`);
+      } else {
+        content += `\nGEMINI_API_KEY="${apiKey}"\n`;
+      }
+
+      const modelRegex = /^GEMINI_MODEL=.*$/m;
+      if (modelRegex.test(content)) {
+        content = content.replace(modelRegex, `GEMINI_MODEL="${model}"`);
+      } else {
+        content += `\nGEMINI_MODEL="${model}"\n`;
+      }
+
+      await fs.writeFile(envPath, content, "utf-8");
+    } catch (fsErr: any) {
+      // Trên môi trường Serverless (Vercel, AWS Lambda, Render...), hệ thống tệp là read-only (EROFS).
+      // Điều này là bình thường và cấu hình đã được lưu an toàn trong PostgreSQL.
+      console.info("[Settings] Ghi file .env.local bỏ qua do filesystem là read-only (Serverless/Vercel):", fsErr?.message);
+    }
 
     revalidatePath("/settings");
     revalidatePath("/import");
@@ -199,20 +211,23 @@ export async function updateAiApiKey(formData: FormData) {
     return { success: true };
   } catch (err: any) {
     console.error("Failed to update AI API key:", err);
-    return { error: "Lỗi lưu cấu hình: " + (err?.message || "Không thể ghi file cấu hình") };
+    return { error: "Lỗi lưu cấu hình: " + (err?.message || "Không thể lưu vào cơ sở dữ liệu") };
   }
 }
 
 export async function testAiApiKey(apiKeyToTest?: string) {
   await getUserId();
-  const key = apiKeyToTest?.trim() || process.env.GEMINI_API_KEY;
+  const key =
+    apiKeyToTest?.trim() ||
+    (await getSystemSetting("GEMINI_API_KEY", process.env.GEMINI_API_KEY || "")).trim();
   if (!key) {
     return { success: false, error: "Chưa nhập API Key để kiểm tra." };
   }
 
   try {
     const ai = new GoogleGenerativeAI(key);
-    const modelName = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+    const modelName =
+      (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.6-flash")).trim();
     const model = ai.getGenerativeModel({ model: modelName });
     const result = await model.generateContent("Ping. Trả lời đúng một từ: PONG");
     const text = result.response.text();
