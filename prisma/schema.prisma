@@ -63,6 +63,26 @@ model User {
   goals        Goal[]
   categories   Category[]
   budgets      Budget[]
+  wallets      Wallet[]
+}
+
+model Wallet {
+  id            String        @id @default(cuid())
+  name          String
+  accountNumber String?
+  bankName      String?
+  balance       Decimal       @default(0) @db.Decimal(15, 2)
+  color         String?       @default("#7c3aed")
+  icon          String?       @default("Landmark")
+  isDefault     Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+
+  @@index([userId])
 }
 
 model Category {
@@ -98,12 +118,16 @@ model Transaction {
   goalId String? // Nếu là nạp tiền vào Goal
   goal   Goal?   @relation(fields: [goalId], references: [id])
 
+  walletId String?
+  wallet   Wallet? @relation(fields: [walletId], references: [id])
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, recordedAt])
   @@index([userId, categoryId])
   @@index([userId, type])
+  @@index([userId, walletId])
 }
 
 model Budget {

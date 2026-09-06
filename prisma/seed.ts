@@ -28,9 +28,48 @@ async function main() {
       });
     }
 
+    // Seed 3 default wallets: 2 TPBank + 1 Techcombank
+    const defaultWallets = [
+      {
+        name: "TPBank - TK 1",
+        bankName: "TPBank",
+        accountNumber: "53510122003",
+        balance: "0",
+        color: "#7c3aed",
+        icon: "Landmark",
+        isDefault: true,
+        userId: user.id,
+      },
+      {
+        name: "TPBank - TK 2",
+        bankName: "TPBank",
+        accountNumber: "",
+        balance: "0",
+        color: "#a855f7",
+        icon: "CreditCard",
+        isDefault: false,
+        userId: user.id,
+      },
+      {
+        name: "Techcombank",
+        bankName: "Techcombank",
+        accountNumber: "",
+        balance: "0",
+        color: "#ef4444",
+        icon: "Building2",
+        isDefault: false,
+        userId: user.id,
+      },
+    ];
+
+    for (const w of defaultWallets) {
+      await tx.orm.public.Wallet.create(w);
+    }
+
     console.log(`✅ Created demo user: ${user.email}`);
     console.log(`   Password: demo123456`);
     console.log(`   Categories: ${DEFAULT_CATEGORIES.length} danh mục mặc định`);
+    console.log(`   Wallets: 3 tài khoản ngân hàng mặc định (2 TPBank + 1 Techcombank)`);
   });
 }
 

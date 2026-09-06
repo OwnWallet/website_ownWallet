@@ -16,8 +16,16 @@ function createDb() {
   });
 }
 
-export const db = globalForDb.db ?? createDb();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.db = db;
+function getDb(): ReturnType<typeof createDb> {
+  // Tự động khởi tạo lại client nếu chưa có hoặc thiếu model mới như Wallet trong singleton cache dev
+  if (!globalForDb.db || !(globalForDb.db as any).orm?.public?.Wallet) {
+    globalForDb.db = createDb();
+  }
+  return globalForDb.db;
 }
+
+export const db = new Proxy({} as ReturnType<typeof createDb>, {
+  get(_target, prop) {
+    return (getDb() as any)[prop];
+  },
+});

@@ -93,14 +93,19 @@ export function ReportClient({
   }
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+    <div className="space-y-6 animate-fade-in w-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-bold">Báo cáo & Phân tích</h1>
-          <p className="text-muted text-sm mt-1">
-            Tổng quan dòng tiền, tỷ trọng chi tiêu và so sánh chu kỳ tài chính
-          </p>
+      <div className="page-header">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-sm">
+            <BarChart3 size={20} />
+          </div>
+          <div>
+            <h1 className="page-header-title">Báo cáo & Phân tích</h1>
+            <p className="page-header-subtitle">
+              Tổng quan dòng tiền, tỷ trọng chi tiêu và so sánh chu kỳ tài chính
+            </p>
+          </div>
         </div>
 
         <button
@@ -119,11 +124,11 @@ export function ReportClient({
 
 
       {/* MoM / YoY Performance Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">
         {/* Income Card */}
         <div className="card p-5 border-emerald-500/20 bg-emerald-500/5 space-y-2">
           <div className="flex justify-between items-center text-xs text-muted">
-            <span className="font-semibold text-emerald-700 dark:text-emerald-400">Thu nhập ({currentMonthName})</span>
+            <span className="font-semibold text-emerald-700">Thu nhập ({currentMonthName})</span>
             <span className="p-1 rounded-md bg-emerald-500/20 text-emerald-600">
               <TrendingUp size={14} />
             </span>
@@ -149,7 +154,7 @@ export function ReportClient({
         {/* Expense Card */}
         <div className="card p-5 border-rose-500/20 bg-rose-500/5 space-y-2">
           <div className="flex justify-between items-center text-xs text-muted">
-            <span className="font-semibold text-rose-700 dark:text-rose-400">Chi tiêu ({currentMonthName})</span>
+            <span className="font-semibold text-rose-700">Chi tiêu ({currentMonthName})</span>
             <span className="p-1 rounded-md bg-rose-500/20 text-rose-600">
               <TrendingDown size={14} />
             </span>

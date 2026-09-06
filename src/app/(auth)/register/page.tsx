@@ -24,21 +24,21 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         {/* Header Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 mb-4 shadow-lg shadow-indigo-500/10">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-500 mb-4 shadow-lg shadow-orange-500/10">
             <Wallet className="w-7 h-7" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">
             Tạo tài khoản mới
           </h1>
           <p className="text-sm text-[var(--foreground-muted)] mt-1.5">
-            Bắt đầu quản lý tài chính thông minh với <span className="font-semibold text-indigo-400">wnWallet</span>
+            Bắt đầu quản lý tài chính thông minh với <span className="font-semibold text-orange-500">wnWallet</span>
           </p>
         </div>
 
         {/* Form Card */}
         <div className="card shadow-2xl backdrop-blur-sm border-[var(--border-strong)] p-6 sm:p-8">
           {generalError && (
-            <div className="flex items-center gap-2.5 p-3.5 mb-6 text-sm text-red-400 bg-red-950/40 border border-red-800/50 rounded-lg animate-fade-in">
+            <div className="flex items-center gap-2.5 p-3.5 mb-6 text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg animate-fade-in">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{generalError}</span>
             </div>
@@ -58,10 +58,10 @@ export default function RegisterPage() {
                 type="text"
                 required
                 placeholder="Nguyễn Văn A"
-                className="w-full px-3.5 py-2.5 bg-[var(--background-elevated)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                className="w-full px-3.5 py-2.5 bg-[var(--background-elevated)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)] focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
               />
               {fieldErrors?.name && (
-                <p className="text-xs text-red-400 mt-1">{fieldErrors.name[0]}</p>
+                <p className="text-xs text-rose-500 mt-1">{fieldErrors.name[0]}</p>
               )}
             </div>
 
@@ -78,10 +78,10 @@ export default function RegisterPage() {
                 type="email"
                 required
                 placeholder="name@example.com"
-                className="w-full px-3.5 py-2.5 bg-[var(--background-elevated)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                className="w-full px-3.5 py-2.5 bg-[var(--background-elevated)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)] focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
               />
               {fieldErrors?.email && (
-                <p className="text-xs text-red-400 mt-1">{fieldErrors.email[0]}</p>
+                <p className="text-xs text-rose-500 mt-1">{fieldErrors.email[0]}</p>
               )}
             </div>
 
@@ -98,10 +98,10 @@ export default function RegisterPage() {
                 type="password"
                 required
                 placeholder="Ít nhất 6 ký tự"
-                className="w-full px-3.5 py-2.5 bg-[var(--background-elevated)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                className="w-full px-3.5 py-2.5 bg-[var(--background-elevated)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)] focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
               />
               {fieldErrors?.password && (
-                <p className="text-xs text-red-400 mt-1">{fieldErrors.password[0]}</p>
+                <p className="text-xs text-rose-500 mt-1">{fieldErrors.password[0]}</p>
               )}
             </div>
 
@@ -118,10 +118,10 @@ export default function RegisterPage() {
                 type="password"
                 required
                 placeholder="Nhập lại mật khẩu"
-                className="w-full px-3.5 py-2.5 bg-[var(--background-elevated)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                className="w-full px-3.5 py-2.5 bg-[var(--background-elevated)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)] focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
               />
               {fieldErrors?.confirmPassword && (
-                <p className="text-xs text-red-400 mt-1">
+                <p className="text-xs text-rose-500 mt-1">
                   {fieldErrors.confirmPassword[0]}
                 </p>
               )}
@@ -130,7 +130,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isPending}
-              className="w-full mt-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-50 text-white font-medium text-sm rounded-lg flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+              className="w-full mt-2 py-2.5 px-4 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 active:from-orange-700 active:to-amber-700 disabled:opacity-50 text-white font-medium text-sm rounded-lg flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-600/20 cursor-pointer"
             >
               {isPending ? (
                 <>
@@ -152,7 +152,7 @@ export default function RegisterPage() {
           Đã có tài khoản?{" "}
           <Link
             href="/login"
-            className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+            className="font-medium text-orange-500 hover:text-orange-400 transition-colors"
           >
             Đăng nhập
           </Link>
@@ -161,4 +161,3 @@ export default function RegisterPage() {
     </main>
   );
 }
-

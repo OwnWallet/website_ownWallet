@@ -3,12 +3,22 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useTransition } from "react";
+import { StyledSelect } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 interface Props {
+  isCollapsed?: boolean;
   onClose?: () => void;
 }
 
-export function SidebarTimeFilter({ onClose }: Props) {
+export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -46,6 +56,7 @@ export function SidebarTimeFilter({ onClose }: Props) {
     params.set("year", String(y));
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`);
+      onClose?.();
     });
   }
 
@@ -67,6 +78,10 @@ export function SidebarTimeFilter({ onClose }: Props) {
     }
   }
 
+  const lastMonthDate = new Date(thisYear, thisMonth - 2, 1);
+  const lastMonthNum = lastMonthDate.getMonth() + 1;
+  const lastMonthYear = lastMonthDate.getFullYear();
+
   const availableYears = [2023, 2024, 2025, 2026, 2027, 2028];
 
   const displayTitle =
@@ -74,30 +89,15 @@ export function SidebarTimeFilter({ onClose }: Props) {
       ? `Cả năm ${currentYear}`
       : `Tháng ${currentMonth}/${currentYear}`;
 
-  return (
-    <div className="mx-3 my-2.5 p-2.5 rounded-xl bg-slate-50/90 border border-slate-200 shadow-2xs">
-      {/* Title */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5 text-slate-700">
-          <Calendar size={13} className="text-orange-600" />
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-            Thời gian dữ liệu
-          </span>
-        </div>
-        {isPending && (
-          <span className="text-[10px] text-orange-600 font-medium animate-pulse">
-            Đang tải...
-          </span>
-        )}
-      </div>
-
+  const filterContent = (
+    <div className="space-y-2">
       {/* Period Navigator Row */}
-      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-1 mb-2 shadow-2xs">
+      <div className="flex items-center justify-between bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-1 shadow-2xs">
         <button
           type="button"
           onClick={handlePrev}
           title="Kỳ trước"
-          className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+          className="p-1 rounded text-[var(--fg-subtle)] hover:text-[var(--fg)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
         >
           <ChevronLeft size={15} />
         </button>
@@ -110,71 +110,149 @@ export function SidebarTimeFilter({ onClose }: Props) {
           type="button"
           onClick={handleNext}
           title="Kỳ kế tiếp"
-          className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+          className="p-1 rounded text-[var(--fg-subtle)] hover:text-[var(--fg)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
         >
           <ChevronRight size={15} />
         </button>
       </div>
 
       {/* Selectors Row */}
-      <div className="grid grid-cols-2 gap-1.5 mb-2">
-        <select
-          value={currentMonth}
-          onChange={(e) => {
-            const val = e.target.value === "ALL" ? "ALL" : Number(e.target.value);
-            applyPeriod(val, currentYear);
+      <div className="grid grid-cols-2 gap-1.5">
+        <StyledSelect
+          value={String(currentMonth)}
+          onChange={(val) => {
+            const parsedVal = val === "ALL" ? "ALL" : Number(val);
+            applyPeriod(parsedVal, currentYear);
           }}
-          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-700 outline-none focus:border-orange-500 cursor-pointer shadow-2xs"
-        >
-          <option value="ALL">Cả năm</option>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-            <option key={m} value={m}>
-              Tháng {m}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "ALL", label: "Cả năm" },
+            ...Array.from({ length: 12 }, (_, i) => ({
+              value: String(i + 1),
+              label: `Tháng ${i + 1}`,
+            })),
+          ]}
+          size="sm"
+          className="w-full"
+        />
 
-        <select
-          value={currentYear}
-          onChange={(e) => {
-            applyPeriod(currentMonth, Number(e.target.value));
+        <StyledSelect
+          value={String(currentYear)}
+          onChange={(val) => {
+            applyPeriod(currentMonth, Number(val));
           }}
-          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-700 outline-none focus:border-orange-500 cursor-pointer shadow-2xs"
-        >
-          {availableYears.map((yr) => (
-            <option key={yr} value={yr}>
-              Năm {yr}
-            </option>
-          ))}
-        </select>
+          options={availableYears.map((yr) => ({
+            value: String(yr),
+            label: `Năm ${yr}`,
+          }))}
+          size="sm"
+          className="w-full"
+        />
       </div>
 
       {/* Quick Presets */}
-      <div className="flex items-center gap-1">
+      <div className="grid grid-cols-3 gap-1 pt-0.5">
         <button
           type="button"
           onClick={() => applyPeriod(thisMonth, thisYear)}
-          className={`flex-1 py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center ${
+          className={cn(
+            "py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center",
             currentMonth === thisMonth && currentYear === thisYear
-              ? "bg-orange-600 text-white shadow-2xs"
-              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-          }`}
+              ? "bg-orange-600 text-white shadow-2xs font-bold"
+              : "bg-[var(--bg-card)] text-[var(--fg-muted)] hover:bg-[var(--bg-elevated)] border border-[var(--border)]"
+          )}
         >
           Tháng này
         </button>
 
         <button
           type="button"
-          onClick={() => applyPeriod("ALL", thisYear)}
-          className={`flex-1 py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center ${
-            currentMonth === "ALL" && currentYear === thisYear
-              ? "bg-orange-600 text-white shadow-2xs"
-              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-          }`}
+          onClick={() => applyPeriod(lastMonthNum, lastMonthYear)}
+          className={cn(
+            "py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center",
+            currentMonth === lastMonthNum && currentYear === lastMonthYear
+              ? "bg-orange-600 text-white shadow-2xs font-bold"
+              : "bg-[var(--bg-card)] text-[var(--fg-muted)] hover:bg-[var(--bg-elevated)] border border-[var(--border)]"
+          )}
         >
-          Cả năm nay
+          Tháng trước
+        </button>
+
+        <button
+          type="button"
+          onClick={() => applyPeriod("ALL", thisYear)}
+          className={cn(
+            "py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center",
+            currentMonth === "ALL" && currentYear === thisYear
+              ? "bg-orange-600 text-white shadow-2xs font-bold"
+              : "bg-[var(--bg-card)] text-[var(--fg-muted)] hover:bg-[var(--bg-elevated)] border border-[var(--border)]"
+          )}
+        >
+          Cả năm
         </button>
       </div>
+    </div>
+  );
+
+  if (isCollapsed) {
+    return (
+      <div className="px-2 mb-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            title={`Thời gian lọc: ${displayTitle}`}
+            className={cn(
+              "w-full rounded-xl border transition-all cursor-pointer outline-none group text-left",
+              "p-2 flex items-center justify-center border-border hover:border-orange-300 hover:bg-orange-50/50",
+              isPending && "opacity-70 animate-pulse"
+            )}
+          >
+            <div className="w-9 h-9 rounded-lg flex flex-col items-center justify-center font-extrabold text-[10px] border shadow-2xs bg-orange-50 text-orange-700 border-orange-200 group-hover:scale-105 transition-transform">
+              <Calendar size={13} />
+              <span className="text-[9px] font-black leading-none mt-0.5">
+                {currentMonth === "ALL" ? "NĂM" : `T${currentMonth}`}
+              </span>
+            </div>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            align="start"
+            side="right"
+            className="w-72 p-3 shadow-xl border-border bg-card"
+          >
+            <DropdownMenuLabel className="font-semibold text-xs px-1 py-1 text-foreground flex items-center justify-between mb-1">
+              <span className="flex items-center gap-1.5">
+                <Calendar size={14} className="text-orange-600" />
+                <span>Thời gian dữ liệu</span>
+              </span>
+              <span className="text-[10px] font-normal text-muted-foreground">
+                {currentMonth === "ALL" ? `Năm ${currentYear}` : `T${currentMonth}/${currentYear}`}
+              </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="mb-2" />
+            {filterContent}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-3 my-1.5 p-2.5 rounded-xl bg-[var(--bg-elevated)]/90 border border-[var(--border)] shadow-2xs">
+      {/* Title */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-[var(--fg)]">
+          <Calendar size={13} className="text-orange-600" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--fg-muted)]">
+            Thời gian dữ liệu
+          </span>
+        </div>
+        {isPending && (
+          <span className="text-[10px] text-orange-600 font-medium animate-pulse">
+            Đang tải...
+          </span>
+        )}
+      </div>
+
+      {filterContent}
     </div>
   );
 }

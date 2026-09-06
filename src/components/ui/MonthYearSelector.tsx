@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { StyledSelect } from "@/components/ui/select";
 
 interface Props {
   currentMonth: number | "ALL";
@@ -65,7 +66,7 @@ export function MonthYearSelector({
         <button
           onClick={handlePrev}
           title="Kỳ trước"
-          className="p-1.5 rounded-lg border border-border bg-elevated hover:bg-slate-100 dark:hover:bg-slate-800 text-foreground transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg border border-border bg-elevated hover:bg-slate-100 text-foreground transition-colors cursor-pointer"
         >
           <ChevronLeft size={17} />
         </button>
@@ -84,7 +85,7 @@ export function MonthYearSelector({
         <button
           onClick={handleNext}
           title="Kỳ kế tiếp"
-          className="p-1.5 rounded-lg border border-border bg-elevated hover:bg-slate-100 dark:hover:bg-slate-800 text-foreground transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg border border-border bg-elevated hover:bg-slate-100 text-foreground transition-colors cursor-pointer"
         >
           <ChevronRight size={17} />
         </button>
@@ -92,37 +93,33 @@ export function MonthYearSelector({
         {/* Direct Month & Year Dropdowns */}
         <div className="flex items-center gap-1.5 ml-1 sm:ml-2">
           {/* Month select */}
-          <select
-            value={currentMonth}
-            onChange={(e) => {
-              const val = e.target.value === "ALL" ? "ALL" : Number(e.target.value);
-              updateSelection(val, currentYear);
+          <StyledSelect
+            value={String(currentMonth)}
+            onChange={(val) => {
+              const parsedVal = val === "ALL" ? "ALL" : Number(val);
+              updateSelection(parsedVal, currentYear);
             }}
-            className="bg-elevated border border-border-strong rounded-lg px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-primary text-foreground cursor-pointer"
-          >
-            <option value="ALL">Cả năm (Tất cả tháng)</option>
-            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-              <option key={m} value={m}>
-                Tháng {m}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: "ALL", label: "Cả năm (Tất cả tháng)" },
+              ...Array.from({ length: 12 }, (_, i) => ({
+                value: String(i + 1),
+                label: `Tháng ${i + 1}`
+              }))
+            ]}
+          />
 
           {/* Year select */}
-          <select
-            value={currentYear}
-            onChange={(e) => {
-              const y = Number(e.target.value);
+          <StyledSelect
+            value={String(currentYear)}
+            onChange={(val) => {
+              const y = Number(val);
               updateSelection(currentMonth, y);
             }}
-            className="bg-elevated border border-border-strong rounded-lg px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-primary text-foreground cursor-pointer"
-          >
-            {availableYears.map((yr) => (
-              <option key={yr} value={yr}>
-                Năm {yr}
-              </option>
-            ))}
-          </select>
+            options={availableYears.map(yr => ({
+              value: String(yr),
+              label: `Năm ${yr}`
+            }))}
+          />
         </div>
       </div>
 

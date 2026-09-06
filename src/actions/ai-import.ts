@@ -36,7 +36,7 @@ export async function confirmAiImport(
     };
   }
 
-  const { transactions } = parsed.data;
+  const { transactions, walletId } = parsed.data;
 
   // ── Lấy toàn bộ categories của user ──
   const existingCategories = await db.orm.public.Category
@@ -99,6 +99,7 @@ export async function confirmAiImport(
       note: t.note ?? "",
       recordedAt: toInstant(t.recordedAt),
       categoryId: catId,
+      walletId: walletId || null,
       userId,
     };
   });
@@ -111,6 +112,7 @@ export async function confirmAiImport(
 
     revalidatePath("/transactions");
     revalidatePath("/dashboard");
+    revalidatePath("/wallets");
 
     return { success: true, imported: transactionData.length };
   } catch (err: unknown) {

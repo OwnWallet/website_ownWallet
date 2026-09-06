@@ -58,8 +58,29 @@ model User {
   goals        Goal[]
   categories   Category[]
   budgets      Budget[]
+  wallets      Wallet[]
 
   @@map("User")
+}
+
+model Wallet {
+  id            String        @id @default(cuid(2))
+  name          String
+  accountNumber String?
+  bankName      String?
+  balance       Decimal       @default("0")
+  color         String?       @default("#7c3aed")
+  icon          String?       @default("Landmark")
+  isDefault     Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     temporal.updatedAt()
+
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+
+  @@index([userId])
+  @@map("Wallet")
 }
 
 model Category {
@@ -96,12 +117,16 @@ model Transaction {
   goalId String?
   goal   Goal?   @relation(fields: [goalId], references: [id])
 
+  walletId String?
+  wallet   Wallet? @relation(fields: [walletId], references: [id])
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, recordedAt])
   @@index([userId, categoryId])
   @@index([userId, type])
+  @@index([userId, walletId])
   @@map("Transaction")
 }
 

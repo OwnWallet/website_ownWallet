@@ -4,6 +4,7 @@ import { serializeData } from "@/lib/utils";
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SettingsClient } from "./settings-client";
+import { Settings } from "lucide-react";
 
 import { getAiConfig } from "@/actions/settings";
 
@@ -30,10 +31,17 @@ export default async function SettingsPage() {
     }
 
     return (
-      <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-        <div>
-          <h1 className="text-2xl font-bold">Cài đặt</h1>
-          <p className="text-muted text-sm mt-1">Quản lý tài khoản, danh mục chi tiêu và cấu hình hệ thống</p>
+      <div className="space-y-6 animate-fade-in w-full">
+        <div className="page-header">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center text-white shadow-sm">
+              <Settings size={20} />
+            </div>
+            <div>
+              <h1 className="page-header-title">Cài đặt</h1>
+              <p className="page-header-subtitle">Quản lý tài khoản, danh mục chi tiêu và cấu hình hệ thống</p>
+            </div>
+          </div>
         </div>
 
         <SettingsClient

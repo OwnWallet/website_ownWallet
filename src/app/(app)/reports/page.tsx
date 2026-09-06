@@ -13,6 +13,7 @@ interface ReportsPageProps {
   searchParams: Promise<{
     month?: string;
     year?: string;
+    wallet?: string;
   }>;
 }
 
@@ -23,6 +24,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
   const resolvedSearchParams = (await searchParams) || {};
   const filterDate = getFilterDateRange(resolvedSearchParams.month, resolvedSearchParams.year);
+  const walletId = resolvedSearchParams.wallet || "ALL";
   const isYearly = filterDate.month === "ALL";
 
   let startCurrent: Date;
@@ -52,15 +54,24 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const endCurrentInstant = toInstant(endCurrent);
 
   try {
+    let txQuery = db.orm.public.Transaction
+      .where((t) => t.userId.eq(userId))
+      .where((t) => t.recordedAt.gte(historyInstant))
+      .where((t) => t.recordedAt.lte(endCurrentInstant));
+
+    if (walletId && walletId !== "ALL") {
+      if (walletId === "UNASSIGNED") {
+        txQuery = txQuery.where({ walletId: null });
+      } else {
+        txQuery = txQuery.where({ walletId });
+      }
+    }
+
     const [categories, txs] = await Promise.all([
       db.orm.public.Category
         .where((c) => c.userId.eq(userId))
         .all(),
-      db.orm.public.Transaction
-        .where((t) => t.userId.eq(userId))
-        .where((t) => t.recordedAt.gte(historyInstant))
-        .where((t) => t.recordedAt.lte(endCurrentInstant))
-        .all(),
+      txQuery.all(),
     ]);
 
     let currentIncome = 0;

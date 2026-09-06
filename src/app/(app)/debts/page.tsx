@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, formatDate, calcPercent, toDate } from "@/lib/utils";
+import { formatCurrency, serializeData } from "@/lib/utils";
 import { DebtActions } from "./debt-actions";
-import { deleteDebt } from "@/actions/debts";
-import { Trash2 } from "lucide-react";
+import { DebtCard } from "./debt-card";
+import { HandCoins, TrendingDown, TrendingUp } from "lucide-react";
 
 export const metadata = {
   title: "Quản lý Nợ | wnWallet",
@@ -23,60 +23,83 @@ export default async function DebtsPage() {
   } catch (error) {
     console.error("Failed to fetch debts:", error);
     return (
-      <div className="p-8 text-center" style={{ color: "var(--color-expense)" }}>
-        Đã có lỗi xảy ra khi tải dữ liệu nợ.
+      <div className="empty-state">
+        <span className="empty-state-icon">⚠️</span>
+        <p className="empty-state-title text-rose-600">Đã có lỗi xảy ra khi tải dữ liệu nợ.</p>
       </div>
     );
   }
 
-  const owes = debts.filter((d) => d.direction === "OWE");
-  const oweds = debts.filter((d) => d.direction === "OWED");
+  const plainDebts = serializeData(debts);
+  const owes = plainDebts.filter((d: any) => d.direction === "OWE");
+  const oweds = plainDebts.filter((d: any) => d.direction === "OWED");
 
-  const totalOwe = owes.reduce((sum, d) => sum + Number(d.amount) - Number(d.paidAmount), 0);
-  const totalOwed = oweds.reduce((sum, d) => sum + Number(d.amount) - Number(d.paidAmount), 0);
+  const totalOwe = owes.reduce((sum: number, d: any) => sum + Number(d.amount) - Number(d.paidAmount), 0);
+  const totalOwed = oweds.reduce((sum: number, d: any) => sum + Number(d.amount) - Number(d.paidAmount), 0);
 
   return (
-    <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Quản lý Nợ</h1>
-          <p className="text-muted text-sm mt-1">Theo dõi các khoản vay và cho vay</p>
+    <div className="space-y-6 animate-fade-in w-full">
+      {/* Page Header */}
+      <div className="page-header">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-sm">
+            <HandCoins size={20} />
+          </div>
+          <div>
+            <h1 className="page-header-title">Quản lý Nợ</h1>
+            <p className="page-header-subtitle">Theo dõi các khoản vay và cho vay</p>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div
-          className="card bg-elevated flex flex-col items-center justify-center py-6"
-          style={{ border: "1px solid var(--border-strong)" }}
-        >
-          <span className="text-muted text-sm mb-1">Tổng nợ phải trả</span>
-          <span className="text-3xl font-extrabold text-expense">{formatCurrency(totalOwe)}</span>
+      {/* Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 stagger-children">
+        <div className="kpi-card" style={{ "--kpi-accent": "#e11d48" } as React.CSSProperties}>
+          <div className="kpi-card-header">
+            <div className="kpi-card-icon bg-rose-100 text-rose-600">
+              <TrendingDown size={18} />
+            </div>
+            <span className="kpi-card-label text-rose-700">Tổng nợ phải trả</span>
+          </div>
+          <p className="kpi-card-value text-rose-600">{formatCurrency(totalOwe)}</p>
+          <p className="kpi-card-sub">{owes.length} khoản nợ đang mở</p>
         </div>
-        <div
-          className="card bg-elevated flex flex-col items-center justify-center py-6"
-          style={{ border: "1px solid var(--border-strong)" }}
-        >
-          <span className="text-muted text-sm mb-1">Tổng nợ phải thu</span>
-          <span className="text-3xl font-extrabold text-income">{formatCurrency(totalOwed)}</span>
+
+        <div className="kpi-card" style={{ "--kpi-accent": "#059669" } as React.CSSProperties}>
+          <div className="kpi-card-header">
+            <div className="kpi-card-icon bg-emerald-100 text-emerald-600">
+              <TrendingUp size={18} />
+            </div>
+            <span className="kpi-card-label text-emerald-700">Tổng nợ phải thu</span>
+          </div>
+          <p className="kpi-card-value text-emerald-600">{formatCurrency(totalOwed)}</p>
+          <p className="kpi-card-sub">{oweds.length} khoản đang chờ thu</p>
         </div>
       </div>
 
+      {/* Add Debt Action */}
       <DebtActions />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-6">
+      {/* Debt Lists */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* OWE */}
         <div>
-          <h2 className="text-lg font-semibold mb-4 pb-2 border-b border-border-strong">
-            Tôi nợ ({owes.length})
-          </h2>
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
+            <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center">
+              <TrendingDown size={14} className="text-rose-600" />
+            </div>
+            <h2 className="text-base font-bold text-foreground">
+              Tôi nợ <span className="text-muted-foreground font-normal text-sm ml-1">({owes.length})</span>
+            </h2>
+          </div>
           {owes.length === 0 ? (
-            <div className="text-center p-8 card border-dashed">
-              <div className="text-4xl mb-2">😌</div>
-              <p className="text-muted text-sm">Bạn không nợ ai cả</p>
+            <div className="empty-state">
+              <span className="empty-state-icon">😌</span>
+              <p className="empty-state-desc">Bạn không nợ ai cả</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {owes.map((d) => (
+            <div className="space-y-3 stagger-children">
+              {owes.map((d: any) => (
                 <DebtCard key={d.id} debt={d} />
               ))}
             </div>
@@ -85,116 +108,27 @@ export default async function DebtsPage() {
 
         {/* OWED */}
         <div>
-          <h2 className="text-lg font-semibold mb-4 pb-2 border-b border-border-strong">
-            Người nợ tôi ({oweds.length})
-          </h2>
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+              <TrendingUp size={14} className="text-emerald-600" />
+            </div>
+            <h2 className="text-base font-bold text-foreground">
+              Người nợ tôi <span className="text-muted-foreground font-normal text-sm ml-1">({oweds.length})</span>
+            </h2>
+          </div>
           {oweds.length === 0 ? (
-            <div className="text-center p-8 card border-dashed">
-              <div className="text-4xl mb-2">🪹</div>
-              <p className="text-muted text-sm">Không có ai nợ bạn</p>
+            <div className="empty-state">
+              <span className="empty-state-icon">🪹</span>
+              <p className="empty-state-desc">Không có ai nợ bạn</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {oweds.map((d) => (
+            <div className="space-y-3 stagger-children">
+              {oweds.map((d: any) => (
                 <DebtCard key={d.id} debt={d} />
               ))}
             </div>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function DebtCard({ debt }: { debt: any }) {
-  const amount = Number(debt.amount);
-  const paid = Number(debt.paidAmount);
-  const remain = Math.max(0, amount - paid);
-  const percent = calcPercent(paid, amount);
-
-  let statusColor = "var(--foreground-muted)";
-  let statusText = "Chờ trả";
-  if (debt.status === "PAID") {
-    statusColor = "var(--color-income)";
-    statusText = "Đã xong";
-  } else if (debt.status === "PARTIAL") {
-    statusColor = "var(--color-debt)";
-    statusText = "Trả 1 phần";
-  }
-
-  const isOverdue = debt.dueDate && toDate(debt.dueDate) < new Date() && debt.status !== "PAID";
-
-  return (
-    <div className="card relative flex flex-col gap-3 group">
-      <div className="flex justify-between items-start">
-        <div>
-          <h3 className="font-bold text-base">{debt.person}</h3>
-          {debt.note && <p className="text-xs text-muted mt-0.5">{debt.note}</p>}
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="text-xs font-semibold px-2 py-0.5 rounded"
-            style={{
-              backgroundColor: `color-mix(in srgb, ${statusColor} 15%, transparent)`,
-              color: statusColor,
-              border: `1px solid color-mix(in srgb, ${statusColor} 30%, transparent)`,
-            }}
-          >
-            {statusText}
-          </span>
-          <form
-            action={async () => {
-              "use server";
-              await deleteDebt(debt.id);
-            }}
-          >
-            <button
-              type="submit"
-              title="Xóa khoản nợ"
-              className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
-            >
-              <Trash2 size={13} />
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <div className="flex justify-between text-xs">
-        <span className="text-muted">
-          Số tiền: <strong className="text-foreground">{formatCurrency(amount)}</strong>
-        </span>
-        <span className="text-muted">
-          Còn lại:{" "}
-          <strong style={{ color: debt.direction === "OWE" ? "var(--color-expense)" : "var(--color-income)" }}>
-            {formatCurrency(remain)}
-          </strong>
-        </span>
-      </div>
-
-      <div className="h-2 w-full bg-elevated rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-500 ease-out"
-          style={{
-            width: `${percent}%`,
-            backgroundColor: statusColor,
-          }}
-        />
-      </div>
-
-      <div className="flex justify-between items-center mt-1">
-        <div className="text-xs">
-          {debt.dueDate ? (
-            <span style={{ color: isOverdue ? "var(--color-expense)" : "var(--foreground-subtle)" }}>
-              Hạn: {formatDate(debt.dueDate)} {isOverdue && "⚠️ Quá hạn"}
-            </span>
-          ) : (
-            <span className="text-muted text-xs">Không có hạn</span>
-          )}
-        </div>
-
-        {debt.status !== "PAID" && (
-          <DebtActions debtId={debt.id} inline mode="record" />
-        )}
       </div>
     </div>
   );

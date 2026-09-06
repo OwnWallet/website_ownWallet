@@ -1,6 +1,6 @@
 export default function AppLoading() {
   return (
-    <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+    <div className="space-y-6 animate-fade-in w-full">
       {/* Header skeleton */}
       <div className="flex justify-between items-end pb-2">
         <div className="space-y-2">

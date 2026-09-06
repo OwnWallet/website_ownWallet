@@ -32,6 +32,7 @@ export async function createTransaction(formData: FormData) {
       note,
       recordedAt: toInstant(data.recordedAt),
       goalId: data.goalId || null,
+      walletId: data.walletId || null,
       userId,
     });
 
@@ -48,6 +49,7 @@ export async function createTransaction(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+  revalidatePath("/wallets");
   revalidatePath("/reports");
   return { success: true };
 }
@@ -73,10 +75,12 @@ export async function updateTransaction(id: string, formData: FormData) {
       note,
       recordedAt: toInstant(data.recordedAt),
       goalId: data.goalId || null,
+      walletId: data.walletId || null,
     });
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+  revalidatePath("/wallets");
   revalidatePath("/reports");
   return { success: true };
 }

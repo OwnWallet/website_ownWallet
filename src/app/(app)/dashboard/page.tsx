@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getWallets } from "@/actions/wallets";
 import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getFilterDateRange, toInstant, toDate, serializeData } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD } from "@/lib/constants";
 import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Plus, ArrowUpRight, ArrowDownLeft } from "lucide-react";
@@ -15,7 +16,8 @@ async function getDashboardData(
   from: Date,
   to: Date,
   month: number | "ALL",
-  year: number
+  year: number,
+  walletId?: string
 ) {
   const fromInstant = toInstant(from);
   const toInstantVal = toInstant(to);
@@ -29,11 +31,28 @@ async function getDashboardData(
       budgetQuery = budgetQuery.where((b) => b.month.eq(month));
     }
 
-    const [monthTransactions, investments, debts, budgets, goals, recentTx] = await Promise.all([
-      db.orm.public.Transaction
-        .where((t) => t.userId.eq(userId))
-        .where((t) => t.recordedAt.gte(fromInstant))
-        .where((t) => t.recordedAt.lte(toInstantVal))
+    let txQuery = db.orm.public.Transaction
+      .where((t) => t.userId.eq(userId))
+      .where((t) => t.recordedAt.gte(fromInstant))
+      .where((t) => t.recordedAt.lte(toInstantVal));
+
+    let recentTxQuery = db.orm.public.Transaction
+      .where((t) => t.userId.eq(userId))
+      .where((t) => t.recordedAt.gte(fromInstant))
+      .where((t) => t.recordedAt.lte(toInstantVal));
+
+    if (walletId && walletId !== "ALL") {
+      if (walletId === "UNASSIGNED") {
+        txQuery = txQuery.where({ walletId: null });
+        recentTxQuery = recentTxQuery.where({ walletId: null });
+      } else {
+        txQuery = txQuery.where({ walletId });
+        recentTxQuery = recentTxQuery.where({ walletId });
+      }
+    }
+
+    const [monthTransactions, investments, debts, budgets, goals, recentTx, realWallets] = await Promise.all([
+      txQuery
         .orderBy((t) => t.recordedAt.asc())
         .all(),
       db.orm.public.Investment
@@ -53,14 +72,13 @@ async function getDashboardData(
         .orderBy((t) => t.deadline.asc())
         .limit(4)
         .all(),
-      db.orm.public.Transaction
-        .where((t) => t.userId.eq(userId))
-        .where((t) => t.recordedAt.gte(fromInstant))
-        .where((t) => t.recordedAt.lte(toInstantVal))
+      recentTxQuery
         .include("category", (cat) => cat)
+        .include("wallet", (w) => w)
         .orderBy((t) => t.recordedAt.desc())
         .limit(8)
         .all(),
+      getWallets(),
     ]);
 
     let income = 0;
@@ -120,9 +138,7 @@ async function getDashboardData(
       createdAt: toDate(g.createdAt).toISOString(),
     }));
 
-    const wallets = [
-      { id: "main-wallet", name: "Ví chính", balance: income - expense },
-    ];
+    const wallets = realWallets;
 
     return {
       income,
@@ -155,6 +171,7 @@ interface DashboardPageProps {
   searchParams: Promise<{
     month?: string;
     year?: string;
+    wallet?: string;
   }>;
 }
 
@@ -164,12 +181,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const resolvedSearchParams = (await searchParams) || {};
   const filterDate = getFilterDateRange(resolvedSearchParams.month, resolvedSearchParams.year);
+  const selectedWalletId = resolvedSearchParams.wallet || "ALL";
 
   const { income, expense, investPnL, debts, budgetsWithSpend, goals, recentTx, monthTransactions, wallets } =
-    await getDashboardData(session.user.id, filterDate.from, filterDate.to, filterDate.month, filterDate.year);
+    await getDashboardData(
+      session.user.id,
+      filterDate.from,
+      filterDate.to,
+      filterDate.month,
+      filterDate.year,
+      selectedWalletId
+    );
   const netBalance = income - expense;
 
   const monthLabel = filterDate.label;
+
+  const activeWallet =
+    selectedWalletId === "ALL"
+      ? null
+      : selectedWalletId === "UNASSIGNED"
+      ? { id: "UNASSIGNED", name: "Chưa gán tài khoản", accountNumber: "" }
+      : wallets.find((w: any) => w.id === selectedWalletId) || null;
 
   const kpiCards = [
     {
@@ -221,16 +253,50 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2 border-b border-border">
-        <div>
-          <p className="text-xs text-muted-foreground font-medium capitalize mb-1">{monthLabel}</p>
-          <h1 className="text-2xl lg:text-3xl font-extrabold text-foreground tracking-tight">Tổng quan tài chính</h1>
+      <div className="page-header">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shadow-sm">
+            <TrendingUp size={20} />
+          </div>
+          <div>
+            <h1 className="page-header-title">Tổng quan tài chính</h1>
+            <p className="page-header-subtitle">{monthLabel}</p>
+          </div>
         </div>
         <Link href="/transactions/new" className="btn-primary">
           <Plus size={16} />
           Thêm giao dịch
         </Link>
       </div>
+
+      {/* Active Account Filter Badge */}
+      {activeWallet && (
+        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-orange-50/80 border border-orange-200/70 animate-scale-in">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-orange-100 border border-orange-200 text-orange-700 flex items-center justify-center shrink-0 text-xs font-bold">
+              💳
+            </div>
+            <p className="text-xs font-semibold text-orange-900 truncate">
+              Đang lọc:{" "}
+              <span className="font-bold text-orange-700">{activeWallet.name}</span>
+              {activeWallet.accountNumber && (
+                <span className="text-muted-foreground font-normal ml-1">(STK: {activeWallet.accountNumber})</span>
+              )}
+            </p>
+          </div>
+          <Link
+            href={`/dashboard?${(() => {
+              const p = new URLSearchParams();
+              if (resolvedSearchParams.month) p.set("month", resolvedSearchParams.month);
+              if (resolvedSearchParams.year) p.set("year", resolvedSearchParams.year);
+              return p.toString();
+            })()}`}
+            className="text-xs font-semibold text-orange-700 hover:text-orange-900 bg-white px-2.5 py-1 rounded-lg border border-orange-200/90 shrink-0 shadow-2xs hover:bg-orange-50/50 transition-colors"
+          >
+            Xem tất cả
+          </Link>
+        </div>
+      )}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -324,8 +390,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <p className="text-sm font-semibold text-foreground truncate">
                       {tx.note || tx.description || tx.category?.name || "Giao dịch"}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {tx.category?.name} · {formatDateTime(tx.recordedAt)}
+                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <span>{tx.category?.name}</span>
+                      {tx.wallet && (
+                        <span className="font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.2 rounded border border-orange-200/60 text-[10px]">
+                          {tx.wallet.name}
+                        </span>
+                      )}
+                      <span>·</span>
+                      <span>{formatDateTime(tx.recordedAt)}</span>
                     </p>
                   </div>
 
@@ -354,32 +427,70 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         {/* Right sidebar widgets */}
         <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-4">
-          {/* Wallets */}
+          {/* Wallets & Accounts */}
           <div className="card bg-card border-border shadow-xs p-5">
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-border">
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <span>💳</span> Ví tiền & Dòng tiền
+                <span>💳</span> Tài khoản ({wallets.length})
               </h2>
-              <Link href="/transactions" className="text-xs font-semibold text-orange-600 hover:underline">
-                Chi tiết →
+              <Link href="/wallets" className="text-xs font-semibold text-orange-600 hover:underline">
+                Quản lý →
               </Link>
             </div>
 
             {wallets.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">Chưa có ví nào</p>
+              <p className="text-xs text-muted-foreground text-center py-4">Chưa có tài khoản nào</p>
             ) : (
-              <div className="space-y-3">
-                {wallets.map((w) => (
-                  <div key={w.id} className="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-100">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-md bg-white border border-slate-200 flex items-center justify-center text-slate-600 shadow-2xs">
-                        <Wallet size={14} />
+              <div className="space-y-2.5">
+                {wallets.map((w: any) => {
+                  const isTpb = (w.bankName || w.name).toLowerCase().includes("tpb");
+                  const isTcb = (w.bankName || w.name).toLowerCase().includes("techcombank");
+                  const iconBg = isTpb
+                    ? "bg-violet-100 text-violet-700"
+                    : isTcb
+                    ? "bg-rose-100 text-rose-700"
+                    : "bg-slate-100 text-slate-700";
+
+                  return (
+                    <Link
+                      key={w.id}
+                      href={`/transactions?wallet=${w.id}`}
+                      className={`flex justify-between items-center p-2.5 rounded-xl border transition-all group ${
+                        selectedWalletId === w.id
+                          ? "bg-orange-50/80 border-orange-300 ring-1 ring-orange-300 shadow-2xs"
+                          : "bg-slate-50 hover:bg-slate-100/80 border-slate-200/70"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-2xs font-extrabold text-[11px] ${iconBg}`}>
+                          {isTpb ? "TPB" : isTcb ? "TCB" : <Wallet size={14} />}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-foreground truncate block group-hover:text-primary transition-colors">
+                            {w.name}
+                          </span>
+                          {w.accountNumber ? (
+                            <span className="text-[10px] text-muted-foreground truncate block">
+                              STK: {w.accountNumber}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground truncate block">
+                              {w.txCount ?? 0} giao dịch
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{w.name}</span>
-                    </div>
-                    <span className="text-xs font-bold text-foreground">{formatCurrencyCompact(Number(w.balance))}</span>
-                  </div>
-                ))}
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-extrabold text-foreground block">
+                          {formatCurrencyCompact(w.currentBalance ?? w.balance)}
+                        </span>
+                        <span className="text-[10px] text-emerald-600 font-medium">
+                          {w.txCount ?? 0} GD
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             )}
           </div>

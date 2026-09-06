@@ -18,20 +18,13 @@ interface ImportReviewProps {
   transactions: ParsedTransaction[];
   totalFound: number;
   skipped: number;
+  wallets?: { id: string; name: string; bankName?: string | null; accountNumber?: string | null }[];
   onReset: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-function formatAmount(amount: number) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function formatDate(iso: string) {
   try {
@@ -64,10 +57,15 @@ export default function ImportReview({
   transactions,
   totalFound,
   skipped,
+  wallets = [],
   onReset,
 }: ImportReviewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  const [selectedWalletId, setSelectedWalletId] = useState<string>(() => {
+    return wallets.length > 0 ? wallets[0].id : "";
+  });
 
   const [rows, setRows] = useState<ReviewRow[]>(() =>
     transactions.map((t, i) => ({
@@ -107,6 +105,7 @@ export default function ImportReview({
 
     startTransition(async () => {
       const result = await confirmAiImport({
+        walletId: selectedWalletId || null,
         transactions: selected.map(({ amount, type, categoryName, note, recordedAt }) => ({
           amount,
           type,
@@ -158,6 +157,37 @@ export default function ImportReview({
           <span>Đã chọn <strong>{selectedCount}</strong></span>
         </div>
       </div>
+
+      {/* ── Wallet Selector ── */}
+      {wallets.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-card border border-border rounded-xl shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center text-orange-600 text-base">
+              💳
+            </div>
+            <div>
+              <span className="text-xs font-bold text-foreground block">
+                Tài khoản nhận giao dịch:
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Tất cả giao dịch import được chọn sẽ liên kết với tài khoản này
+              </span>
+            </div>
+          </div>
+          <select
+            value={selectedWalletId}
+            onChange={(e) => setSelectedWalletId(e.target.value)}
+            className="text-xs font-bold px-3 py-2 rounded-lg border border-border bg-card text-foreground outline-none cursor-pointer focus:border-primary shrink-0 shadow-2xs"
+          >
+            {wallets.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name} {w.accountNumber ? `(STK: ${w.accountNumber})` : ""}
+              </option>
+            ))}
+            <option value="">-- Chưa gán tài khoản --</option>
+          </select>
+        </div>
+      )}
 
       {/* ── Error message ── */}
       {importResult?.error && (

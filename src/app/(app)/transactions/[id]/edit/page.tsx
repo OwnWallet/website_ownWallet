@@ -18,7 +18,7 @@ export default async function EditTransactionPage({ params }: Props) {
 
   const { id } = await params;
 
-  const [transaction, categories, goals] = await Promise.all([
+  const [transaction, categories, goals, rawWallets] = await Promise.all([
     db.orm.public.Transaction
       .where({ id, userId })
       .first(),
@@ -29,6 +29,10 @@ export default async function EditTransactionPage({ params }: Props) {
     db.orm.public.Goal
       .where({ userId })
       .orderBy((g) => g.name.asc())
+      .all(),
+    db.orm.public.Wallet
+      .where({ userId })
+      .orderBy((w) => w.createdAt.asc())
       .all(),
   ]);
 
@@ -41,6 +45,7 @@ export default async function EditTransactionPage({ params }: Props) {
       transaction={serializeData(transaction)}
       categories={serializeData(categories)}
       goals={serializeData(goals)}
+      wallets={serializeData(rawWallets)}
     />
   );
 }

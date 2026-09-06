@@ -11,14 +11,28 @@ export default async function NewTransactionPage() {
   if (!session?.user?.id) return null;
 
   let categories: any[] = [];
+  let wallets: any[] = [];
   try {
-    categories = await db.orm.public.Category
-      .where((c) => c.userId.eq(session.user.id))
-      .orderBy((c) => c.name.asc())
-      .all();
+    const [cats, rawWallets] = await Promise.all([
+      db.orm.public.Category
+        .where((c) => c.userId.eq(session.user.id))
+        .orderBy((c) => c.name.asc())
+        .all(),
+      db.orm.public.Wallet
+        .where((w) => w.userId.eq(session.user.id))
+        .orderBy((w) => w.createdAt.asc())
+        .all(),
+    ]);
+    categories = serializeData(cats);
+    wallets = serializeData(rawWallets);
   } catch (err) {
-    console.error("Failed to load categories for new transaction:", err);
+    console.error("Failed to load categories/wallets for new transaction:", err);
   }
 
-  return <NewTransactionForm categories={serializeData(categories)} />;
+  return (
+    <NewTransactionForm
+      categories={categories}
+      wallets={wallets}
+    />
+  );
 }

@@ -438,11 +438,11 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
             <h2 className="text-lg font-bold">Cấu hình AI (Google Gemini)</h2>
           </div>
           {aiConfig.isConfigured ? (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
               <Check size={12} /> Đang hoạt động ({aiConfig.maskedKey})
             </span>
           ) : (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center gap-1.5">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1.5">
               <AlertCircle size={12} /> Chưa cấu hình API Key
             </span>
           )}
@@ -501,7 +501,7 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
             </div>
 
             {/* Hint & external link */}
-            <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-1 bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-border/80">
+            <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-1 bg-slate-50 p-2.5 rounded-lg border border-border/80">
               <span>💡 Bạn có thể tạo hoặc lấy API Key miễn phí từ Google tại:</span>
               <a
                 href="https://aistudio.google.com/app/apikey"

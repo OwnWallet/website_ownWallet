@@ -25,6 +25,7 @@ export type ParsedTransaction = z.infer<typeof ParsedTransactionSchema>;
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const ConfirmImportSchema = z.object({
+  walletId: z.string().optional().nullable(),
   transactions: z
     .array(
       z.object({
