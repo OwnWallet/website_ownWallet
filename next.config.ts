@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
+const isVercel = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV);
+
 const nextConfig: NextConfig = {
-  output: "standalone",
+  ...(isVercel ? {} : { output: "standalone" }),
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   async headers() {
     return [
