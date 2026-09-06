@@ -18,7 +18,10 @@ export default async function SettingsPage() {
 
   try {
     const [user, categories, aiConfig] = await Promise.all([
-      db.orm.public.User.where({ id: session.user.id }).first(),
+      db.orm.public.User
+        .select("id", "name", "email", "timezone", "createdAt")
+        .where({ id: session.user.id })
+        .first(),
       db.orm.public.Category
         .where({ userId: session.user.id })
         .orderBy((c) => c.name.asc())
@@ -29,6 +32,8 @@ export default async function SettingsPage() {
     if (!user) {
       return <div className="p-8 text-center text-muted">Không tìm thấy người dùng</div>;
     }
+
+    const { password: _pw, ...safeUser } = user as any;
 
     return (
       <div className="space-y-6 animate-fade-in w-full">
@@ -45,7 +50,7 @@ export default async function SettingsPage() {
         </div>
 
         <SettingsClient
-          user={serializeData(user)}
+          user={serializeData(safeUser)}
           categories={serializeData(categories)}
           initialAiConfig={aiConfig}
         />

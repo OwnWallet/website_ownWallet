@@ -4,13 +4,17 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { RegisterSchema } from "@/schemas/auth";
 import { DEFAULT_CATEGORIES } from "@/lib/constants";
-import { signIn, signOut } from "@/lib/auth";
+import { signIn, signOut, isEmailAllowed } from "@/lib/auth";
 import { AuthError } from "next-auth";
 
 export type AuthState = {
   error?: string | Record<string, string[]>;
   success?: boolean;
 } | null;
+
+export async function loginWithGoogle() {
+  await signIn("google", { redirectTo: "/dashboard" });
+}
 
 export async function register(formData: FormData): Promise<AuthState> {
   const raw = Object.fromEntries(formData);
@@ -21,6 +25,15 @@ export async function register(formData: FormData): Promise<AuthState> {
   }
 
   const { name, email, password } = parsed.data;
+
+  // Kiểm tra Whitelist
+  if (!isEmailAllowed(email)) {
+    return {
+      error: {
+        email: ["Email này chưa được cấp phép đăng ký (không nằm trong danh sách Whitelist)."],
+      },
+    };
+  }
 
   // Kiểm tra email đã tồn tại
   const existing = await db.orm.public.User.where({ email }).first();

@@ -38,6 +38,16 @@ export async function confirmAiImport(
 
   const { transactions, walletId } = parsed.data;
 
+  // Kiểm tra quyền sở hữu ví nếu có truyền walletId để chống IDOR
+  let validatedWalletId: string | null = null;
+  if (walletId) {
+    const wallet = await db.orm.public.Wallet.where({ id: walletId, userId }).first();
+    if (!wallet) {
+      return { success: false, imported: 0, error: "Ví được chọn không tồn tại hoặc không thuộc quyền sở hữu." };
+    }
+    validatedWalletId = wallet.id;
+  }
+
   // ── Lấy toàn bộ categories của user ──
   const existingCategories = await db.orm.public.Category
     .select("id", "name")
@@ -99,7 +109,7 @@ export async function confirmAiImport(
       note: t.note ?? "",
       recordedAt: toInstant(t.recordedAt),
       categoryId: catId,
-      walletId: walletId || null,
+      walletId: validatedWalletId,
       userId,
     };
   });

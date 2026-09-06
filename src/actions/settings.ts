@@ -142,12 +142,26 @@ export async function getAiConfig() {
 
 export async function updateAiApiKey(formData: FormData) {
   await getUserId();
-  const apiKey = (formData.get("apiKey") as string)?.trim();
-  const model = ((formData.get("model") as string)?.trim()) || "gemini-3.6-flash";
+  const rawApiKey = (formData.get("apiKey") as string)?.trim() || "";
+  const rawModel = ((formData.get("model") as string)?.trim()) || "gemini-3.6-flash";
 
-  if (!apiKey) {
+  if (!rawApiKey) {
     return { error: "API Key không được để trống" };
   }
+
+  // Chống Environment Variable Injection / Parameter Pollution
+  const SAFE_API_KEY_REGEX = /^[A-Za-z0-9_\-\.]{10,256}$/;
+  if (!SAFE_API_KEY_REGEX.test(rawApiKey)) {
+    return { error: "API Key chứa ký tự không hợp lệ hoặc độ dài không đúng định dạng." };
+  }
+
+  const SAFE_MODEL_REGEX = /^[a-zA-Z0-9\.\-_]{3,50}$/;
+  if (!SAFE_MODEL_REGEX.test(rawModel)) {
+    return { error: "Tên model không hợp lệ." };
+  }
+
+  const apiKey = rawApiKey;
+  const model = rawModel;
 
   try {
     const envPath = path.join(process.cwd(), ".env.local");

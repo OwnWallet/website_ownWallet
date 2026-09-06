@@ -33,7 +33,7 @@ async function main() {
       {
         name: "TPBank - TK 1",
         bankName: "TPBank",
-        accountNumber: "53510122003",
+        accountNumber: "",
         balance: "0",
         color: "#7c3aed",
         icon: "Landmark",

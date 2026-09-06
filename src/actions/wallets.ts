@@ -40,7 +40,7 @@ export async function ensureDefaultWallets(userId: string) {
     {
       name: "TPBank - TK 1",
       bankName: "TPBank",
-      accountNumber: "53510122003",
+      accountNumber: "",
       balance: "0",
       color: "#7c3aed", // Tím TPBank
       icon: "Landmark",
@@ -237,12 +237,18 @@ export async function deleteWallet(id: string) {
 export async function reassignTransactions(fromWalletId: string | "UNASSIGNED", toWalletId: string) {
   const userId = await getUserId();
 
+  // Kiểm tra quyền sở hữu ví đích để chống IDOR
+  const targetWallet = await db.orm.public.Wallet.where({ id: toWalletId, userId }).first();
+  if (!targetWallet) {
+    return { error: "Ví đích không tồn tại hoặc không thuộc quyền sở hữu" };
+  }
+
   const txs = fromWalletId === "UNASSIGNED"
     ? await db.orm.public.Transaction.where({ userId, walletId: null }).all()
     : await db.orm.public.Transaction.where({ userId, walletId: fromWalletId }).all();
 
   for (const t of txs) {
-    await db.orm.public.Transaction.where({ id: t.id }).update({ walletId: toWalletId });
+    await db.orm.public.Transaction.where({ id: t.id, userId }).update({ walletId: toWalletId });
   }
 
   revalidatePath("/wallets");

@@ -24,6 +24,28 @@ export async function createTransaction(formData: FormData) {
   const data = parsed.data;
   const note = data.note || data.description || null;
 
+  // Xác thực quyền sở hữu danh mục
+  const category = await db.orm.public.Category.where({ id: data.categoryId, userId }).first();
+  if (!category) {
+    return { error: { categoryId: ["Danh mục không tồn tại hoặc không thuộc quyền sở hữu"] } };
+  }
+
+  // Xác thực quyền sở hữu ví (nếu có chọn ví)
+  if (data.walletId) {
+    const wallet = await db.orm.public.Wallet.where({ id: data.walletId, userId }).first();
+    if (!wallet) {
+      return { error: { walletId: ["Ví không tồn tại hoặc không thuộc quyền sở hữu"] } };
+    }
+  }
+
+  // Xác thực quyền sở hữu mục tiêu (nếu có chọn mục tiêu)
+  if (data.goalId) {
+    const goal = await db.orm.public.Goal.where({ id: data.goalId, userId }).first();
+    if (!goal) {
+      return { error: { goalId: ["Mục tiêu không tồn tại hoặc không thuộc quyền sở hữu"] } };
+    }
+  }
+
   await db.transaction(async (tx: any) => {
     await tx.orm.public.Transaction.create({
       amount: String(data.amount),
@@ -65,6 +87,34 @@ export async function updateTransaction(id: string, formData: FormData) {
 
   const data = parsed.data;
   const note = data.note || data.description || null;
+
+  // Kiểm tra giao dịch tồn tại và thuộc quyền sở hữu của user
+  const existingTx = await db.orm.public.Transaction.where({ id, userId }).first();
+  if (!existingTx) {
+    return { error: "Không tìm thấy giao dịch" };
+  }
+
+  // Xác thực quyền sở hữu danh mục
+  const category = await db.orm.public.Category.where({ id: data.categoryId, userId }).first();
+  if (!category) {
+    return { error: { categoryId: ["Danh mục không tồn tại hoặc không thuộc quyền sở hữu"] } };
+  }
+
+  // Xác thực quyền sở hữu ví (nếu có chọn ví)
+  if (data.walletId) {
+    const wallet = await db.orm.public.Wallet.where({ id: data.walletId, userId }).first();
+    if (!wallet) {
+      return { error: { walletId: ["Ví không tồn tại hoặc không thuộc quyền sở hữu"] } };
+    }
+  }
+
+  // Xác thực quyền sở hữu mục tiêu (nếu có chọn mục tiêu)
+  if (data.goalId) {
+    const goal = await db.orm.public.Goal.where({ id: data.goalId, userId }).first();
+    if (!goal) {
+      return { error: { goalId: ["Mục tiêu không tồn tại hoặc không thuộc quyền sở hữu"] } };
+    }
+  }
 
   await db.orm.public.Transaction
     .where({ id, userId })

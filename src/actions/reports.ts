@@ -10,6 +10,19 @@ async function getUserId(): Promise<string> {
   return session.user.id;
 }
 
+/**
+ * Phòng chống CSV / Formula Injection (DDE injection trong Excel/Sheets):
+ * Nếu ô bắt đầu bằng =, +, -, @, \t, \r thì chèn thêm dấu nháy đơn ' để ngăn Excel coi đó là công thức tính toán.
+ */
+function escapeCsvCell(val: string | number | null | undefined): string {
+  if (val === null || val === undefined) return '""';
+  let str = String(val);
+  if (/^[=\+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
 export async function exportTransactionsCSV() {
   const userId = await getUserId();
 
@@ -21,12 +34,12 @@ export async function exportTransactionsCSV() {
 
   const headers = ["ID", "Thời gian", "Loại", "Danh mục", "Số tiền (VND)", "Ghi chú"];
   const rows = transactions.map((t: any) => [
-    t.id,
-    `"${formatDateTime(t.recordedAt)}"`,
-    t.type === "INCOME" ? "Thu nhập" : "Chi tiêu",
-    `"${t.category?.name || ""}"`,
+    escapeCsvCell(t.id),
+    escapeCsvCell(formatDateTime(t.recordedAt)),
+    escapeCsvCell(t.type === "INCOME" ? "Thu nhập" : "Chi tiêu"),
+    escapeCsvCell(t.category?.name || ""),
     Number(t.amount),
-    `"${(t.note || "").replace(/"/g, '""')}"`,
+    escapeCsvCell(t.note || ""),
   ]);
 
   const csvContent =
