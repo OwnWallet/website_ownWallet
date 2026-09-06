@@ -18,6 +18,7 @@ interface ImportReviewProps {
   transactions: ParsedTransaction[];
   totalFound: number;
   skipped: number;
+  duplicateCount?: number;
   wallets?: { id: string; name: string; bankName?: string | null; accountNumber?: string | null }[];
   onReset: () => void;
 }
@@ -67,13 +68,16 @@ export default function ImportReview({
     return wallets.length > 0 ? wallets[0].id : "";
   });
 
+  // Tự động bỏ chọn các giao dịch bị phát hiện trùng lặp với Database
   const [rows, setRows] = useState<ReviewRow[]>(() =>
     transactions.map((t, i) => ({
       ...t,
       _id: `row-${i}`,
-      _selected: true,
+      _selected: !t.duplicateInfo?.isDuplicate,
     }))
   );
+
+  const [filterMode, setFilterMode] = useState<"all" | "valid" | "duplicate">("all");
 
   const [importResult, setImportResult] = useState<{
     success: boolean;
@@ -81,16 +85,46 @@ export default function ImportReview({
     error?: string;
   } | null>(null);
 
+  // Thống kê trùng lặp
+  const totalDuplicates = rows.filter((r) => r.duplicateInfo?.isDuplicate).length;
+  const totalValid = rows.length - totalDuplicates;
+  const selectedCount = rows.filter((r) => r._selected).length;
+
+  // Lọc danh sách theo filterMode
+  const visibleRows = rows.filter((r) => {
+    if (filterMode === "valid") return !r.duplicateInfo?.isDuplicate;
+    if (filterMode === "duplicate") return Boolean(r.duplicateInfo?.isDuplicate);
+    return true;
+  });
+
   // ── Select all toggle ──
-  const allSelected = rows.every((r) => r._selected);
-  const toggleAll = () =>
-    setRows((prev) => prev.map((r) => ({ ...r, _selected: !allSelected })));
+  const allVisibleSelected = visibleRows.length > 0 && visibleRows.every((r) => r._selected);
+  const toggleAllVisible = () => {
+    const nextState = !allVisibleSelected;
+    const visibleIds = new Set(visibleRows.map((r) => r._id));
+    setRows((prev) =>
+      prev.map((r) => (visibleIds.has(r._id) ? { ...r, _selected: nextState } : r))
+    );
+  };
 
   // ── Toggle single row ──
   const toggleRow = (id: string) =>
     setRows((prev) =>
       prev.map((r) => (r._id === id ? { ...r, _selected: !r._selected } : r))
     );
+
+  // ── Thao tác nhanh trùng lặp ──
+  const deselectDuplicates = () => {
+    setRows((prev) =>
+      prev.map((r) => (r.duplicateInfo?.isDuplicate ? { ...r, _selected: false } : r))
+    );
+  };
+
+  const selectValidOnly = () => {
+    setRows((prev) =>
+      prev.map((r) => ({ ...r, _selected: !r.duplicateInfo?.isDuplicate }))
+    );
+  };
 
   // ── Edit cell ──
   const updateRow = (id: string, field: keyof ParsedTransaction, value: string | number) =>
@@ -122,8 +156,6 @@ export default function ImportReview({
     });
   };
 
-  const selectedCount = rows.filter((r) => r._selected).length;
-
   // ── Success state ──
   if (importResult?.success) {
     return (
@@ -139,24 +171,94 @@ export default function ImportReview({
   }
 
   return (
-    <div className="review-wrapper">
-      {/* ── Header stats ── */}
-      <div className="review-stats">
-        <div className="stat-chip stat-found">
-          <span>📄</span>
-          <span>Tìm thấy <strong>{totalFound}</strong></span>
-        </div>
-        {skipped > 0 && (
-          <div className="stat-chip stat-skipped">
-            <span>⚠️</span>
-            <span>Bỏ qua <strong>{skipped}</strong></span>
+    <div className="review-wrapper space-y-4">
+      {/* ── Header stats & Duplicate Alert Banner ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="review-stats">
+          <div className="stat-chip stat-found">
+            <span>📄</span>
+            <span>Tìm thấy <strong>{totalFound}</strong></span>
           </div>
-        )}
-        <div className="stat-chip stat-selected">
-          <span>☑️</span>
-          <span>Đã chọn <strong>{selectedCount}</strong></span>
+          {totalDuplicates > 0 && (
+            <div className="stat-chip border-amber-300 bg-amber-50 text-amber-800">
+              <span>⚠️</span>
+              <span>Trùng lặp: <strong>{totalDuplicates}</strong> (Đã tự động bỏ chọn)</span>
+            </div>
+          )}
+          <div className="stat-chip stat-selected">
+            <span>☑️</span>
+            <span>Sẵn sàng import: <strong>{selectedCount}</strong> / {rows.length}</span>
+          </div>
+          {skipped > 0 && (
+            <div className="stat-chip stat-skipped">
+              <span>⚠️</span>
+              <span>Bỏ qua <strong>{skipped}</strong></span>
+            </div>
+          )}
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setFilterMode("all")}
+            className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+              filterMode === "all" ? "bg-white shadow-2xs text-foreground font-bold" : "text-slate-600 hover:text-foreground"
+            }`}
+          >
+            Tất cả ({rows.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterMode("valid")}
+            className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+              filterMode === "valid" ? "bg-white shadow-2xs text-emerald-700 font-bold" : "text-slate-600 hover:text-emerald-700"
+            }`}
+          >
+            Hợp lệ ({totalValid})
+          </button>
+          {totalDuplicates > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilterMode("duplicate")}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                filterMode === "duplicate" ? "bg-white shadow-2xs text-amber-700 font-bold" : "text-slate-600 hover:text-amber-700"
+              }`}
+            >
+              Trùng lặp ({totalDuplicates})
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Duplicate Warning Notice */}
+      {totalDuplicates > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-amber-50/90 border border-amber-200/80 text-amber-900 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🛡️</span>
+            <div>
+              <span className="font-bold">Đã đối chiếu với cơ sở dữ liệu:</span> Phát hiện {totalDuplicates} giao dịch đã tồn tại hoặc trùng lặp tiềm ẩn.
+              Hệ thống đã <strong>tự động bỏ chọn</strong> các mục này để tránh duplicate dữ liệu.
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={deselectDuplicates}
+              className="px-2.5 py-1 rounded-lg border border-amber-300 bg-white hover:bg-amber-100/60 font-semibold cursor-pointer transition-colors"
+            >
+              Bỏ chọn lại tất cả trùng lặp
+            </button>
+            <button
+              type="button"
+              onClick={selectValidOnly}
+              className="px-2.5 py-1 rounded-lg bg-amber-600 text-white hover:bg-amber-700 font-semibold cursor-pointer transition-colors"
+            >
+              Chỉ chọn mục hợp lệ
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Wallet Selector ── */}
       {wallets.length > 0 && (
@@ -199,38 +301,42 @@ export default function ImportReview({
         <table className="review-table">
           <thead>
             <tr>
-              <th>
+              <th className="w-10 text-center">
                 <input
                   id="select-all-toggle"
                   type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
+                  checked={allVisibleSelected}
+                  onChange={toggleAllVisible}
                   className="row-checkbox"
+                  title="Chọn / Bỏ chọn tất cả mục hiển thị"
                 />
               </th>
               <th>Ngày giờ</th>
               <th>Loại</th>
               <th>Số tiền</th>
               <th>Danh mục</th>
-              <th>Ghi chú</th>
+              <th>Ghi chú & Trạng thái đối chiếu</th>
               <th>Tin cậy</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {visibleRows.map((row) => {
               const badge = confidenceBadge(row.confidence);
+              const isDup = row.duplicateInfo?.isDuplicate;
               return (
                 <tr
                   key={row._id}
-                  className={`review-row ${!row._selected ? "row-deselected" : ""}`}
+                  className={`review-row transition-colors ${
+                    !row._selected ? "row-deselected" : ""
+                  } ${isDup ? "bg-amber-50/40 hover:bg-amber-50/70" : ""}`}
                 >
                   {/* Checkbox */}
-                  <td>
+                  <td className="text-center">
                     <input
                       type="checkbox"
                       checked={row._selected}
                       onChange={() => toggleRow(row._id)}
-                      className="row-checkbox"
+                      className="row-checkbox cursor-pointer"
                       id={`row-check-${row._id}`}
                     />
                   </td>
@@ -283,8 +389,8 @@ export default function ImportReview({
                     />
                   </td>
 
-                  {/* Note */}
-                  <td>
+                  {/* Note & Duplicate Info */}
+                  <td className="min-w-[220px]">
                     <input
                       id={`row-note-${row._id}`}
                       type="text"
@@ -292,8 +398,29 @@ export default function ImportReview({
                       onChange={(e) =>
                         updateRow(row._id, "note", e.target.value)
                       }
+                      placeholder="Ghi chú giao dịch..."
                       className="note-input"
                     />
+
+                    {/* Duplicate Warning Badge */}
+                    {isDup && (
+                      <div className="mt-1 flex items-start gap-1.5 text-[11px] text-amber-800 bg-amber-100/90 px-2 py-1 rounded-md border border-amber-200 leading-tight">
+                        <span className="shrink-0 text-amber-600 font-bold">⚠️</span>
+                        <div>
+                          <span className="font-semibold">
+                            {row.duplicateInfo?.type === "EXACT" ? "Đã có trong DB:" : "Trùng lặp tiềm ẩn:"}
+                          </span>{" "}
+                          <span>{row.duplicateInfo?.reason}</span>
+                          {row.duplicateInfo?.matchedTx && (
+                            <span className="block text-[10px] text-amber-700 mt-0.5">
+                              (Khớp với GD: {formatDate(row.duplicateInfo.matchedTx.recordedAt)} ·{" "}
+                              {new Intl.NumberFormat("vi-VN").format(row.duplicateInfo.matchedTx.amount)}đ
+                              {row.duplicateInfo.matchedTx.note ? ` · "${row.duplicateInfo.matchedTx.note}"` : ""})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </td>
 
                   {/* Confidence badge */}

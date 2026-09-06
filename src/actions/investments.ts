@@ -74,3 +74,23 @@ export async function deleteInvestment(id: string) {
   revalidatePath("/investments");
   return { success: true };
 }
+
+export async function deleteInvestments(ids: string[]) {
+  if (!ids || ids.length === 0) return { success: true, count: 0 };
+  const userId = await getUserId();
+
+  let count = 0;
+  await db.transaction(async (t: any) => {
+    for (const id of ids) {
+      const inv = await t.orm.public.Investment.where({ id, userId }).first();
+      if (!inv) continue;
+      await t.orm.public.Investment.where({ id, userId }).delete();
+      count++;
+    }
+  });
+
+  revalidatePath("/investments");
+  revalidatePath("/dashboard");
+  return { success: true, count };
+}
+

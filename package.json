@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma contract emit && next build",
+    "build": "prisma contract emit && next build && node scripts/copy-standalone.mjs",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "node scripts/shim-prisma.mjs && prisma contract emit",

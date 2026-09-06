@@ -160,3 +160,35 @@ export async function deleteTransaction(id: string) {
   revalidatePath("/reports");
   return { success: true };
 }
+
+export async function deleteTransactions(ids: string[]) {
+  if (!ids || ids.length === 0) return { success: true, count: 0 };
+  const userId = await getUserId();
+
+  let count = 0;
+  await db.transaction(async (t: any) => {
+    for (const id of ids) {
+      const tx = await t.orm.public.Transaction.where({ id, userId }).first();
+      if (!tx) continue;
+
+      await t.orm.public.Transaction.where({ id, userId }).delete();
+      count++;
+
+      if (tx.goalId) {
+        const goal = await t.orm.public.Goal.where({ id: tx.goalId, userId }).first();
+        if (goal) {
+          await t.orm.public.Goal
+            .where({ id: tx.goalId, userId })
+            .update({ savedAmount: String(Math.max(0, Number(goal.savedAmount) - Number(tx.amount))) });
+        }
+      }
+    }
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/wallets");
+  revalidatePath("/reports");
+  return { success: true, count };
+}
+

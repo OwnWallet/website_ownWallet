@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { parseDocument } from "@/lib/ai/parseDocument";
+import { reconcileTransactionsWithDb } from "@/lib/ai/reconcile";
 import { db } from "@/lib/db";
-
 
 export const runtime = "nodejs"; // cần nodejs runtime để đọc Buffer
 
@@ -47,16 +47,26 @@ export async function POST(request: NextRequest) {
     .all();
   const categoryNames = categories.map((c: any) => c.name);
 
-
   // ── Gọi AI ──
   try {
     const result = await parseDocument(buffer, file.name, categoryNames);
 
+    // ── Đối chiếu với database để phát hiện trùng lặp ──
+    const reconciledTransactions = await reconcileTransactionsWithDb(
+      result.transactions,
+      userId
+    );
+
+    const duplicateCount = reconciledTransactions.filter(
+      (t) => t.duplicateInfo?.isDuplicate
+    ).length;
+
     return NextResponse.json({
       success: true,
-      transactions: result.transactions,
+      transactions: reconciledTransactions,
       totalFound: result.totalFound,
       skipped: result.skipped,
+      duplicateCount,
     });
   } catch (err: unknown) {
     const message =

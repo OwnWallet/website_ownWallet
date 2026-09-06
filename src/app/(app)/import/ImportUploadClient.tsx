@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import type { ParsedTransaction } from "@/schemas/ai-import";
 import ImportReview from "./ImportReview";
-import { Upload, FileText, Table, FileSpreadsheet, AlertTriangle, Lightbulb, Brain, Loader2 } from "lucide-react";
+import { Upload, FileText, Table, FileSpreadsheet, AlertTriangle, Lightbulb, Brain } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -18,6 +18,7 @@ type UploadState =
       transactions: ParsedTransaction[];
       totalFound: number;
       skipped: number;
+      duplicateCount: number;
     }
   | { phase: "error"; message: string };
 
@@ -99,6 +100,7 @@ export default function ImportUploadClient({ wallets = [] }: ImportUploadClientP
         transactions: data.transactions,
         totalFound: data.totalFound,
         skipped: data.skipped,
+        duplicateCount: data.duplicateCount ?? 0,
       });
     } catch (err: unknown) {
       clearInterval(progressInterval);
@@ -144,6 +146,7 @@ export default function ImportUploadClient({ wallets = [] }: ImportUploadClientP
         transactions={state.transactions}
         totalFound={state.totalFound}
         skipped={state.skipped}
+        duplicateCount={state.duplicateCount}
         wallets={wallets}
         onReset={reset}
       />

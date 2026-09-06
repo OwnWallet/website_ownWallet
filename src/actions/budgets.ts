@@ -57,3 +57,23 @@ export async function deleteBudget(id: string) {
   revalidatePath("/budget");
   return { success: true };
 }
+
+export async function deleteBudgets(ids: string[]) {
+  if (!ids || ids.length === 0) return { success: true, count: 0 };
+  const userId = await getUserId();
+
+  let count = 0;
+  await db.transaction(async (t: any) => {
+    for (const id of ids) {
+      const b = await t.orm.public.Budget.where({ id, userId }).first();
+      if (!b) continue;
+      await t.orm.public.Budget.where({ id, userId }).delete();
+      count++;
+    }
+  });
+
+  revalidatePath("/budget");
+  revalidatePath("/dashboard");
+  return { success: true, count };
+}
+

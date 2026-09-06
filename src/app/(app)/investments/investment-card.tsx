@@ -25,7 +25,15 @@ interface Investment {
   logs: InvestLog[];
 }
 
-export function InvestmentCard({ inv }: { inv: Investment }) {
+export function InvestmentCard({
+  inv,
+  selected,
+  onToggleSelect,
+}: {
+  inv: Investment;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+}) {
   const [activeTab, setActiveTab] = useState<"view" | "price" | "trade" | "logs">("view");
   const [loading, setLoading] = useState(false);
 
@@ -39,23 +47,34 @@ export function InvestmentCard({ inv }: { inv: Investment }) {
   const isPos = pnl >= 0;
 
   return (
-    <div className="card space-y-4 flex flex-col justify-between group">
+    <div className={`card space-y-4 flex flex-col justify-between group transition-colors ${selected ? "ring-2 ring-primary/50 bg-primary/5" : ""}`}>
       <div>
         {/* Card Header */}
         <div className="flex justify-between items-start">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-lg">{inv.name}</h3>
-              {inv.ticker && (
-                <span className="text-xs px-2 py-0.5 bg-elevated rounded-md text-muted border border-border-strong font-semibold">
-                  {inv.ticker}
+          <div className="flex items-start gap-2.5">
+            {onToggleSelect && (
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-border-strong text-primary focus:ring-primary/30 cursor-pointer accent-primary mt-1 shrink-0"
+                checked={!!selected}
+                onChange={onToggleSelect}
+                title="Chọn khoản đầu tư này"
+              />
+            )}
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-lg">{inv.name}</h3>
+                {inv.ticker && (
+                  <span className="text-xs px-2 py-0.5 bg-elevated rounded-md text-muted border border-border-strong font-semibold">
+                    {inv.ticker}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-sm font-bold ${isPos ? "text-income" : "text-expense"}`}>
+                  {pnl > 0 ? "+" : ""}{formatCurrency(pnl)} ({pnlPercent.toFixed(2)}%)
                 </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`text-sm font-bold ${isPos ? "text-income" : "text-expense"}`}>
-                {pnl > 0 ? "+" : ""}{formatCurrency(pnl)} ({pnlPercent.toFixed(2)}%)
-              </span>
+              </div>
             </div>
           </div>
 

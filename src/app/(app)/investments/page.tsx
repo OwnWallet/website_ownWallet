@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { formatCurrency, serializeData } from "@/lib/utils";
 import { createInvestment } from "@/actions/investments";
 import { redirect } from "next/navigation";
-import { InvestmentCard } from "./investment-card";
+import { InvestmentListClient } from "./investment-list-client";
 import { Plus, TrendingUp, Briefcase, BarChart3, Layers } from "lucide-react";
 import type { Metadata } from "next";
 
@@ -103,20 +103,8 @@ export default async function InvestmentsPage() {
           </div>
         </div>
 
-        {/* Investment Cards Grid */}
-        {investments.length === 0 ? (
-          <div className="empty-state">
-            <span className="empty-state-icon">📈</span>
-            <h2 className="empty-state-title">Chưa có khoản đầu tư nào</h2>
-            <p className="empty-state-desc">Hãy thêm khoản đầu tư đầu tiên của bạn để theo dõi sinh lời.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
-            {plainInvestments.map((inv: any) => (
-              <InvestmentCard key={inv.id} inv={inv} />
-            ))}
-          </div>
-        )}
+        {/* Investment Cards Grid with Bulk Delete */}
+        <InvestmentListClient investments={plainInvestments} />
 
         {/* Add Form */}
         <div className="card bg-gradient-to-br from-blue-50/50 to-white border-blue-200/60">
