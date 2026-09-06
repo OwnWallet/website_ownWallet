@@ -17,7 +17,15 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 
-export function DebtCard({ debt }: { debt: any }) {
+export function DebtCard({
+  debt,
+  selected,
+  onToggleSelect,
+}: {
+  debt: any;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+}) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const amount = Number(debt.amount);
@@ -39,11 +47,22 @@ export function DebtCard({ debt }: { debt: any }) {
 
   return (
     <>
-      <div className="card relative flex flex-col gap-3 group">
+      <div className={`card relative flex flex-col gap-3 group transition-colors ${selected ? "ring-2 ring-primary/50 bg-primary/5" : ""}`}>
         <div className="flex justify-between items-start">
-          <div>
-            <h3 className="font-bold text-base">{debt.person}</h3>
-            {debt.note && <p className="text-xs text-muted mt-0.5">{debt.note}</p>}
+          <div className="flex items-center gap-2.5">
+            {onToggleSelect && (
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-border-strong text-primary focus:ring-primary/30 cursor-pointer accent-primary shrink-0"
+                checked={!!selected}
+                onChange={onToggleSelect}
+                title="Chọn khoản nợ này"
+              />
+            )}
+            <div>
+              <h3 className="font-bold text-base">{debt.person}</h3>
+              {debt.note && <p className="text-xs text-muted mt-0.5">{debt.note}</p>}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <span

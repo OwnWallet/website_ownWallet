@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatCurrency, serializeData } from "@/lib/utils";
 import { DebtActions } from "./debt-actions";
-import { DebtCard } from "./debt-card";
+import { DebtListClient } from "./debt-list-client";
 import { HandCoins, TrendingDown, TrendingUp } from "lucide-react";
 
 export const metadata = {
@@ -80,56 +80,8 @@ export default async function DebtsPage() {
       {/* Add Debt Action */}
       <DebtActions />
 
-      {/* Debt Lists */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* OWE */}
-        <div>
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
-            <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center">
-              <TrendingDown size={14} className="text-rose-600" />
-            </div>
-            <h2 className="text-base font-bold text-foreground">
-              Tôi nợ <span className="text-muted-foreground font-normal text-sm ml-1">({owes.length})</span>
-            </h2>
-          </div>
-          {owes.length === 0 ? (
-            <div className="empty-state">
-              <span className="empty-state-icon">😌</span>
-              <p className="empty-state-desc">Bạn không nợ ai cả</p>
-            </div>
-          ) : (
-            <div className="space-y-3 stagger-children">
-              {owes.map((d: any) => (
-                <DebtCard key={d.id} debt={d} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* OWED */}
-        <div>
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
-            <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
-              <TrendingUp size={14} className="text-emerald-600" />
-            </div>
-            <h2 className="text-base font-bold text-foreground">
-              Người nợ tôi <span className="text-muted-foreground font-normal text-sm ml-1">({oweds.length})</span>
-            </h2>
-          </div>
-          {oweds.length === 0 ? (
-            <div className="empty-state">
-              <span className="empty-state-icon">🪹</span>
-              <p className="empty-state-desc">Không có ai nợ bạn</p>
-            </div>
-          ) : (
-            <div className="space-y-3 stagger-children">
-              {oweds.map((d: any) => (
-                <DebtCard key={d.id} debt={d} />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Debt Lists with Bulk Delete */}
+      <DebtListClient owes={owes} oweds={oweds} />
     </div>
   );
 }

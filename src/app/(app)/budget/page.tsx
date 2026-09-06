@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatCurrency, calcPercent, getFilterDateRange, toInstant, toDate } from "@/lib/utils";
-import { BUDGET_WARNING_THRESHOLD, BUDGET_DANGER_THRESHOLD } from "@/lib/constants";
-import { upsertBudget, deleteBudget } from "@/actions/budgets";
-import { Trash2, PiggyBank, TrendingDown, AlertCircle, Wallet, Plus } from "lucide-react";
+import { upsertBudget } from "@/actions/budgets";
+import { BudgetListClient } from "./budget-list-client";
+import { PiggyBank, TrendingDown, AlertCircle, Wallet, Plus } from "lucide-react";
 
 export const metadata = {
   title: "Ngân sách | wnWallet",
@@ -143,109 +143,29 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
         </div>
       </div>
 
-      {/* Budget List */}
-      {budgets.length === 0 ? (
-        <div className="empty-state">
-          <span className="empty-state-icon">💸</span>
-          <h3 className="empty-state-title">Chưa có ngân sách cho {filterDate.label.toLowerCase()}</h3>
-          <p className="empty-state-desc">Hãy thiết lập ngân sách bên dưới để bắt đầu theo dõi chi tiêu.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
-          {budgets.map((b) => {
-            const limit = Number(b.limitAmount);
-            const spent = filterDate.month === "ALL"
-              ? (monthSpentMap.get(`${b.categoryId}_${b.month}`) || 0)
-              : (spentMap.get(b.categoryId) || 0);
-            const percent = calcPercent(spent, limit);
-            const isWarning = percent >= BUDGET_WARNING_THRESHOLD * 100;
-            const isDanger = percent >= BUDGET_DANGER_THRESHOLD * 100;
-
-            const progressColor = isDanger ? "#e11d48" : isWarning ? "#d97706" : "#059669";
-            const statusBadge = isDanger
-              ? { text: "Vượt hạn mức", bg: "bg-rose-50 text-rose-700 border-rose-200" }
-              : isWarning
-              ? { text: "Sắp vượt", bg: "bg-amber-50 text-amber-700 border-amber-200" }
-              : null;
-
-            return (
-              <div key={b.id} className="card flex flex-col gap-4 relative overflow-hidden group hover:border-orange-200 transition-colors">
-                {/* Top accent line */}
-                <div className="absolute top-0 left-0 right-0 h-1 rounded-t-xl" style={{ backgroundColor: progressColor, opacity: 0.6 }} />
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-xl border"
-                      style={{
-                        backgroundColor: `${b.category?.color || "#ea580c"}12`,
-                        borderColor: `${b.category?.color || "#ea580c"}30`,
-                      }}
-                    >
-                      {b.category?.icon || "📂"}
-                    </div>
-                    <div>
-                      <span className="font-bold text-base block">{b.category?.name}</span>
-                      {filterDate.month === "ALL" && (
-                        <span className="text-xs font-medium text-muted-foreground">
-                          Tháng {b.month}/{b.year}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {statusBadge && (
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${statusBadge.bg}`}>
-                        {statusBadge.text}
-                      </span>
-                    )}
-                    <form
-                      action={async () => {
-                        "use server";
-                        await deleteBudget(b.id);
-                      }}
-                    >
-                      <button
-                        type="submit"
-                        title="Xóa ngân sách"
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </form>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">
-                      Đã chi: <span className="text-foreground font-semibold">{formatCurrency(spent)}</span>
-                    </span>
-                    <span className="text-muted-foreground">
-                      Hạn mức: <span className="text-foreground font-semibold">{formatCurrency(limit)}</span>
-                    </span>
-                  </div>
-
-                  <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
-                    <div
-                      className="h-full rounded-full transition-all duration-700 ease-out"
-                      style={{
-                        width: `${Math.min(percent, 100)}%`,
-                        backgroundColor: progressColor,
-                      }}
-                    />
-                  </div>
-                  <div className="mt-2 text-right">
-                    <span className="text-xs font-bold" style={{ color: progressColor }}>
-                      {percent}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* Budget List with Bulk Delete */}
+      <BudgetListClient
+        budgets={budgets.map((b) => {
+          const limit = Number(b.limitAmount);
+          const spent = filterDate.month === "ALL"
+            ? (monthSpentMap.get(`${b.categoryId}_${b.month}`) || 0)
+            : (spentMap.get(b.categoryId) || 0);
+          const percent = calcPercent(spent, limit);
+          return {
+            id: b.id,
+            month: b.month,
+            year: b.year,
+            categoryName: b.category?.name || "Chung",
+            categoryIcon: b.category?.icon || "📂",
+            categoryColor: b.category?.color || "#ea580c",
+            limit,
+            spent,
+            percent,
+          };
+        })}
+        isMonthAll={filterDate.month === "ALL"}
+        filterLabel={filterDate.label}
+      />
 
       {/* Add / Upsert Budget Form */}
       <div className="card bg-gradient-to-br from-orange-50/40 to-white border-orange-200/60">

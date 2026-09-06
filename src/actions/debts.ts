@@ -58,3 +58,23 @@ export async function deleteDebt(id: string) {
   revalidatePath("/debts");
   return { success: true };
 }
+
+export async function deleteDebts(ids: string[]) {
+  if (!ids || ids.length === 0) return { success: true, count: 0 };
+  const userId = await getUserId();
+
+  let count = 0;
+  await db.transaction(async (t: any) => {
+    for (const id of ids) {
+      const debt = await t.orm.public.Debt.where({ id, userId }).first();
+      if (!debt) continue;
+      await t.orm.public.Debt.where({ id, userId }).delete();
+      count++;
+    }
+  });
+
+  revalidatePath("/debts");
+  revalidatePath("/dashboard");
+  return { success: true, count };
+}
+

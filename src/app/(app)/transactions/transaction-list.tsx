@@ -22,7 +22,8 @@ import {
  formatDayHeader,
  toDate,
 } from "@/lib/utils";
-import { deleteTransaction } from "@/actions/transactions";
+import { deleteTransaction, deleteTransactions } from "@/actions/transactions";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
 import {
   Search,
   ArrowUpRight,
@@ -43,7 +44,6 @@ import {
   Tag,
 } from "lucide-react";
 import { WalletBadge } from "@/components/ui/wallet-badge";
-import type { WalletOption } from "@/components/ui/account-filter";
 
 interface Category {
  id: string;
@@ -101,6 +101,35 @@ export function TransactionList({
   const [selectedType, setSelectedType] = useState<"ALL" | "EXPENSE" | "INCOME">("ALL");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectGroup = (items: TransactionItem[]) => {
+    const itemIds = items.map((i) => i.id);
+    const allSelected = itemIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        itemIds.forEach((id) => next.delete(id));
+      } else {
+        itemIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+
 
   // Time & Wallet filters are controlled uniformly from the Sidebar URL params
   const now = new Date();
@@ -188,6 +217,15 @@ export function TransactionList({
     selectedYear,
     sortOption,
   ]);
+
+  const toggleSelectAllFiltered = () => {
+    if (selectedIds.size === filtered.length && filtered.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((t) => t.id)));
+    }
+  };
+
 
  // Overall Financial Summary for current filter
  const summary = useMemo(() => {
@@ -541,6 +579,13 @@ export function TransactionList({
  <div className="px-4 py-3 bg-slate-50/90 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
  {/* Left: Date info */}
  <div className="flex items-center gap-2.5">
+ <input
+ type="checkbox"
+ className="w-4 h-4 rounded border-border-strong text-primary focus:ring-primary/30 cursor-pointer accent-primary shrink-0"
+ checked={group.items.length > 0 && group.items.every((i) => selectedIds.has(i.id))}
+ onChange={() => toggleSelectGroup(group.items)}
+ title="Chọn tất cả giao dịch trong ngày này"
+ />
  <div
  className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
  group.dayHeader.isToday
@@ -603,11 +648,19 @@ export function TransactionList({
  {group.items.map((tx) => (
  <div
  key={tx.id}
- className="p-3.5 sm:px-4 flex items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors group"
+ className={`p-3.5 sm:px-4 flex items-center justify-between gap-3 transition-colors group ${
+ selectedIds.has(tx.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-slate-50/70"
+ }`}
  >
- {/* Left: Icon + Description + Category + Time */}
+ {/* Left: Checkbox + Icon + Description + Category + Time */}
  <div className="flex items-center gap-3 min-w-0 flex-1">
- {/* Category Icon */}
+ <input
+ type="checkbox"
+ className="w-4 h-4 rounded border-border-strong text-primary focus:ring-primary/30 cursor-pointer accent-primary shrink-0"
+ checked={selectedIds.has(tx.id)}
+ onChange={() => toggleSelectOne(tx.id)}
+ title="Chọn giao dịch này"
+ />
  <div
  className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 border border-border/60"
  style={{ backgroundColor: `${tx.category?.color || "#ea580c"}18` }}
@@ -712,113 +765,134 @@ export function TransactionList({
  </div>
  ))}
  </div>
- ) : (
- /* ─── VIEW 2: FLAT TABLE VIEW ──────────────────────────────── */
- <div className="bg-card border border-border rounded-xl overflow-hidden shadow-xs">
- {/* Table Header */}
- <div className="grid grid-cols-12 px-4 py-3 border-b border-border bg-slate-50 text-xs font-bold text-muted-foreground uppercase tracking-wider">
- <span className="col-span-5 md:col-span-4">Giao dịch / Ghi chú</span>
- <span className="col-span-3 md:col-span-3">Danh mục</span>
- <span className="hidden md:block md:col-span-2">Ngày & Giờ</span>
- <span className="col-span-4 md:col-span-3 text-right">Số tiền & Thao tác</span>
- </div>
+  ) : (
+  /* ─── VIEW 2: FLAT TABLE VIEW ──────────────────────────────── */
+  <div className="bg-card border border-border rounded-xl overflow-hidden shadow-xs">
+    {/* Table Header */}
+    <div className="grid grid-cols-12 px-4 py-3 border-b border-border bg-slate-50 text-xs font-bold text-muted-foreground uppercase tracking-wider items-center">
+      <div className="col-span-1 flex items-center">
+        <input
+          type="checkbox"
+          className="w-4 h-4 rounded border-border-strong text-primary focus:ring-primary/30 cursor-pointer accent-primary"
+          checked={filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id))}
+          onChange={toggleSelectAllFiltered}
+          title="Chọn tất cả giao dịch"
+        />
+      </div>
+      <span className="col-span-4 md:col-span-4">Giao dịch / Ghi chú</span>
+      <span className="col-span-3 md:col-span-3">Danh mục</span>
+      <span className="hidden md:block md:col-span-2">Ngày & Giờ</span>
+      <span className="col-span-4 md:col-span-2 text-right">Số tiền & Thao tác</span>
+    </div>
 
- {/* Table Rows */}
- <div className="divide-y divide-border/70">
- {paginatedFlat.map((tx) => (
- <div
- key={tx.id}
- className="grid grid-cols-12 px-4 py-3.5 items-center hover:bg-slate-50/70 transition-colors group text-sm"
- >
- {/* Transaction Name & Icon */}
- <div className="col-span-5 md:col-span-4 flex items-center gap-3 min-w-0 pr-2">
- <div
- className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 border border-border/60"
- style={{ backgroundColor: `${tx.category?.color || "#ea580c"}20` }}
- >
- {tx.category?.icon ?? "💳"}
- </div>
- <div className="min-w-0">
- <p className="font-bold text-foreground truncate">
- {tx.note || tx.description || tx.category?.name}
- </p>
- <p className="text-xs text-muted-foreground truncate md:hidden">
- {formatDate(tx.recordedAt)} · {formatTime(tx.recordedAt)}
- </p>
- </div>
- </div>
+    {/* Table Rows */}
+    <div className="divide-y divide-border/70">
+      {paginatedFlat.map((tx) => (
+        <div
+          key={tx.id}
+          className={`grid grid-cols-12 px-4 py-3.5 items-center transition-colors group text-sm ${
+            selectedIds.has(tx.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-slate-50/70"
+          }`}
+        >
+          <div className="col-span-1 flex items-center">
+            <input
+              type="checkbox"
+              className="w-4 h-4 rounded border-border-strong text-primary focus:ring-primary/30 cursor-pointer accent-primary"
+              checked={selectedIds.has(tx.id)}
+              onChange={() => toggleSelectOne(tx.id)}
+              title="Chọn giao dịch này"
+            />
+          </div>
 
-                  {/* Category & Wallet Pill */}
-                  <div className="col-span-3 md:col-span-3 flex flex-wrap items-center gap-1.5">
-                    <span
-                      className="inline-block text-xs px-2.5 py-0.5 rounded-full font-semibold truncate max-w-full"
-                      style={{
-                        backgroundColor: `${tx.category?.color || "#ea580c"}15`,
-                        color: tx.category?.color || "#ea580c",
-                        border: `1px solid ${tx.category?.color || "#ea580c"}30`,
-                      }}
-                    >
-                      {tx.category?.name}
-                    </span>
-                    {tx.wallet && (
-                      <WalletBadge
-                        wallet={tx.wallet}
-                        size="sm"
-                      />
-                    )}
-                  </div>
+          {/* Transaction Name & Icon */}
+          <div className="col-span-4 md:col-span-4 flex items-center gap-3 min-w-0 pr-2">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 border border-border/60"
+              style={{ backgroundColor: `${tx.category?.color || "#ea580c"}20` }}
+            >
+              {tx.category?.icon ?? "💳"}
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-foreground truncate">
+                {tx.note || tx.description || tx.category?.name}
+              </p>
+              <p className="text-xs text-muted-foreground truncate md:hidden">
+                {formatDate(tx.recordedAt)} · {formatTime(tx.recordedAt)}
+              </p>
+            </div>
+          </div>
 
- {/* Date & Time (Desktop) */}
- <div className="hidden md:block md:col-span-2 text-xs text-muted-foreground">
- <span className="font-medium text-foreground block">{formatDate(tx.recordedAt)}</span>
- <span>{formatTime(tx.recordedAt)}</span>
- </div>
+          {/* Category & Wallet Pill */}
+          <div className="col-span-3 md:col-span-3 flex flex-wrap items-center gap-1.5">
+            <span
+              className="inline-block text-xs px-2.5 py-0.5 rounded-full font-semibold truncate max-w-full"
+              style={{
+                backgroundColor: `${tx.category?.color || "#ea580c"}15`,
+                color: tx.category?.color || "#ea580c",
+                border: `1px solid ${tx.category?.color || "#ea580c"}30`,
+              }}
+            >
+              {tx.category?.name}
+            </span>
+            {tx.wallet && (
+              <WalletBadge
+                wallet={tx.wallet}
+                size="sm"
+              />
+            )}
+          </div>
 
- {/* Amount & Actions */}
- <div className="col-span-4 md:col-span-3 flex items-center justify-end gap-3">
- <div className="flex items-center gap-1.5">
- {tx.type === "INCOME" ? (
- <ArrowUpRight size={15} className="text-emerald-600 shrink-0" />
- ) : (
- <ArrowDownLeft size={15} className="text-rose-600 shrink-0" />
- )}
- <span
- className={`font-extrabold text-sm md:text-base ${
- tx.type === "INCOME" ? "text-emerald-600" : "text-rose-600"
- }`}
- >
- {tx.type === "INCOME" ? "+" : "-"}
- {formatCurrency(Number(tx.amount))}
- </span>
- </div>
+          {/* Date & Time (Desktop) */}
+          <div className="hidden md:block md:col-span-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground block">{formatDate(tx.recordedAt)}</span>
+            <span>{formatTime(tx.recordedAt)}</span>
+          </div>
 
- {/* Actions */}
- <div className="flex items-center gap-1">
- <Link
- href={`/transactions/${tx.id}/edit`}
- title="Chỉnh sửa"
- className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-elevated transition-colors"
- >
- <Edit2 size={13} />
- </Link>
- <button
- onClick={() =>
- setDeleteTarget({
- id: tx.id,
- name: tx.note || tx.description || tx.category?.name || "giao dịch",
- })
- }
- title="Xóa giao dịch"
- className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
- >
- <Trash2 size={13} />
- </button>
- </div>
- </div>
- </div>
- ))}
- </div>
- </div>
+          {/* Amount & Actions */}
+          <div className="col-span-4 md:col-span-2 flex items-center justify-end gap-2">
+            <div className="flex items-center gap-1">
+              {tx.type === "INCOME" ? (
+                <ArrowUpRight size={15} className="text-emerald-600 shrink-0" />
+              ) : (
+                <ArrowDownLeft size={15} className="text-rose-600 shrink-0" />
+              )}
+              <span
+                className={`font-extrabold text-xs sm:text-sm md:text-base ${
+                  tx.type === "INCOME" ? "text-emerald-600" : "text-rose-600"
+                }`}
+              >
+                {tx.type === "INCOME" ? "+" : "-"}
+                {formatCurrency(Number(tx.amount))}
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-1">
+              <Link
+                href={`/transactions/${tx.id}/edit`}
+                title="Chỉnh sửa"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-elevated transition-colors"
+              >
+                <Edit2 size={13} />
+              </Link>
+              <button
+                onClick={() =>
+                  setDeleteTarget({
+                    id: tx.id,
+                    name: tx.note || tx.description || tx.category?.name || "giao dịch",
+                  })
+                }
+                title="Xóa giao dịch"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
  )}
 
  {/* ─── 4. PAGINATION CONTROLS ─────────────────────────────────── */}
@@ -886,6 +960,21 @@ export function TransactionList({
  </AlertDialogFooter>
  </AlertDialogContent>
  </AlertDialog>
+      {/* Bulk Action Floating Bar */}
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        itemName="giao dịch"
+        onClearSelection={() => setSelectedIds(new Set())}
+        onConfirmDelete={async () => {
+          const res = await deleteTransactions(Array.from(selectedIds));
+          if ((res as any)?.error) {
+            toast.error((res as any).error);
+          } else {
+            toast.success(`Đã xóa thành công ${res.count ?? selectedIds.size} giao dịch`);
+            setSelectedIds(new Set());
+          }
+        }}
+      />
  </div>
  );
 }
