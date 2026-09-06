@@ -72,17 +72,17 @@ export function Sidebar({
       {/* Main Sidebar Element */}
       <aside
         className={cn(
-          "fixed top-0 left-0 bottom-0 bg-card border-r border-border flex flex-col z-50 shadow-lg lg:shadow-none transition-all duration-300 ease-in-out",
+          "fixed top-0 left-0 bottom-0 h-dvh max-h-screen bg-card border-r border-border flex flex-col z-50 shadow-lg lg:shadow-none transition-all duration-300 ease-in-out overflow-hidden",
           // Mobile state
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
           // Desktop width: 72px when collapsed, 250px when expanded
           isCollapsed ? "w-[250px] lg:w-[72px]" : "w-[250px]"
         )}
       >
-        {/* Brand Header */}
+        {/* Brand Header (Sticky at top) */}
         <div
           className={cn(
-            "h-16 flex items-center border-b border-border shrink-0 bg-card transition-all duration-200",
+            "h-16 flex items-center border-b border-border shrink-0 bg-card transition-all duration-200 z-10",
             isCollapsed ? "justify-between px-5 lg:justify-center lg:px-2" : "justify-between px-5"
           )}
         >
@@ -113,89 +113,94 @@ export function Sidebar({
           )}
         </div>
 
-        {/* Card / Account Selector in Sidebar */}
-        {wallets && wallets.length > 0 && (
-          <div className="pt-2 pb-0.5 border-b border-border/70 transition-all">
-            <SidebarWalletSelector
-              wallets={wallets}
-              isCollapsed={isCollapsed}
-              onClose={onClose}
-            />
-          </div>
-        )}
+        {/* Scrollable Middle Area: Wallets, Time Filter & Navigation */}
+        <ScrollArea className="flex-1 min-h-0 w-full overflow-hidden">
+          <div className="flex flex-col py-2">
+            {/* Card / Account Selector in Sidebar */}
+            {wallets && wallets.length > 0 && (
+              <div className="pt-0.5 pb-1 border-b border-border/70 transition-all shrink-0">
+                <SidebarWalletSelector
+                  wallets={wallets}
+                  isCollapsed={isCollapsed}
+                  onClose={onClose}
+                />
+              </div>
+            )}
 
-        {/* Sidebar Time Filter (Month & Year) */}
-        <div className="border-b border-border/70 pb-1 transition-all">
-          <SidebarTimeFilter isCollapsed={isCollapsed} onClose={onClose} />
-        </div>
+            {/* Sidebar Time Filter (Month & Year) */}
+            <div className="border-b border-border/70 pb-2 mb-2 transition-all shrink-0">
+              <SidebarTimeFilter isCollapsed={isCollapsed} onClose={onClose} />
+            </div>
 
-        {/* Navigation Items (ScrollArea) */}
-        <ScrollArea className="flex-1 px-2.5 py-3">
-          <div className={cn("px-2.5 mb-2 transition-all", isCollapsed && "lg:hidden")}>
-            <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">
-              Menu chính
-            </span>
-          </div>
+            {/* Navigation Items */}
+            <div className="px-2.5">
+              <div className={cn("px-2.5 mb-2 transition-all", isCollapsed && "lg:hidden")}>
+                <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">
+                  Menu chính
+                </span>
+              </div>
 
-          <nav className="space-y-1">
-            {NAV_ITEMS.map((item) => {
-              const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}`));
-              const Icon = item.icon;
+              <nav className="space-y-1">
+                {NAV_ITEMS.map((item) => {
+                  const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}`));
+                  const Icon = item.icon;
 
-              const targetHref =
-                searchStr && ["/dashboard", "/transactions", "/reports", "/budget", "/wallets"].includes(item.href)
-                  ? `${item.href}?${searchStr}`
-                  : item.href;
+                  const targetHref =
+                    searchStr && ["/dashboard", "/transactions", "/reports", "/budget", "/wallets"].includes(item.href)
+                      ? `${item.href}?${searchStr}`
+                      : item.href;
 
-              return (
-                <Link
-                  key={item.href}
-                  href={targetHref}
-                  onClick={() => onClose?.()}
-                  title={item.label}
-                  className={cn(
-                    "flex items-center rounded-xl text-sm font-medium transition-all duration-150 group relative",
-                    isCollapsed
-                      ? "px-3 py-2.5 lg:justify-center lg:px-0 lg:py-2.5"
-                      : "gap-3 px-3 py-2.5",
-                    isActive
-                      ? "bg-orange-50 text-orange-700 font-semibold shadow-2xs border border-orange-200/80"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all",
-                      isActive
-                        ? "bg-orange-600 text-white shadow-xs"
-                        : "bg-slate-100 text-slate-500 group-hover:text-slate-800 group-hover:bg-slate-200/60"
-                    )}
-                  >
-                    <Icon size={16} />
-                  </div>
-
-                  {/* Label (hidden in collapsed mode on desktop) */}
-                  <span className={cn("truncate flex-1 transition-opacity", isCollapsed && "lg:hidden")}>
-                    {item.label}
-                  </span>
-
-                  {/* Active indicator dot */}
-                  {isActive && (
-                    <div
+                  return (
+                    <Link
+                      key={item.href}
+                      href={targetHref}
+                      onClick={() => onClose?.()}
+                      title={item.label}
                       className={cn(
-                        "w-1.5 h-1.5 rounded-full bg-orange-600 shrink-0",
-                        isCollapsed && "lg:hidden"
+                        "flex items-center rounded-xl text-sm font-medium transition-all duration-150 group relative",
+                        isCollapsed
+                          ? "px-3 py-2.5 lg:justify-center lg:px-0 lg:py-2.5"
+                          : "gap-3 px-3 py-2.5",
+                        isActive
+                          ? "bg-orange-50 text-orange-700 font-semibold shadow-2xs border border-orange-200/80"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent"
                       )}
-                    />
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
+                    >
+                      <div
+                        className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all",
+                          isActive
+                            ? "bg-orange-600 text-white shadow-xs"
+                            : "bg-slate-100 text-slate-500 group-hover:text-slate-800 group-hover:bg-slate-200/60"
+                        )}
+                      >
+                        <Icon size={16} />
+                      </div>
+
+                      {/* Label (hidden in collapsed mode on desktop) */}
+                      <span className={cn("truncate flex-1 transition-opacity", isCollapsed && "lg:hidden")}>
+                        {item.label}
+                      </span>
+
+                      {/* Active indicator dot */}
+                      {isActive && (
+                        <div
+                          className={cn(
+                            "w-1.5 h-1.5 rounded-full bg-orange-600 shrink-0",
+                            isCollapsed && "lg:hidden"
+                          )}
+                        />
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          </div>
         </ScrollArea>
 
-        {/* Footer with Toggle & Logout */}
-        <div className="p-2.5 border-t border-border bg-[var(--bg-elevated)]/50 shrink-0 space-y-1">
+        {/* Footer with Toggle & Logout (Sticky at bottom) */}
+        <div className="p-2.5 border-t border-border bg-[var(--bg-elevated)]/50 shrink-0 space-y-1 z-10">
           {/* Desktop Collapse Toggle Button at bottom */}
           {onToggleCollapse && (
             <button
