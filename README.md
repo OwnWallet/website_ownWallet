@@ -1,4 +1,4 @@
-﻿# wnWallet — Quản Lí Chi Tiêu Cá Nhân
+# wnWallet — Quản Lí Chi Tiêu Cá Nhân
 
 > Thay thế Excel bằng một web app theo dõi tài chính theo thời gian thực, chính xác đến từng phút.
 
@@ -376,17 +376,19 @@ TZ="Asia/Ho_Chi_Minh"
 # 2. Vào vercel.com → New Project → Import repo
 # 3. Prisma Postgres: prisma.io/postgres → tạo DB → copy DATABASE_URL
 # 4. Thêm env vars vào Vercel Project Settings
-# 5. Build command: prisma generate && next build
+# 5. Build command: prisma contract emit && next build
 # 6. Migrate production:
-npx prisma migrate deploy
+npx prisma db migrate
 ```
 
 ### package.json scripts cần có
 ```json
 {
   "scripts": {
-    "build": "prisma generate && next build",
-    "postinstall": "prisma generate"
+    "build": "prisma contract emit && next build",
+    "postinstall": "node scripts/shim-prisma.mjs && prisma contract emit",
+    "db:migrate": "prisma migration plan && prisma db migrate",
+    "db:apply": "prisma db migrate"
   }
 }
 ```
