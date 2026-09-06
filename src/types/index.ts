@@ -1,34 +1,104 @@
-import {
-  User,
-  Category,
-  Transaction,
-  Budget,
-  Investment,
-  InvestLog,
-  Debt,
-  Goal,
-  CategoryType,
-  TxType,
-  DebtDir,
-  DebtStatus,
-  InvestAction,
-} from "@prisma/client";
+// Prisma 8 — types được infer trực tiếp từ contract, không import từ @prisma/client
+// Dùng type inference từ db object hoặc tự định nghĩa
 
-// Re-export Prisma types
-export type {
-  User,
-  Category,
-  Transaction,
-  Budget,
-  Investment,
-  InvestLog,
-  Debt,
-  Goal,
-  CategoryType,
-  TxType,
-  DebtDir,
-  DebtStatus,
-  InvestAction,
+// ─── Enum types ─────────────────────────────────────────────────
+export type CategoryType = "EXPENSE" | "INCOME" | "INVEST" | "DEBT" | "SAVINGS";
+export type TxType = "INCOME" | "EXPENSE";
+export type DebtDir = "OWE" | "OWED";
+export type DebtStatus = "PENDING" | "PARTIAL" | "PAID";
+export type InvestAction = "BUY" | "SELL";
+
+// ─── Model types ─────────────────────────────────────────────────
+export type User = {
+  id: string;
+  email: string;
+  name: string | null;
+  password: string;
+  timezone: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Category = {
+  id: string;
+  name: string;
+  type: CategoryType;
+  color: string;
+  icon: string | null;
+  isDefault: boolean;
+  createdAt: Date;
+  userId: string;
+};
+
+export type Transaction = {
+  id: string;
+  amount: number;
+  note: string | null;
+  recordedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  type: TxType;
+  categoryId: string;
+  goalId: string | null;
+  userId: string;
+};
+
+export type Budget = {
+  id: string;
+  limitAmount: number;
+  month: number;
+  year: number;
+  categoryId: string;
+  userId: string;
+};
+
+export type Investment = {
+  id: string;
+  name: string;
+  ticker: string | null;
+  quantity: number;
+  buyPrice: number;
+  currentPrice: number | null;
+  boughtAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  userId: string;
+};
+
+export type InvestLog = {
+  id: string;
+  action: InvestAction;
+  quantity: number;
+  price: number;
+  recordedAt: Date;
+  createdAt: Date;
+  investmentId: string;
+};
+
+export type Debt = {
+  id: string;
+  person: string;
+  amount: number;
+  paidAmount: number;
+  direction: DebtDir;
+  status: DebtStatus;
+  dueDate: Date | null;
+  note: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  userId: string;
+};
+
+export type Goal = {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  deadline: Date | null;
+  note: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  userId: string;
 };
 
 // ─── Composed types (with relations) ──────────────────────────

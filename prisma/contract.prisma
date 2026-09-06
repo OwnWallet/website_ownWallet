@@ -1,47 +1,42 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-generator client {
-  provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
-}
-
-datasource db {
-  provider = "postgresql"
-  // URL được cấu hình trong prisma.config.ts (Prisma 7+)
-}
+// Prisma 8 Contract Schema (PSL v2)
+// Không có generator block hay datasource block — chúng được cấu hình trong prisma.config.ts
 
 // ─────────────────────────────────────────
-// ENUMS
+// ENUMS — Prisma 8 yêu cầu @@type và explicit values
 // ─────────────────────────────────────────
 
 enum CategoryType {
-  EXPENSE
-  INCOME
-  INVEST
-  DEBT
-  SAVINGS
+  @@type("pg/text@1")
+  EXPENSE = "EXPENSE"
+  INCOME  = "INCOME"
+  INVEST  = "INVEST"
+  DEBT    = "DEBT"
+  SAVINGS = "SAVINGS"
 }
 
 enum TxType {
-  INCOME
-  EXPENSE
+  @@type("pg/text@1")
+  INCOME  = "INCOME"
+  EXPENSE = "EXPENSE"
 }
 
 enum DebtDir {
-  OWE  // Tôi nợ người khác
-  OWED // Người khác nợ tôi
+  @@type("pg/text@1")
+  OWE  = "OWE"   // Tôi nợ người khác
+  OWED = "OWED"  // Người khác nợ tôi
 }
 
 enum DebtStatus {
-  PENDING
-  PARTIAL
-  PAID
+  @@type("pg/text@1")
+  PENDING = "PENDING"
+  PARTIAL = "PARTIAL"
+  PAID    = "PAID"
 }
 
 enum InvestAction {
-  BUY
-  SELL
+  @@type("pg/text@1")
+  BUY  = "BUY"
+  SELL = "SELL"
 }
 
 // ─────────────────────────────────────────
@@ -49,13 +44,13 @@ enum InvestAction {
 // ─────────────────────────────────────────
 
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  name         String?
-  password     String        // bcryptjs hashed
-  timezone     String        @default("Asia/Ho_Chi_Minh")
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id        String   @id @default(cuid(2))
+  email     String   @unique
+  name      String?
+  password  String
+  timezone  String   @default("Asia/Ho_Chi_Minh")
+  createdAt DateTime @default(now())
+  updatedAt temporal.updatedAt()
 
   transactions Transaction[]
   investments  Investment[]
@@ -63,14 +58,37 @@ model User {
   goals        Goal[]
   categories   Category[]
   budgets      Budget[]
+  wallets      Wallet[]
+
+  @@map("User")
+}
+
+model Wallet {
+  id            String        @id @default(cuid(2))
+  name          String
+  accountNumber String?
+  bankName      String?
+  balance       Decimal       @default("0")
+  color         String?       @default("#7c3aed")
+  icon          String?       @default("Landmark")
+  isDefault     Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     temporal.updatedAt()
+
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+
+  @@index([userId])
+  @@map("Wallet")
 }
 
 model Category {
-  id        String       @id @default(cuid())
+  id        String       @id @default(cuid(2))
   name      String
   type      CategoryType
-  color     String       // hex: "#22c55e"
-  icon      String?      // emoji hoặc icon name
+  color     String
+  icon      String?
   isDefault Boolean      @default(false)
   createdAt DateTime     @default(now())
 
@@ -81,22 +99,26 @@ model Category {
   budgets      Budget[]
 
   @@unique([userId, name])
+  @@map("Category")
 }
 
 model Transaction {
-  id         String   @id @default(cuid())
-  amount     Decimal  @db.Decimal(15, 2)
+  id         String   @id @default(cuid(2))
+  amount     Decimal
   note       String?
-  recordedAt DateTime // Thời điểm thực tế do user chọn (chính xác đến phút)
+  recordedAt DateTime
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  updatedAt  temporal.updatedAt()
   type       TxType
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
-  goalId String? // Nếu là nạp tiền vào Goal
+  goalId String?
   goal   Goal?   @relation(fields: [goalId], references: [id])
+
+  walletId String?
+  wallet   Wallet? @relation(fields: [walletId], references: [id])
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -104,12 +126,14 @@ model Transaction {
   @@index([userId, recordedAt])
   @@index([userId, categoryId])
   @@index([userId, type])
+  @@index([userId, walletId])
+  @@map("Transaction")
 }
 
 model Budget {
-  id          String  @id @default(cuid())
-  limitAmount Decimal @db.Decimal(15, 2)
-  month       Int     // 1–12
+  id          String  @id @default(cuid(2))
+  limitAmount Decimal
+  month       Int
   year        Int
 
   categoryId String
@@ -119,67 +143,76 @@ model Budget {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, categoryId, month, year])
+  @@map("Budget")
 }
 
 model Investment {
-  id           String   @id @default(cuid())
-  name         String   // "VN30F", "BTC", "Vàng SJC"
+  id           String   @id @default(cuid(2))
+  name         String
   ticker       String?
-  quantity     Decimal  @db.Decimal(18, 8)
-  buyPrice     Decimal  @db.Decimal(15, 2)
-  currentPrice Decimal? @db.Decimal(15, 2)
+  quantity     Decimal
+  buyPrice     Decimal
+  currentPrice Decimal?
   boughtAt     DateTime
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  updatedAt    temporal.updatedAt()
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   logs InvestLog[]
+
+  @@map("Investment")
 }
 
 model InvestLog {
-  id         String       @id @default(cuid())
+  id         String       @id @default(cuid(2))
   action     InvestAction
-  quantity   Decimal      @db.Decimal(18, 8)
-  price      Decimal      @db.Decimal(15, 2)
+  quantity   Decimal
+  price      Decimal
   recordedAt DateTime
   createdAt  DateTime     @default(now())
 
   investmentId String
   investment   Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@map("InvestLog")
 }
 
 model Debt {
-  id         String     @id @default(cuid())
+  id         String     @id @default(cuid(2))
   person     String
-  amount     Decimal    @db.Decimal(15, 2)
-  paidAmount Decimal    @db.Decimal(15, 2) @default(0)
+  amount     Decimal
+  paidAmount Decimal    @default("0")
   direction  DebtDir
   status     DebtStatus @default(PENDING)
   dueDate    DateTime?
   note       String?
   createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  updatedAt  temporal.updatedAt()
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
   @@index([userId, direction])
+  @@map("Debt")
 }
 
 model Goal {
-  id           String    @id @default(cuid())
+  id           String    @id @default(cuid(2))
   name         String
-  targetAmount Decimal   @db.Decimal(15, 2)
-  savedAmount  Decimal   @db.Decimal(15, 2) @default(0)
+  targetAmount Decimal
+  savedAmount  Decimal   @default("0")
   deadline     DateTime?
   note         String?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  updatedAt    temporal.updatedAt()
 
   userId        String
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   contributions Transaction[]
+
+  @@map("Goal")
 }
+

@@ -1,15 +1,14 @@
-import { defineConfig } from "prisma/config";
+import "dotenv/config";
+import { definePrismaConfig } from "prisma/config";
+import { defineConfig as ormConfig } from "@prisma/orm-postgres/config";
 
-// Prisma 7+ — URL được cấu hình tại đây thay vì trong schema.prisma
-// Đọc từ .env.local hoặc biến môi trường (Vercel tự inject)
-export default defineConfig({
-  schema: "prisma/schema.prisma",
-  migrations: {
-    path: "prisma/migrations",
-  },
-  datasource: {
-    // Prisma Postgres: "prisma+postgres://accelerate.prisma-data.net/?api_key=..."
-    // Local PostgreSQL: "postgresql://user:pass@localhost:5432/wnwallet"
-    url: process.env.DATABASE_URL!,
-  },
+// Prisma 8 — dùng definePrismaConfig + @prisma/orm-postgres/config
+// CLI đọc file .env nhờ dotenv/config ở trên
+export default definePrismaConfig({
+  orm: ormConfig({
+    contract: "./prisma/contract.prisma",
+    db: {
+      connection: process.env.DATABASE_URL!,
+    },
+  }),
 });

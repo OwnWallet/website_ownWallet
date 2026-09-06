@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { BudgetSchema } from "@/schemas/budget";
 
 async function getUserId() {
@@ -22,11 +22,29 @@ export async function upsertBudget(formData: FormData) {
 
   const { categoryId, limitAmount, month, year } = parsed.data;
 
-  await prisma.budget.upsert({
-    where: { userId_categoryId_month_year: { userId, categoryId, month, year } },
-    create: { userId, categoryId, limitAmount, month, year },
-    update: { limitAmount },
-  });
+  // Kiểm tra quyền sở hữu danh mục để chống IDOR
+  const category = await db.orm.public.Category.where({ id: categoryId, userId }).first();
+  if (!category) {
+    return { error: { categoryId: ["Danh mục không tồn tại hoặc không thuộc quyền sở hữu"] } };
+  }
+
+  const existing = await db.orm.public.Budget
+    .where({ userId, categoryId, month, year })
+    .first();
+
+  if (existing) {
+    await db.orm.public.Budget
+      .where({ id: existing.id, userId })
+      .update({ limitAmount: String(limitAmount) });
+  } else {
+    await db.orm.public.Budget.create({
+      userId,
+      categoryId,
+      limitAmount: String(limitAmount),
+      month,
+      year,
+    });
+  }
 
   revalidatePath("/budget");
   revalidatePath("/dashboard");
@@ -35,7 +53,7 @@ export async function upsertBudget(formData: FormData) {
 
 export async function deleteBudget(id: string) {
   const userId = await getUserId();
-  await prisma.budget.delete({ where: { id, userId } });
+  await db.orm.public.Budget.where({ id, userId }).delete();
   revalidatePath("/budget");
   return { success: true };
 }

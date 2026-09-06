@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { DebtSchema, DebtPaymentSchema } from "@/schemas/debt";
+import { toInstant } from "@/lib/utils";
 
 async function getUserId() {
   const session = await auth();
@@ -16,7 +17,12 @@ export async function createDebt(formData: FormData) {
   const parsed = DebtSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.debt.create({ data: { ...parsed.data, userId } });
+  await db.orm.public.Debt.create({
+    ...parsed.data,
+    amount: String(parsed.data.amount),
+    dueDate: parsed.data.dueDate ? toInstant(parsed.data.dueDate) : null,
+    userId,
+  });
   revalidatePath("/debts");
   revalidatePath("/dashboard");
   return { success: true };
@@ -27,21 +33,20 @@ export async function recordPayment(id: string, formData: FormData) {
   const parsed = DebtPaymentSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  const debt = await prisma.debt.findUnique({ where: { id, userId } });
+  const debt = await db.orm.public.Debt.where({ id, userId }).first();
   if (!debt) return { error: "Không tìm thấy khoản nợ" };
 
   const newPaid = Number(debt.paidAmount) + parsed.data.paidAmount;
-  const newStatus =
+  const newStatus: "PAID" | "PARTIAL" | "PENDING" =
     newPaid >= Number(debt.amount)
       ? "PAID"
       : newPaid > 0
       ? "PARTIAL"
       : "PENDING";
 
-  await prisma.debt.update({
-    where: { id, userId },
-    data: { paidAmount: newPaid, status: newStatus },
-  });
+  await db.orm.public.Debt
+    .where({ id, userId })
+    .update({ paidAmount: String(newPaid), status: newStatus });
 
   revalidatePath("/debts");
   return { success: true };
@@ -49,7 +54,7 @@ export async function recordPayment(id: string, formData: FormData) {
 
 export async function deleteDebt(id: string) {
   const userId = await getUserId();
-  await prisma.debt.delete({ where: { id, userId } });
+  await db.orm.public.Debt.where({ id, userId }).delete();
   revalidatePath("/debts");
   return { success: true };
 }

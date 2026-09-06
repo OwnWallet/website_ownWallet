@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { toInstant } from "@/lib/utils";
 import {
   InvestmentSchema,
   UpdatePriceSchema,
@@ -20,7 +21,13 @@ export async function createInvestment(formData: FormData) {
   const parsed = InvestmentSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.investment.create({ data: { ...parsed.data, userId } });
+  await db.orm.public.Investment.create({
+    ...parsed.data,
+    quantity: String(parsed.data.quantity),
+    buyPrice: String(parsed.data.buyPrice),
+    boughtAt: toInstant(parsed.data.boughtAt),
+    userId,
+  });
   revalidatePath("/investments");
   return { success: true };
 }
@@ -30,10 +37,9 @@ export async function updateCurrentPrice(id: string, formData: FormData) {
   const parsed = UpdatePriceSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.investment.update({
-    where: { id, userId },
-    data: { currentPrice: parsed.data.currentPrice },
-  });
+  await db.orm.public.Investment
+    .where({ id, userId })
+    .update({ currentPrice: String(parsed.data.currentPrice) });
 
   revalidatePath("/investments");
   revalidatePath("/dashboard");
@@ -45,13 +51,17 @@ export async function addInvestLog(investmentId: string, formData: FormData) {
   const parsed = InvestLogSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  const investment = await prisma.investment.findUnique({
-    where: { id: investmentId, userId },
-  });
+  const investment = await db.orm.public.Investment
+    .where({ id: investmentId, userId })
+    .first();
   if (!investment) return { error: "Không tìm thấy khoản đầu tư" };
 
-  await prisma.investLog.create({
-    data: { ...parsed.data, investmentId },
+  await db.orm.public.InvestLog.create({
+    ...parsed.data,
+    quantity: String(parsed.data.quantity),
+    price: String(parsed.data.price),
+    recordedAt: toInstant(parsed.data.recordedAt),
+    investmentId,
   });
 
   revalidatePath("/investments");
@@ -60,7 +70,7 @@ export async function addInvestLog(investmentId: string, formData: FormData) {
 
 export async function deleteInvestment(id: string) {
   const userId = await getUserId();
-  await prisma.investment.delete({ where: { id, userId } });
+  await db.orm.public.Investment.where({ id, userId }).delete();
   revalidatePath("/investments");
   return { success: true };
 }
