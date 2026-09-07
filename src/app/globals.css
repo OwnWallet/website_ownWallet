@@ -12,7 +12,7 @@
   --bg-card:             #ffffff; /* Pure White */
   --bg-elevated:         #f1f5f9; /* Slate 100 */
   --bg-input:            #ffffff; /* White input */
-  --bg-sidebar:          #ffffff; /* Clean white sidebar */
+  --bg-sidebar:          rgba(15, 23, 42, 0.88); /* Slate 900 Glass */
 
   /* === Foreground / Text === */
   --fg:                  #0f172a; /* Slate 900 */
@@ -27,10 +27,13 @@
   --brand-text:          #ffffff;
   --brand-glow:          rgba(234, 88, 12, 0.18);
 
-  /* === Sidebar States === */
-  --sidebar-active-bg:   #ffedd5; /* Orange 100 */
-  --sidebar-active-fg:   #c2410c; /* Orange 700 */
-  --sidebar-hover-bg:    #f8fafc; /* Slate 50 */
+  /* === Sidebar Glassmorphism States === */
+  --sidebar-active-bg:   rgba(249, 115, 22, 0.95); /* Orange 500 */
+  --sidebar-active-fg:   #ffffff;
+  --sidebar-hover-bg:    rgba(255, 255, 255, 0.08);
+  --sidebar-border:      rgba(255, 255, 255, 0.08);
+  --sidebar-text:        #cbd5e1; /* Slate 300 */
+  --sidebar-muted:       #94a3b8; /* Slate 400 */
 
   /* === Semantic Financial Colors === */
   --income:              #059669; /* Emerald 600 */
@@ -128,13 +131,15 @@ html {
 }
 
 body {
-  font-family: var(--font-sans), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-inter), var(--font-sans), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   background-color: var(--bg-page);
   color: var(--fg);
   line-height: 1.6;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* ─────────────────────────────────────────────────────
@@ -194,8 +199,8 @@ body {
   font-size: 1.5rem;
   font-weight: 800;
   color: var(--fg);
-  letter-spacing: -0.025em;
-  line-height: 1.2;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
 }
 @media (min-width: 1024px) {
   .page-header-title {

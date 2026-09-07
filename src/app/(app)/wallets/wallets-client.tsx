@@ -381,7 +381,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                     {/* Account Number */}
                     <div className="font-mono text-xs tracking-widest text-white/80">
                       {wallet.accountNumber
-                        ? wallet.accountNumber.length > 8
+                        ? wallet.accountNumber.length > 4
                           ? `•••• •••• ${wallet.accountNumber.slice(-4)}`
                           : wallet.accountNumber
                         : "•••• •••• ••••"}

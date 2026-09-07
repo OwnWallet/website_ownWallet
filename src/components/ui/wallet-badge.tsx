@@ -1,5 +1,5 @@
 import React from "react";
-import { cn } from "@/lib/utils";
+import { cn, maskAccountNumber } from "@/lib/utils";
 import { Landmark, CreditCard, Building2, Wallet as WalletIcon, Banknote } from "lucide-react";
 
 interface WalletBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -71,7 +71,7 @@ export function WalletBadge({
         interactive && "cursor-pointer active:scale-95",
         className
       )}
-      title={wallet.accountNumber ? `Số TK: ${wallet.accountNumber}` : wallet.name}
+      title={wallet.accountNumber ? `Số TK: ${maskAccountNumber(wallet.accountNumber)}` : wallet.name}
       {...props}
     >
       {React.createElement(BankIcon, { size: size === "sm" ? 11 : 13, className: "shrink-0" })}

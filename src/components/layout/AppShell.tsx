@@ -146,17 +146,17 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
               <Menu size={18} />
             </button>
 
-            {/* Desktop Collapse / Expand Toggle Button with State Indicator */}
+            {/* Desktop Collapse / Expand Toggle Button */}
             <button
               type="button"
               onClick={toggleCollapse}
               title={
                 isCollapsed
-                  ? "Mở rộng thanh bên (Ctrl+B) — Đang tắt"
-                  : "Thu gọn thanh bên (Ctrl+B) — Đang bật"
+                  ? "Mở rộng thanh bên (Ctrl+B)"
+                  : "Thu gọn thanh bên (Ctrl+B)"
               }
               className={cn(
-                "hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer shadow-2xs text-xs font-semibold",
+                "hidden lg:flex items-center justify-center p-2 rounded-xl border transition-all cursor-pointer shadow-2xs",
                 isCollapsed
                   ? "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100/80"
                   : "border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/80"
@@ -164,30 +164,25 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
               aria-label="Toggle sidebar"
             >
               {isCollapsed ? (
-                <>
-                  <PanelLeft size={16} className="text-orange-600" />
-                  <span className="hidden xl:inline text-[11px] font-medium">Sidebar: Tắt</span>
-                </>
+                <PanelLeft size={16} className="text-orange-600" />
               ) : (
-                <>
-                  <PanelLeftClose size={16} />
-                  <span className="hidden xl:inline text-[11px] font-medium">Thu gọn</span>
-                </>
+                <PanelLeftClose size={16} />
               )}
             </button>
 
             {/* Layout Width Customizer Dropdown */}
             <DropdownMenu>
-              <DropdownMenuTrigger className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-border bg-card hover:bg-muted/80 text-muted-foreground hover:text-foreground text-xs font-medium shadow-2xs transition-all cursor-pointer outline-none">
-                <SlidersHorizontal size={13} className="text-orange-600" />
-                <span className="text-[11px]">
-                  {layoutWidth === "full"
-                    ? "Toàn màn hình"
+              <DropdownMenuTrigger
+                title={
+                  layoutWidth === "full"
+                    ? "Độ rộng giao diện: Toàn màn hình"
                     : layoutWidth === "standard"
-                    ? "Tiêu chuẩn (1400px)"
-                    : "Rộng thích ứng"}
-                </span>
-                <ChevronDown size={12} className="text-muted-foreground/70" />
+                    ? "Độ rộng giao diện: Tiêu chuẩn (1400px)"
+                    : "Độ rộng giao diện: Rộng thích ứng"
+                }
+                className="hidden sm:inline-flex items-center justify-center p-2 rounded-xl border border-border bg-card hover:bg-muted/80 text-muted-foreground hover:text-foreground shadow-2xs transition-all cursor-pointer outline-none"
+              >
+                <SlidersHorizontal size={15} className="text-orange-600" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64 p-1.5 shadow-lg border-border bg-card">
                 <DropdownMenuLabel className="font-semibold text-xs px-2 py-1 text-foreground">
@@ -255,13 +250,6 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <div className="hidden 2xl:flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse-soft shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-              <span className="text-xs font-semibold text-muted-foreground tracking-wide">
-                Hệ thống Quản lý Tài chính Cá nhân
-              </span>
-            </div>
           </div>
 
           {/* Right: Quick actions & User Dropdown Menu */}
@@ -278,11 +266,10 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
             {/* Quick AI Import Button */}
             <Link
               href="/import"
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-border bg-card hover:bg-muted/70 text-muted-foreground hover:text-foreground text-xs font-medium shadow-2xs transition-all"
-              title="Import sao kê tự động"
+              className="hidden sm:inline-flex items-center justify-center p-2 rounded-xl border border-border bg-card hover:bg-muted/70 text-muted-foreground hover:text-foreground shadow-2xs transition-all"
+              title="Import sao kê tự động (AI)"
             >
-              <Sparkles size={13} className="text-amber-500" />
-              <span className="hidden lg:inline">AI Import</span>
+              <Sparkles size={15} className="text-amber-500" />
             </Link>
 
             {/* User Dropdown Menu */}
@@ -302,7 +289,7 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
               <DropdownMenuContent align="end" className="w-56 p-1.5 shadow-lg border-border bg-card">
                 <DropdownMenuLabel className="font-normal px-2 py-1.5">
                   <div className="flex flex-col space-y-0.5">
-                    <p className="text-xs font-bold text-foreground">Tài khoản Quản trị</p>
+                    <p className="text-xs font-bold text-foreground">Tài khoản của tôi</p>
                     <p className="text-[11px] text-muted-foreground truncate">{email}</p>
                   </div>
                 </DropdownMenuLabel>

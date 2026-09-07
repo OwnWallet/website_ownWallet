@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getWallets } from "@/actions/wallets";
-import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getFilterDateRange, toInstant, toDate, serializeData } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getFilterDateRange, toInstant, toDate, serializeData, maskAccountNumber } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD } from "@/lib/constants";
 import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Plus, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import Link from "next/link";
@@ -277,7 +277,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               Đang lọc:{" "}
               <span className="font-bold text-orange-700">{activeWallet.name}</span>
               {activeWallet.accountNumber && activeWallet.bankName !== "CASH" && (
-                <span className="text-muted-foreground font-normal ml-1">(STK: {activeWallet.accountNumber})</span>
+                <span className="text-muted-foreground font-normal ml-1">(STK: {maskAccountNumber(activeWallet.accountNumber)})</span>
               )}
             </p>
           </div>
@@ -468,7 +468,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           </span>
                           {w.accountNumber ? (
                             <span className="text-[10px] text-muted-foreground truncate block">
-                              STK: {w.accountNumber}
+                              STK: {maskAccountNumber(w.accountNumber)}
                             </span>
                           ) : (
                             <span className="text-[10px] text-muted-foreground truncate block">
