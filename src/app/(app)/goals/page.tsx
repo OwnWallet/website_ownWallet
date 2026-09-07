@@ -3,11 +3,7 @@ import { db } from "@/lib/db";
 import { formatCurrency, calcPercent, toDate } from "@/lib/utils";
 import { createGoal, deleteGoal, contributeToGoal } from "@/actions/goals";
 import { Trash2, Target, TrendingUp, PiggyBank, Plus } from "lucide-react";
-import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "Mục tiêu tích lũy | OwnWallet",
-};
 
 export default async function GoalsPage() {
   const session = await auth();

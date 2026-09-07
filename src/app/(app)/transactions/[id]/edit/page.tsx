@@ -3,9 +3,6 @@ import { db } from "@/lib/db";
 import { serializeData } from "@/lib/utils";
 import { notFound, redirect } from "next/navigation";
 import { EditTransactionForm } from "./edit-form";
-import type { Metadata } from "next";
-
-export const metadata: Metadata = { title: "Chỉnh sửa giao dịch — OwnWallet" };
 
 interface Props {
   params: Promise<{ id: string }>;

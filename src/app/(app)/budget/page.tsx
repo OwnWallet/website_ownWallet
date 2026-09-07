@@ -5,9 +5,7 @@ import { upsertBudget } from "@/actions/budgets";
 import { BudgetListClient } from "./budget-list-client";
 import { PiggyBank, TrendingDown, AlertCircle, Wallet, Plus } from "lucide-react";
 
-export const metadata = {
-  title: "Ngân sách | OwnWallet",
-};
+
 
 interface BudgetPageProps {
   searchParams: Promise<{

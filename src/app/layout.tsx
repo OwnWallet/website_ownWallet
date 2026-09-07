@@ -9,10 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: {
-    default: "OwnWallet — Quản lí chi tiêu cá nhân",
-    template: "%s | OwnWallet",
-  },
+  title: "OwnWallet",
   description:
     "Theo dõi thu chi, đầu tư, nợ và mục tiêu tài chính của bạn theo thời gian thực.",
   icons: {

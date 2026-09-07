@@ -2,9 +2,6 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { serializeData } from "@/lib/utils";
 import { NewTransactionForm } from "./transaction-form";
-import type { Metadata } from "next";
-
-export const metadata: Metadata = { title: "Thêm giao dịch | OwnWallet" };
 
 export default async function NewTransactionPage() {
   const session = await auth();
