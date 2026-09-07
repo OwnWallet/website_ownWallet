@@ -25,7 +25,6 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
     formState: { errors, isSubmitting },
     setValue,
   } = useForm<TransactionInput>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(TransactionSchema) as any,
     defaultValues: {
       type: "EXPENSE",

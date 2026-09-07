@@ -8,8 +8,6 @@ import {
   CreditCard,
   Plus,
   ArrowRight,
-  TrendingUp,
-  TrendingDown,
   Edit2,
   Trash2,
   RefreshCw,
