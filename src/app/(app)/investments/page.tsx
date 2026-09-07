@@ -8,7 +8,7 @@ import { Plus, TrendingUp, Briefcase, BarChart3, Layers } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Đầu tư | wnWallet",
+  title: "Đầu tư | OwnWallet",
 };
 
 export default async function InvestmentsPage() {

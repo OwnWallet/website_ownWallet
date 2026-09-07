@@ -9,7 +9,7 @@ import Link from "next/link";
 import { DashboardChart } from "@/components/ui/DashboardChart";
 import { Card } from "@/components/ui/card";
 
-export const metadata: Metadata = { title: "Tổng quan — wnWallet" };
+export const metadata: Metadata = { title: "Tổng quan — OwnWallet" };
 
 async function getDashboardData(
   userId: string,

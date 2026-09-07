@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { EditTransactionForm } from "./edit-form";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Chỉnh sửa giao dịch — wnWallet" };
+export const metadata: Metadata = { title: "Chỉnh sửa giao dịch — OwnWallet" };
 
 interface Props {
   params: Promise<{ id: string }>;

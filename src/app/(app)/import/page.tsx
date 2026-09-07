@@ -6,9 +6,9 @@ import { serializeData } from "@/lib/utils";
 import { Sparkles } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "AI Import — wnWallet",
+  title: "AI Import — OwnWallet",
   description:
-    "Upload sao kê ngân hàng PDF hoặc bảng Excel/CSV để AI tự động phân tích và nhập giao dịch vào wnWallet.",
+    "Upload sao kê ngân hàng PDF hoặc bảng Excel/CSV để AI tự động phân tích và nhập giao dịch vào OwnWallet.",
 };
 
 export default async function ImportPage() {

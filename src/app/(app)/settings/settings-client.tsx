@@ -703,7 +703,7 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Shield size={18} className="text-primary" />
-          <h2 className="text-lg font-bold">Hệ thống wnWallet</h2>
+          <h2 className="text-lg font-bold">Hệ thống OwnWallet</h2>
         </div>
 
         <div className="card text-xs space-y-2.5 text-muted">

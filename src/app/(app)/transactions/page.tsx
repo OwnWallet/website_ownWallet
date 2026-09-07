@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { TransactionList } from "./transaction-list";
 
-export const metadata: Metadata = { title: "Giao dịch | wnWallet" };
+export const metadata: Metadata = { title: "Giao dịch | OwnWallet" };
 
 interface TransactionsPageProps {
   searchParams: Promise<{
