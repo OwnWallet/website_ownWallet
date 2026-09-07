@@ -283,7 +283,7 @@ export default function ImportReview({
           >
             {wallets.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.name} {w.accountNumber ? `(STK: ${w.accountNumber})` : ""}
+                {w.bankName === "CASH" ? "💵" : "💳"} {w.name} {w.accountNumber && w.bankName !== "CASH" ? `(STK: ${w.accountNumber})` : ""}
               </option>
             ))}
             <option value="">-- Chưa gán tài khoản --</option>

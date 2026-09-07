@@ -11,6 +11,7 @@ import {
   Wallet,
   Sparkles,
   ArrowRight,
+  Banknote,
 } from "lucide-react";
 import Link from "next/link";
 import { cn, formatCurrencyCompact } from "@/lib/utils";
@@ -71,6 +72,13 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
 
   function getBankBadge(bank?: string | null, name?: string) {
     const text = (bank || name || "").toLowerCase();
+    if (bank === "CASH" || text.includes("tiền mặt") || text.includes("cash")) {
+      return {
+        label: "TIỀN",
+        bg: "bg-emerald-100 text-emerald-800 border-emerald-300",
+        icon: Banknote,
+      };
+    }
     if (text.includes("tpbank") || text.includes("tpb")) {
       return {
         label: "TPB",

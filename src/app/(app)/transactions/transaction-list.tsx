@@ -42,8 +42,10 @@ import {
   LayoutList,
   Table as TableIcon,
   Tag,
+  Paperclip,
 } from "lucide-react";
 import { WalletBadge } from "@/components/ui/wallet-badge";
+import { EvidenceModal } from "@/components/ui/evidence-modal";
 
 interface Category {
  id: string;
@@ -74,6 +76,7 @@ interface TransactionItem {
  category: Category;
  walletId?: string | null;
  wallet?: Wallet | null;
+ evidenceUrl?: string | null;
 }
 
 interface Props {
@@ -102,6 +105,11 @@ export function TransactionList({
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedEvidence, setSelectedEvidence] = useState<{
+    url: string;
+    title: string;
+    subtitle: string;
+  } | null>(null);
 
   const toggleSelectOne = (id: string) => {
     setSelectedIds((prev) => {
@@ -718,6 +726,28 @@ export function TransactionList({
                           <Clock size={11} />
                           {formatTime(tx.recordedAt)}
                         </span>
+
+                        {/* Evidence Badge */}
+                        {tx.evidenceUrl && (
+                          <>
+                            <span>•</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedEvidence({
+                                  url: tx.evidenceUrl!,
+                                  title: tx.note || tx.description || "Bằng chứng giao dịch",
+                                  subtitle: `${tx.type === "INCOME" ? "+" : "-"}${formatCurrency(Number(tx.amount))} • ${formatDate(tx.recordedAt)}`,
+                                })
+                              }
+                              className="inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full text-[11px] bg-primary/10 text-primary hover:bg-primary/20 border border-primary/25 transition-colors cursor-pointer"
+                              title="Bấm để xem ảnh bằng chứng / hóa đơn"
+                            >
+                              <Paperclip size={11} />
+                              <span>Hóa đơn / Ảnh</span>
+                            </button>
+                          </>
+                        )}
                       </div>
  </div>
  </div>
@@ -840,6 +870,23 @@ export function TransactionList({
                 size="sm"
               />
             )}
+            {tx.evidenceUrl && (
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedEvidence({
+                    url: tx.evidenceUrl!,
+                    title: tx.note || tx.description || "Bằng chứng giao dịch",
+                    subtitle: `${tx.type === "INCOME" ? "+" : "-"}${formatCurrency(Number(tx.amount))} • ${formatDate(tx.recordedAt)}`,
+                  })
+                }
+                className="inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full text-[11px] bg-primary/10 text-primary hover:bg-primary/20 border border-primary/25 transition-colors cursor-pointer shrink-0"
+                title="Xem ảnh hóa đơn / bằng chứng"
+              >
+                <Paperclip size={11} />
+                <span>Ảnh</span>
+              </button>
+            )}
           </div>
 
           {/* Date & Time (Desktop) */}
@@ -960,6 +1007,14 @@ export function TransactionList({
  </AlertDialogFooter>
  </AlertDialogContent>
  </AlertDialog>
+  {/* Evidence Lightbox Modal */}
+  <EvidenceModal
+    isOpen={!!selectedEvidence}
+    onClose={() => setSelectedEvidence(null)}
+    imageUrl={selectedEvidence?.url}
+    title={selectedEvidence?.title}
+    subtitle={selectedEvidence?.subtitle}
+  />
       {/* Bulk Action Floating Bar */}
       <BulkActionBar
         selectedCount={selectedIds.size}

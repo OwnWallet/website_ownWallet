@@ -2,7 +2,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import { Landmark, Building2, CreditCard, ChevronDown, Check } from "lucide-react";
+import { Landmark, Building2, CreditCard, ChevronDown, Check, Banknote } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +33,9 @@ interface AccountFilterProps {
 
 function getBankIcon(wallet?: WalletOption | null) {
   if (!wallet) return Landmark;
+  if (wallet.bankName === "CASH" || (wallet.bankName || wallet.name || "").toLowerCase().includes("tiền mặt")) {
+    return Banknote;
+  }
   const name = (wallet.bankName || wallet.name || "").toLowerCase();
   if (name.includes("techcombank") || name.includes("tcb")) return Building2;
   if (name.includes("tpbank") || name.includes("tpb")) return Landmark;
@@ -80,12 +83,14 @@ export function AccountFilter({
 
         {wallets.map((w) => {
           const isSelected = selectedWallet === w.id;
+          const isCash = w.bankName === "CASH" || (w.bankName || w.name).toLowerCase().includes("tiền mặt");
           const isTpb = (w.bankName || w.name).toLowerCase().includes("tpb");
           const isTcb = (w.bankName || w.name).toLowerCase().includes("techcombank") || (w.bankName || w.name).toLowerCase().includes("tcb");
 
           let activeStyle = "bg-orange-600 text-white border-orange-600 shadow-xs";
-          if (isTpb) activeStyle = "bg-violet-600 text-white border-violet-600 shadow-xs";
-          if (isTcb) activeStyle = "bg-rose-600 text-white border-rose-600 shadow-xs";
+          if (isCash) activeStyle = "bg-emerald-600 text-white border-emerald-600 shadow-xs";
+          else if (isTpb) activeStyle = "bg-violet-600 text-white border-violet-600 shadow-xs";
+          else if (isTcb) activeStyle = "bg-rose-600 text-white border-rose-600 shadow-xs";
 
           return (
             <button
@@ -162,12 +167,14 @@ export function AccountFilter({
 
         {wallets.map((w) => {
           const isSelected = selectedWallet === w.id;
+          const isCash = w.bankName === "CASH" || (w.bankName || w.name).toLowerCase().includes("tiền mặt");
           const isTpb = (w.bankName || w.name).toLowerCase().includes("tpb");
           const isTcb = (w.bankName || w.name).toLowerCase().includes("techcombank");
 
           let iconColor = "text-orange-500";
-          if (isTpb) iconColor = "text-violet-500";
-          if (isTcb) iconColor = "text-rose-500";
+          if (isCash) iconColor = "text-emerald-600";
+          else if (isTpb) iconColor = "text-violet-500";
+          else if (isTcb) iconColor = "text-rose-500";
 
           return (
             <DropdownMenuItem
