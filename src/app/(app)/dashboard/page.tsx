@@ -4,12 +4,9 @@ import { getWallets } from "@/actions/wallets";
 import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getFilterDateRange, toInstant, toDate, serializeData } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD } from "@/lib/constants";
 import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Plus, ArrowUpRight, ArrowDownLeft } from "lucide-react";
-import type { Metadata } from "next";
 import Link from "next/link";
 import { DashboardChart } from "@/components/ui/DashboardChart";
 import { Card } from "@/components/ui/card";
-
-export const metadata: Metadata = { title: "Tổng quan — OwnWallet" };
 
 async function getDashboardData(
   userId: string,

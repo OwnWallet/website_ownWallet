@@ -5,11 +5,7 @@ import { createInvestment } from "@/actions/investments";
 import { redirect } from "next/navigation";
 import { InvestmentListClient } from "./investment-list-client";
 import { Plus, TrendingUp, Briefcase, BarChart3, Layers } from "lucide-react";
-import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "Đầu tư | OwnWallet",
-};
 
 export default async function InvestmentsPage() {
   const session = await auth();

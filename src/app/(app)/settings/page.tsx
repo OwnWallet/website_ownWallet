@@ -8,9 +8,7 @@ import { Settings } from "lucide-react";
 
 import { getAiConfig } from "@/actions/settings";
 
-export const metadata: Metadata = {
-  title: "Cài đặt | OwnWallet",
-};
+
 
 export default async function SettingsPage() {
   const session = await auth();

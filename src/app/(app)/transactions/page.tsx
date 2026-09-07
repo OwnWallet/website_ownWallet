@@ -3,10 +3,7 @@ import { db } from "@/lib/db";
 import { serializeData } from "@/lib/utils";
 import { Plus, ArrowLeftRight } from "lucide-react";
 import Link from "next/link";
-import type { Metadata } from "next";
 import { TransactionList } from "./transaction-list";
-
-export const metadata: Metadata = { title: "Giao dịch | OwnWallet" };
 
 interface TransactionsPageProps {
   searchParams: Promise<{

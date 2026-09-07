@@ -5,9 +5,7 @@ import { DebtActions } from "./debt-actions";
 import { DebtListClient } from "./debt-list-client";
 import { HandCoins, TrendingDown, TrendingUp } from "lucide-react";
 
-export const metadata = {
-  title: "Quản lý Nợ | OwnWallet",
-};
+
 
 export default async function DebtsPage() {
   const session = await auth();
