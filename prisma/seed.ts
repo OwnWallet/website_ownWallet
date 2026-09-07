@@ -7,7 +7,11 @@ async function main() {
   console.log("🌱 Seeding database...");
 
   // Xóa dữ liệu demo cũ (nếu có)
-  const existing = await db.orm.public.User.where({ email: "demo@wnwallet.dev" }).first();
+  const existingOld = await db.orm.public.User.where({ email: "demo@wnwallet.dev" }).first();
+  if (existingOld) {
+    await db.orm.public.User.where({ id: existingOld.id }).delete();
+  }
+  const existing = await db.orm.public.User.where({ email: "demo@ownwallet.dev" }).first();
   if (existing) {
     await db.orm.public.User.where({ id: existing.id }).delete();
   }
@@ -17,7 +21,7 @@ async function main() {
   await db.transaction(async (tx: any) => {
     const user = await tx.orm.public.User.create({
       name: "Demo User",
-      email: "demo@wnwallet.dev",
+      email: "demo@ownwallet.dev",
       password: hashedPassword,
     });
 

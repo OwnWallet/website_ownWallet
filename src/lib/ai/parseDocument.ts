@@ -27,7 +27,7 @@ function buildSystemPrompt(availableCategories: string[]): string {
   const maxTx = MAX_TRANSACTIONS;
 
   const lines = [
-    "Bạn là AI phân tích tài chính chuyên nghiệp cho ứng dụng wnWallet.",
+    "Bạn là AI phân tích tài chính chuyên nghiệp cho ứng dụng OwnWallet.",
     "Nhiệm vụ: trích xuất TẤT CẢ giao dịch tài chính từ tài liệu được cung cấp (sao kê ngân hàng TPBank PDF, hoặc bảng Excel/CSV).",
     "",
     "## QUY TẮC BẮT BUỘC",

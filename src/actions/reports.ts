@@ -48,6 +48,6 @@ export async function exportTransactionsCSV() {
   return {
     success: true,
     csv: csvContent,
-    filename: `wnwallet-giao-dich-${new Date().toISOString().slice(0, 10)}.csv`,
+    filename: `ownwallet-giao-dich-${new Date().toISOString().slice(0, 10)}.csv`,
   };
 }

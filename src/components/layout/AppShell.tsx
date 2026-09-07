@@ -45,11 +45,11 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        const savedCollapsed = localStorage.getItem("wnwallet_sidebar_collapsed");
+        const savedCollapsed = localStorage.getItem("ownwallet_sidebar_collapsed") ?? localStorage.getItem("wnwallet_sidebar_collapsed");
         if (savedCollapsed !== null) {
           setIsCollapsed(savedCollapsed === "true");
         }
-        const savedWidth = localStorage.getItem("wnwallet_layout_width") as LayoutWidth;
+        const savedWidth = (localStorage.getItem("ownwallet_layout_width") ?? localStorage.getItem("wnwallet_layout_width")) as LayoutWidth;
         if (savedWidth && ["adaptive", "full", "standard"].includes(savedWidth)) {
           setLayoutWidth(savedWidth);
         }
@@ -64,7 +64,7 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
     setIsCollapsed((prev) => {
       const next = !prev;
       try {
-        localStorage.setItem("wnwallet_sidebar_collapsed", String(next));
+        localStorage.setItem("ownwallet_sidebar_collapsed", String(next));
       } catch {
         // Ignore
       }
@@ -75,7 +75,7 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
   function changeLayoutWidth(width: LayoutWidth) {
     setLayoutWidth(width);
     try {
-      localStorage.setItem("wnwallet_layout_width", width);
+      localStorage.setItem("ownwallet_layout_width", width);
     } catch {
       // Ignore
     }

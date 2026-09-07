@@ -163,7 +163,7 @@ export default function ImportReview({
         <div className="success-icon">✅</div>
         <h2 className="text-2xl font-bold mb-2">Import thành công!</h2>
         <p className="text-muted">
-          Đã thêm <strong className="text-income">{importResult.imported} giao dịch</strong> vào wnWallet.
+          Đã thêm <strong className="text-income">{importResult.imported} giao dịch</strong> vào OwnWallet.
         </p>
         <p className="text-subtle text-sm mt-1">Đang chuyển hướng về Giao dịch…</p>
       </div>

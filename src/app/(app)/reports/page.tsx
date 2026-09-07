@@ -6,7 +6,7 @@ import { toInstant, toDate, getFilterDateRange } from "@/lib/utils";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Báo cáo & Phân tích — wnWallet",
+  title: "Báo cáo & Phân tích — OwnWallet",
 };
 
 interface ReportsPageProps {

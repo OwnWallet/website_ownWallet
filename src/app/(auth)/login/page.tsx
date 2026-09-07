@@ -2,6 +2,7 @@
 
 import { useActionState, useState, Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { loginAction } from "@/actions/auth";
@@ -37,15 +38,22 @@ function LoginForm() {
     <main className="min-h-screen flex items-center justify-center p-4 bg-[var(--background)]">
       <div className="w-full max-w-md">
         {/* Header Branding */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-500 mb-4 shadow-lg shadow-orange-500/10">
-            <Wallet className="w-7 h-7" />
-          </div>
+        <div className="text-center mb-8 flex flex-col items-center">
+          <Link href="/" className="inline-block mb-3 group">
+            <Image
+              src="/logo-transparent.png"
+              alt="OwnWallet Logo"
+              width={240}
+              height={70}
+              className="h-16 w-auto object-contain mx-auto group-hover:scale-105 transition-transform"
+              priority
+            />
+          </Link>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">
             Chào mừng trở lại
           </h1>
           <p className="text-sm text-[var(--foreground-muted)] mt-1.5">
-            Đăng nhập vào ví cá nhân <span className="font-semibold text-orange-500">wnWallet</span>
+            Đăng nhập vào ví cá nhân <span className="font-semibold text-orange-500">OwnWallet</span>
           </p>
         </div>
 

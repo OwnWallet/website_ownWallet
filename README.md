@@ -1,4 +1,4 @@
-# wnWallet — Quản Lí Chi Tiêu Cá Nhân
+# OwnWallet — Quản Lí Chi Tiêu Cá Nhân
 
 > Thay thế Excel bằng một web app theo dõi tài chính theo thời gian thực, chính xác đến từng phút.
 

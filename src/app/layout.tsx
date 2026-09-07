@@ -10,11 +10,21 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "wnWallet — Quản lí chi tiêu cá nhân",
-    template: "%s | wnWallet",
+    default: "OwnWallet — Quản lí chi tiêu cá nhân",
+    template: "%s | OwnWallet",
   },
   description:
     "Theo dõi thu chi, đầu tư, nợ và mục tiêu tài chính của bạn theo thời gian thực.",
+  icons: {
+    icon: [
+      { url: "/icon.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/favicon.ico" },
+    ],
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({

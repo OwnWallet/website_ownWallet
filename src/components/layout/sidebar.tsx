@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { logout } from "@/actions/auth";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -90,14 +91,28 @@ export function Sidebar({
             href="/dashboard"
             className="flex items-center gap-3 group overflow-hidden"
             onClick={() => onClose?.()}
-            title="wnWallet — Quản lý tài chính"
+            title="OwnWallet — Quản lý tài chính"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shadow-sm shadow-orange-500/20 group-hover:scale-105 transition-transform shrink-0">
-              <Coins size={18} />
+            {/* Desktop Collapsed view: 3D gold emblem */}
+            <div className={cn("items-center justify-center shrink-0", isCollapsed ? "hidden lg:flex" : "hidden")}>
+              <Image
+                src="/icon-emblem-transparent.png"
+                alt="OwnWallet"
+                width={36}
+                height={36}
+                className="w-9 h-9 object-contain group-hover:scale-105 transition-transform drop-shadow-sm"
+              />
             </div>
-            <div className={cn("transition-opacity duration-200", isCollapsed && "lg:hidden")}>
-              <div className="text-base font-bold text-foreground tracking-tight leading-tight">wnWallet</div>
-              <div className="text-[11px] text-muted-foreground font-medium leading-none mt-0.5">Quản lý tài chính</div>
+            {/* Expanded view & Mobile drawer: Official full logo */}
+            <div className={cn("items-center", isCollapsed ? "flex lg:hidden" : "flex")}>
+              <Image
+                src="/logo-transparent.png"
+                alt="OwnWallet — Quản lý tài chính"
+                width={175}
+                height={48}
+                className="h-10 w-auto max-w-[175px] object-contain group-hover:scale-[1.02] transition-transform"
+                priority
+              />
             </div>
           </Link>
 
