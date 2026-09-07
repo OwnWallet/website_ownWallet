@@ -7,15 +7,17 @@ import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Calendar } from "lucide-react";
 import { createTransaction } from "@/actions/transactions";
 import { TransactionSchema, type TransactionInput } from "@/schemas/transaction";
+import { EvidenceUpload } from "@/components/ui/evidence-upload";
 
 interface Props {
   categories: { id: string; name: string; type: string; color: string; icon: string | null }[];
-  wallets?: { id: string; name: string }[];
+  wallets?: { id: string; name: string; bankName?: string | null }[];
 }
 
 export function NewTransactionForm({ categories, wallets = [] }: Props) {
   const router = useRouter();
   const [txType, setTxType] = useState<"EXPENSE" | "INCOME">("EXPENSE");
+  const [evidenceUrl, setEvidenceUrl] = useState<string | null>(null);
 
   const {
     register,
@@ -23,7 +25,6 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
     formState: { errors, isSubmitting },
     setValue,
   } = useForm<TransactionInput>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(TransactionSchema) as any,
     defaultValues: {
       type: "EXPENSE",
@@ -44,6 +45,9 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
     if (data.description || data.note) {
       formData.append("note", (data.description || data.note)!);
       formData.append("description", (data.description || data.note)!);
+    }
+    if (evidenceUrl) {
+      formData.append("evidenceUrl", evidenceUrl);
     }
     formData.append("recordedAt", data.recordedAt.toISOString());
     const result = await createTransaction(formData);
@@ -211,7 +215,7 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
                 <option value="">-- Mặc định --</option>
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>
-                    💳 {w.name}
+                    {w.bankName === "CASH" ? "💵" : "💳"} {w.name}
                   </option>
                 ))}
               </select>
@@ -291,6 +295,29 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
               {...register("description")}
               placeholder="VD: Ăn trưa với đồng nghiệp..."
               style={inputStyle}
+            />
+          </div>
+
+          {/* Evidence Photo */}
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: "13px",
+                fontWeight: 500,
+                color: "var(--foreground-muted)",
+                marginBottom: "6px",
+              }}
+            >
+              Ảnh bằng chứng / Hóa đơn (Tùy chọn)
+            </label>
+            <EvidenceUpload
+              value={evidenceUrl}
+              onChange={(url) => {
+                setEvidenceUrl(url);
+                setValue("evidenceUrl", url);
+              }}
+              disabled={isSubmitting}
             />
           </div>
 

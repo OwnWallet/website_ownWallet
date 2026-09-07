@@ -8,6 +8,7 @@ import { Loader2, ArrowLeft, Calendar } from "lucide-react";
 import { updateTransaction } from "@/actions/transactions";
 import { TransactionSchema, type TransactionInput } from "@/schemas/transaction";
 import { toDate } from "@/lib/utils";
+import { EvidenceUpload } from "@/components/ui/evidence-upload";
 
 interface Props {
   transaction: {
@@ -17,12 +18,13 @@ interface Props {
     categoryId: string;
     note?: string | null;
     description?: string | null;
+    evidenceUrl?: string | null;
     recordedAt: any;
     goalId?: string | null;
     walletId?: string | null;
   };
   categories: { id: string; name: string; type: string; color: string; icon: string | null }[];
-  wallets?: { id: string; name: string }[];
+  wallets?: { id: string; name: string; bankName?: string | null }[];
   goals?: { id: string; name: string }[];
 }
 
@@ -34,6 +36,7 @@ export function EditTransactionForm({
 }: Props) {
   const router = useRouter();
   const [txType, setTxType] = useState<"EXPENSE" | "INCOME">(transaction.type);
+  const [evidenceUrl, setEvidenceUrl] = useState<string | null>(transaction.evidenceUrl || null);
 
   const initialDate = toDate(transaction.recordedAt);
   const localInitial = new Date(initialDate.getTime() - initialDate.getTimezoneOffset() * 60000)
@@ -46,7 +49,6 @@ export function EditTransactionForm({
     formState: { errors, isSubmitting },
     setValue,
   } = useForm<TransactionInput>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(TransactionSchema) as any,
     defaultValues: {
       amount: Number(transaction.amount),
@@ -75,6 +77,7 @@ export function EditTransactionForm({
     }
     formData.append("recordedAt", data.recordedAt.toISOString());
     if (data.goalId) formData.append("goalId", data.goalId);
+    formData.append("evidenceUrl", evidenceUrl || "");
 
     const result = await updateTransaction(transaction.id, formData);
     if (result?.success) router.push("/transactions");
@@ -236,7 +239,7 @@ export function EditTransactionForm({
                 <option value="">-- Mặc định --</option>
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>
-                    💳 {w.name}
+                    {w.bankName === "CASH" ? "💵" : "💳"} {w.name}
                   </option>
                 ))}
               </select>
@@ -343,6 +346,29 @@ export function EditTransactionForm({
               </select>
             </div>
           )}
+
+          {/* Evidence Photo */}
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: "13px",
+                fontWeight: 500,
+                color: "var(--foreground-muted)",
+                marginBottom: "6px",
+              }}
+            >
+              Ảnh bằng chứng / Hóa đơn (Tùy chọn)
+            </label>
+            <EvidenceUpload
+              value={evidenceUrl}
+              onChange={(url) => {
+                setEvidenceUrl(url);
+                setValue("evidenceUrl", url);
+              }}
+              disabled={isSubmitting}
+            />
+          </div>
 
           {/* Submit */}
           <button

@@ -1,6 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
-import { Landmark, CreditCard, Building2, Wallet as WalletIcon } from "lucide-react";
+import { Landmark, CreditCard, Building2, Wallet as WalletIcon, Banknote } from "lucide-react";
 
 interface WalletBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   wallet?: {
@@ -43,7 +43,10 @@ export function WalletBadge({
   let themeStyles = "bg-purple-50 text-purple-700 border-purple-200/80 hover:bg-purple-100/70";
   let BankIcon = Landmark;
 
-  if (bank.includes("techcombank") || bank.includes("tcb")) {
+  if (wallet.bankName === "CASH" || bank.includes("tiền mặt") || bank.includes("cash")) {
+    themeStyles = "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100/80";
+    BankIcon = Banknote;
+  } else if (bank.includes("techcombank") || bank.includes("tcb")) {
     themeStyles = "bg-rose-50 text-rose-700 border-rose-200/80 hover:bg-rose-100/70";
     BankIcon = Building2;
   } else if (bank.includes("tpbank") || bank.includes("tpb")) {

@@ -922,6 +922,13 @@
                   "kind": "scalar"
                 }
               },
+              "evidenceUrl": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "goalId": {
                 "nullable": true,
                 "type": {
@@ -1057,6 +1064,9 @@
                 },
                 "createdAt": {
                   "column": "createdAt"
+                },
+                "evidenceUrl": {
+                  "column": "evidenceUrl"
                 },
                 "goalId": {
                   "column": "goalId"
@@ -2096,6 +2106,11 @@
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
+                "evidenceUrl": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "goalId": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
@@ -2509,7 +2524,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "61b3e5556c0cf8178552461ca981c95681e371826d8f9692044054863c3c561f"
+    "storageHash": "a1e4ee65f36db5f5daf70f41b9bd875a3352457ecd282fc6d609dc0d7dcf1ef2"
   },
   "execution": {
     "executionHash": "5b45af12a04ed43a4f9ac0de55f25cabb9020fe7f82138bab5079eb90074b356",

@@ -274,12 +274,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-orange-50/80 border border-orange-200/70 animate-scale-in">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded-lg bg-orange-100 border border-orange-200 text-orange-700 flex items-center justify-center shrink-0 text-xs font-bold">
-              💳
+              {activeWallet.bankName === "CASH" || (activeWallet.name || "").toLowerCase().includes("tiền mặt") ? "💵" : "💳"}
             </div>
             <p className="text-xs font-semibold text-orange-900 truncate">
               Đang lọc:{" "}
               <span className="font-bold text-orange-700">{activeWallet.name}</span>
-              {activeWallet.accountNumber && (
+              {activeWallet.accountNumber && activeWallet.bankName !== "CASH" && (
                 <span className="text-muted-foreground font-normal ml-1">(STK: {activeWallet.accountNumber})</span>
               )}
             </p>

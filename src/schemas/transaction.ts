@@ -11,6 +11,7 @@ export const TransactionSchema = z.object({
   recordedAt: z.coerce.date({ error: "Chọn thời điểm giao dịch" }),
   goalId: z.string().optional().nullable(),
   walletId: z.string().optional().nullable(),
+  evidenceUrl: z.string().optional().nullable(),
 });
 
 export type TransactionInput = z.infer<typeof TransactionSchema>;
