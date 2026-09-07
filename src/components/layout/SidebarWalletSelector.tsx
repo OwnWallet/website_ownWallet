@@ -42,13 +42,21 @@ interface Props {
   onClose?: () => void;
 }
 
+function getSavedWalletCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp("(^| )ownwallet_selected_wallet=([^;]+)"));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
 export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClose }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  const selectedWalletId = searchParams ? searchParams.get("wallet") || "ALL" : "ALL";
+  const urlWallet = searchParams ? searchParams.get("wallet") : null;
+  const savedCookieWallet = getSavedWalletCookie();
+  const selectedWalletId = urlWallet || savedCookieWallet || "ALL";
 
   const selectedWallet =
     selectedWalletId === "ALL"
@@ -58,6 +66,14 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
       : wallets.find((w) => w.id === selectedWalletId) || null;
 
   function handleSelect(walletId: string) {
+    if (typeof document !== "undefined") {
+      if (walletId === "ALL") {
+        document.cookie = "ownwallet_selected_wallet=; path=/; max-age=0";
+      } else {
+        document.cookie = `ownwallet_selected_wallet=${encodeURIComponent(walletId)}; path=/; max-age=2592000; SameSite=Lax`;
+      }
+    }
+
     const params = new URLSearchParams(searchParams ? searchParams.toString() : "");
     if (walletId === "ALL") {
       params.delete("wallet");

@@ -13,15 +13,23 @@ export const metadata: Metadata = {
 export default async function ImportPage() {
   const session = await auth();
   let wallets: any[] = [];
+  let categories: any[] = [];
   if (session?.user?.id) {
     try {
-      const rawWallets = await db.orm.public.Wallet
-        .where((w) => w.userId.eq(session.user.id))
-        .orderBy((w) => w.createdAt.asc())
-        .all();
+      const [rawWallets, rawCategories] = await Promise.all([
+        db.orm.public.Wallet
+          .where((w) => w.userId.eq(session.user.id))
+          .orderBy((w) => w.createdAt.asc())
+          .all(),
+        db.orm.public.Category
+          .where((c) => c.userId.eq(session.user.id))
+          .orderBy((c) => c.name.asc())
+          .all(),
+      ]);
       wallets = serializeData(rawWallets);
+      categories = serializeData(rawCategories);
     } catch (err) {
-      console.error("Failed to load wallets for import:", err);
+      console.error("Failed to load wallets or categories for import:", err);
     }
   }
 
@@ -44,7 +52,7 @@ export default async function ImportPage() {
         </div>
       </div>
 
-      <ImportUploadClient wallets={wallets} />
+      <ImportUploadClient wallets={wallets} categories={categories} />
     </div>
   );
 }

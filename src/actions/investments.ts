@@ -23,6 +23,7 @@ export async function createInvestment(formData: FormData) {
 
   await db.orm.public.Investment.create({
     ...parsed.data,
+    targetPrice: parsed.data.targetPrice ? String(parsed.data.targetPrice) : null,
     quantity: String(parsed.data.quantity),
     buyPrice: String(parsed.data.buyPrice),
     boughtAt: toInstant(parsed.data.boughtAt),

@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { serializeData } from "@/lib/utils";
 import { Plus, ArrowLeftRight } from "lucide-react";
@@ -19,7 +20,9 @@ export default async function TransactionsPage({ searchParams }: TransactionsPag
   const userId = session.user.id;
 
   const resolvedSearchParams = (await searchParams) || {};
-  const initialWallet = resolvedSearchParams.wallet || "ALL";
+  const cookieStore = await cookies();
+  const savedCookieWallet = cookieStore.get("ownwallet_selected_wallet")?.value;
+  const initialWallet = resolvedSearchParams.wallet || savedCookieWallet || "ALL";
   let initialMonth: number | "ALL" | undefined = undefined;
   if (resolvedSearchParams.month) {
     if (resolvedSearchParams.month === "ALL" || resolvedSearchParams.month === "all") {
