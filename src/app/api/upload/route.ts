@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import fs from "fs";
-import path from "path";
 
 export const runtime = "nodejs";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -13,6 +11,7 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/gif",
   "image/heic",
   "image/heif",
+  "image/svg+xml",
 ]);
 
 export async function POST(request: NextRequest) {
@@ -49,28 +48,21 @@ export async function POST(request: NextRequest) {
 
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: "Kích thước ảnh tối đa là 10MB" },
+        { error: "Kích thước ảnh tối đa là 15MB" },
         { status: 400 }
       );
     }
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    const extension = path.extname(file.name).toLowerCase() || ".jpg";
-    const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const filename = `evidence-${uniqueSuffix}${extension}`;
-    const targetPath = path.join(uploadDir, filename);
-
+    // Serverless-safe: encode as Base64 data URL to avoid read-only filesystem errors (/var/task) on Vercel
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    fs.writeFileSync(targetPath, buffer);
+    const mimeType = file.type || "image/jpeg";
+    const base64 = buffer.toString("base64");
+    const dataUrl = `data:${mimeType};base64,${base64}`;
 
     return NextResponse.json({
       success: true,
-      url: `/api/uploads/${filename}`,
+      url: dataUrl,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Lỗi tải ảnh lên";
