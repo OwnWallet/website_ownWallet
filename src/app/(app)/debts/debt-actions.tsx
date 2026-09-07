@@ -51,7 +51,7 @@ export function DebtActions({
         className="flex flex-wrap gap-2 items-center"
       >
         <div className="w-36">
-          <CurrencyInput
+          <SmartCurrencyInput
             name="paidAmount"
             placeholder="Số tiền..."
             required
@@ -194,7 +194,7 @@ export function DebtActions({
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 Số tiền (₫)
               </label>
-              <CurrencyInput
+              <SmartCurrencyInput
                 name="amount"
                 required
                 min={1000}
