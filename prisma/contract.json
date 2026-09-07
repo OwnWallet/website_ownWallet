@@ -437,6 +437,13 @@
                   "kind": "scalar"
                 }
               },
+              "priority": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "status": {
                 "nullable": false,
                 "type": {
@@ -507,6 +514,9 @@
                 },
                 "person": {
                   "column": "person"
+                },
+                "priority": {
+                  "column": "priority"
                 },
                 "status": {
                   "column": "status"
@@ -759,6 +769,13 @@
           },
           "Investment": {
             "fields": {
+              "assetType": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "boughtAt": {
                 "nullable": false,
                 "type": {
@@ -787,6 +804,13 @@
                   "kind": "scalar"
                 }
               },
+              "exchange": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "id": {
                 "nullable": false,
                 "type": {
@@ -801,8 +825,22 @@
                   "kind": "scalar"
                 }
               },
+              "note": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "quantity": {
                 "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar"
+                }
+              },
+              "targetPrice": {
+                "nullable": true,
                 "type": {
                   "codecId": "pg/numeric@1",
                   "kind": "scalar"
@@ -864,6 +902,9 @@
             },
             "storage": {
               "fields": {
+                "assetType": {
+                  "column": "assetType"
+                },
                 "boughtAt": {
                   "column": "boughtAt"
                 },
@@ -876,14 +917,23 @@
                 "currentPrice": {
                   "column": "currentPrice"
                 },
+                "exchange": {
+                  "column": "exchange"
+                },
                 "id": {
                   "column": "id"
                 },
                 "name": {
                   "column": "name"
                 },
+                "note": {
+                  "column": "note"
+                },
                 "quantity": {
                   "column": "quantity"
+                },
+                "targetPrice": {
+                  "column": "targetPrice"
                 },
                 "ticker": {
                   "column": "ticker"
@@ -1722,6 +1772,15 @@
                   "nativeType": "text",
                   "nullable": false
                 },
+                "priority": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "NORMAL"
+                  },
+                  "nativeType": "text",
+                  "nullable": false
+                },
                 "status": {
                   "codecId": "pg/text@1",
                   "default": {
@@ -1987,6 +2046,11 @@
             },
             "Investment": {
               "columns": {
+                "assetType": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "boughtAt": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "nativeType": "timestamptz",
@@ -2011,6 +2075,11 @@
                   "nativeType": "numeric",
                   "nullable": true
                 },
+                "exchange": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "id": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
@@ -2021,10 +2090,20 @@
                   "nativeType": "text",
                   "nullable": false
                 },
+                "note": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "quantity": {
                   "codecId": "pg/numeric@1",
                   "nativeType": "numeric",
                   "nullable": false
+                },
+                "targetPrice": {
+                  "codecId": "pg/numeric@1",
+                  "nativeType": "numeric",
+                  "nullable": true
                 },
                 "ticker": {
                   "codecId": "pg/text@1",
@@ -2524,7 +2603,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a1e4ee65f36db5f5daf70f41b9bd875a3352457ecd282fc6d609dc0d7dcf1ef2"
+    "storageHash": "2390b50e165fbad23c3d47ae713e416dca562ed958253c0d63351f950b488c48"
   },
   "execution": {
     "executionHash": "5b45af12a04ed43a4f9ac0de55f25cabb9020fe7f82138bab5079eb90074b356",

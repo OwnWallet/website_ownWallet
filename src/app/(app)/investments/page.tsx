@@ -4,8 +4,8 @@ import { formatCurrency, serializeData } from "@/lib/utils";
 import { createInvestment } from "@/actions/investments";
 import { redirect } from "next/navigation";
 import { InvestmentListClient } from "./investment-list-client";
+import { AddInvestmentForm } from "./add-investment-form";
 import { Plus, TrendingUp, Briefcase, BarChart3, Layers } from "lucide-react";
-import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 
 export default async function InvestmentsPage() {
@@ -100,88 +100,11 @@ export default async function InvestmentsPage() {
           </div>
         </div>
 
+        {/* Add Form */}
+        <AddInvestmentForm />
+
         {/* Investment Cards Grid with Bulk Delete */}
         <InvestmentListClient investments={plainInvestments} />
-
-        {/* Add Form */}
-        <div className="card bg-gradient-to-br from-blue-50/50 to-white border-blue-200/60">
-          <div className="flex items-center gap-2 mb-5">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Plus size={16} className="text-blue-600" />
-            </div>
-            <h2 className="text-lg font-bold text-foreground">Thêm tài sản đầu tư mới</h2>
-          </div>
-          <form
-            action={async (fd) => {
-              "use server";
-              await createInvestment(fd);
-            }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"
-          >
-            <div>
-              <label className="form-label form-label-required">Tên tài sản</label>
-              <input
-                type="text"
-                name="name"
-                required
-                className="form-input"
-                placeholder="VD: Cổ phiếu FPT, Bitcoin..."
-              />
-            </div>
-            <div>
-              <label className="form-label">Mã (Ticker)</label>
-              <input
-                type="text"
-                name="ticker"
-                className="form-input"
-                placeholder="FPT / BTC"
-              />
-            </div>
-            <div>
-              <label className="form-label form-label-required">Số lượng</label>
-              <input
-                type="number"
-                step="any"
-                min="0.00000001"
-                name="quantity"
-                required
-                className="form-input"
-                placeholder="100"
-              />
-            </div>
-            <div>
-              <label className="form-label form-label-required">Giá mua (₫)</label>
-              <SmartCurrencyInput
-                name="buyPrice"
-                required
-                allowDecimals
-                className="form-input"
-                placeholder="VD: 100.000"
-                showQuickButtons
-                showWordsPreview
-              />
-            </div>
-            <div>
-              <label className="form-label form-label-required">Ngày mua</label>
-              <input
-                type="date"
-                name="boughtAt"
-                required
-                defaultValue={new Date().toISOString().split("T")[0]}
-                className="form-input"
-              />
-            </div>
-            <div className="lg:col-span-5 flex justify-end mt-2">
-              <button
-                type="submit"
-                className="w-full sm:w-auto btn-primary py-2.5 px-6 text-sm flex justify-center cursor-pointer"
-              >
-                <Plus size={16} className="mr-1.5" />
-                Thêm tài sản đầu tư
-              </button>
-            </div>
-          </form>
-        </div>
       </div>
     );
   } catch (error) {

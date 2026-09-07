@@ -22,6 +22,7 @@ interface ImportReviewProps {
   skipped: number;
   duplicateCount?: number;
   wallets?: { id: string; name: string; bankName?: string | null; accountNumber?: string | null }[];
+  categories?: { id: string; name: string; type: string; color?: string; icon?: string | null }[];
   onReset: () => void;
 }
 
@@ -60,7 +61,9 @@ export default function ImportReview({
   transactions,
   totalFound,
   skipped,
+  duplicateCount,
   wallets = [],
+  categories = [],
   onReset,
 }: ImportReviewProps) {
   const router = useRouter();
@@ -174,6 +177,27 @@ export default function ImportReview({
 
   return (
     <div className="review-wrapper space-y-4">
+      {/* Category Suggestions Datalists */}
+      <datalist id="category-datalist-INCOME">
+        {categories
+          .filter((c) => c.type === "INCOME")
+          .map((c) => (
+            <option key={c.id} value={c.name} />
+          ))}
+      </datalist>
+      <datalist id="category-datalist-EXPENSE">
+        {categories
+          .filter((c) => c.type === "EXPENSE")
+          .map((c) => (
+            <option key={c.id} value={c.name} />
+          ))}
+      </datalist>
+      <datalist id="category-datalist-ALL">
+        {categories.map((c) => (
+          <option key={c.id} value={c.name} />
+        ))}
+      </datalist>
+
       {/* ── Header stats & Duplicate Alert Banner ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="review-stats">
@@ -378,7 +402,9 @@ export default function ImportReview({
                     <input
                       id={`row-cat-${row._id}`}
                       type="text"
+                      list={row.type === "INCOME" ? "category-datalist-INCOME" : "category-datalist-EXPENSE"}
                       value={row.categoryName}
+                      placeholder="Chọn hoặc nhập..."
                       onChange={(e) =>
                         updateRow(row._id, "categoryName", e.target.value)
                       }

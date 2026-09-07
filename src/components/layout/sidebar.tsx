@@ -160,10 +160,7 @@ export function Sidebar({
                   const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}`));
                   const Icon = item.icon;
 
-                  const targetHref =
-                    searchStr && ["/dashboard", "/transactions", "/reports", "/budget", "/wallets"].includes(item.href)
-                      ? `${item.href}?${searchStr}`
-                      : item.href;
+                  const targetHref = searchStr ? `${item.href}?${searchStr}` : item.href;
 
                   return (
                     <Link

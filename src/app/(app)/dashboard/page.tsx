@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { getWallets } from "@/actions/wallets";
 import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, formatMetric, getFilterDateRange, toInstant, toDate, serializeData, maskAccountNumber } from "@/lib/utils";
@@ -178,7 +179,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const resolvedSearchParams = (await searchParams) || {};
   const filterDate = getFilterDateRange(resolvedSearchParams.month, resolvedSearchParams.year);
-  const selectedWalletId = resolvedSearchParams.wallet || "ALL";
+  const cookieStore = await cookies();
+  const savedCookieWallet = cookieStore.get("ownwallet_selected_wallet")?.value;
+  const selectedWalletId = resolvedSearchParams.wallet || savedCookieWallet || "ALL";
 
   const { income, expense, investPnL, debts, budgetsWithSpend, goals, recentTx, monthTransactions, wallets } =
     await getDashboardData(
@@ -300,28 +303,28 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {kpiCards.map((card, i) => (
           <div
             key={card.label}
-            className={`rounded-xl p-5 border shadow-xs transition-all hover:shadow-md animate-fade-in ${card.bgCard}`}
+            className={`rounded-2xl p-5 border shadow-xs transition-all hover:shadow-md hover:-translate-y-0.5 animate-fade-in ${card.bgCard}`}
             style={{ animationDelay: `${i * 50}ms` }}
           >
             {/* Icon & Label */}
             <div className="flex items-center justify-between mb-3">
-              <div className={`w-9 h-9 rounded-lg ${card.bgIcon} flex items-center justify-center ${card.iconColor}`}>
-                <card.icon size={18} />
+              <div className={`w-10 h-10 rounded-xl ${card.bgIcon} flex items-center justify-center ${card.iconColor} shadow-2xs`}>
+                <card.icon size={20} />
               </div>
-              <span className={`text-[11px] font-bold uppercase tracking-wider ${card.color}`}>
+              <span className={`text-xs font-black uppercase tracking-wider ${card.color}`}>
                 {card.label}
               </span>
             </div>
 
             {/* Value */}
             <div className="space-y-1">
-              <p className={`text-2xl font-black tracking-tight ${card.color}`}>
+              <p className={`text-3xl font-black tracking-tight ${card.color}`}>
                 {card.prefix}{formatCurrencyCompact(Math.abs(card.value))}
               </p>
-              <p className="text-xs text-slate-600 font-medium">
+              <p className="text-xs text-slate-700 font-semibold">
                 {formatCurrency(Math.abs(card.value))}
               </p>
-              <p className="text-[11px] text-muted-foreground">{card.desc}</p>
+              <p className="text-[11px] text-muted-foreground font-medium">{card.desc}</p>
             </div>
           </div>
         ))}

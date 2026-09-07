@@ -92,19 +92,20 @@ export async function ensureDefaultWallets(userId: string) {
 
 export async function getWallets() {
   const userId = await getUserId();
-  let wallets = await db.orm.public.Wallet
-    .where((w) => w.userId.eq(userId))
-    .orderBy((w) => w.createdAt.asc())
-    .all();
+  const [rawWallets, txs] = await Promise.all([
+    db.orm.public.Wallet
+      .where((w) => w.userId.eq(userId))
+      .orderBy((w) => w.createdAt.asc())
+      .all(),
+    db.orm.public.Transaction
+      .where((t) => t.userId.eq(userId))
+      .all(),
+  ]);
 
+  let wallets = rawWallets;
   if (wallets.length === 0) {
     wallets = await ensureDefaultWallets(userId);
   }
-
-  // Tính số dư và số giao dịch cho từng ví
-  const txs = await db.orm.public.Transaction
-    .where((t) => t.userId.eq(userId))
-    .all();
 
   const walletStats = new Map<string, { income: number; expense: number; txCount: number }>();
   for (const t of txs) {

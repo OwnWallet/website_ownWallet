@@ -18,12 +18,37 @@ interface Investment {
   id: string;
   name: string;
   ticker: string | null;
+  assetType?: string | null;
+  exchange?: string | null;
+  targetPrice?: string | number | { toString: () => string } | null;
+  note?: string | null;
   quantity: string | number | { toString: () => string };
   buyPrice: string | number | { toString: () => string };
   currentPrice: string | number | { toString: () => string } | null;
   boughtAt: any;
   updatedAt: any;
   logs: InvestLog[];
+}
+
+function getAssetTypeBadge(type?: string | null) {
+  switch (type) {
+    case "STOCK":
+      return { label: "📈 Cổ phiếu", bg: "bg-blue-50 text-blue-700 border-blue-200" };
+    case "CRYPTO":
+      return { label: "🪙 Crypto", bg: "bg-amber-50 text-amber-700 border-amber-200" };
+    case "GOLD":
+      return { label: "🥇 Vàng", bg: "bg-yellow-50 text-yellow-800 border-yellow-300" };
+    case "FUND":
+      return { label: "📊 Quỹ / ETF", bg: "bg-purple-50 text-purple-700 border-purple-200" };
+    case "REAL_ESTATE":
+      return { label: "🏢 BĐS", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+    case "BOND":
+      return { label: "📜 Trái phiếu", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" };
+    case "SAVINGS":
+      return { label: "🏦 Tiền gửi", bg: "bg-teal-50 text-teal-700 border-teal-200" };
+    default:
+      return type ? { label: type, bg: "bg-slate-50 text-slate-700 border-slate-200" } : null;
+  }
 }
 
 export function InvestmentCard({
@@ -41,11 +66,14 @@ export function InvestmentCard({
   const quantity = Number(inv.quantity);
   const buyPrice = Number(inv.buyPrice);
   const currentPrice = Number(inv.currentPrice) || buyPrice;
+  const targetPrice = inv.targetPrice ? Number(inv.targetPrice) : null;
   const invested = buyPrice * quantity;
   const current = currentPrice * quantity;
   const pnl = current - invested;
   const pnlPercent = invested > 0 ? (pnl / invested) * 100 : 0;
   const isPos = pnl >= 0;
+
+  const assetBadge = getAssetTypeBadge(inv.assetType);
 
   return (
     <div className={`card space-y-4 flex flex-col justify-between group transition-colors ${selected ? "ring-2 ring-primary/50 bg-primary/5" : ""}`}>
@@ -63,16 +91,28 @@ export function InvestmentCard({
               />
             )}
             <div>
+              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                {assetBadge && (
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${assetBadge.bg}`}>
+                    {assetBadge.label}
+                  </span>
+                )}
+                {inv.exchange && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                    🏛️ {inv.exchange}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-lg">{inv.name}</h3>
+                <h3 className="font-bold text-lg text-foreground">{inv.name}</h3>
                 {inv.ticker && (
-                  <span className="text-xs px-2 py-0.5 bg-elevated rounded-md text-muted border border-border-strong font-semibold">
+                  <span className="text-xs px-2 py-0.5 bg-elevated rounded-md text-muted-foreground border border-border font-bold">
                     {inv.ticker}
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-1">
-                <span className={`text-sm font-bold ${isPos ? "text-income" : "text-expense"}`}>
+                <span className={`text-sm font-extrabold ${isPos ? "text-income" : "text-expense"}`}>
                   {pnl > 0 ? "+" : ""}{formatCurrency(pnl)} ({pnlPercent.toFixed(2)}%)
                 </span>
               </div>
@@ -97,24 +137,48 @@ export function InvestmentCard({
         </div>
 
         {/* Quantities & Prices */}
-        <div className="grid grid-cols-2 gap-3 text-xs mt-3 p-2.5 bg-elevated/50 rounded-lg border border-border">
+        <div className="grid grid-cols-2 gap-3 text-xs mt-3 p-3 bg-elevated/60 rounded-xl border border-border">
           <div>
-            <p className="text-muted">Đang nắm giữ</p>
+            <p className="text-muted-foreground">Đang nắm giữ</p>
             <p className="font-bold text-sm text-foreground">{quantity.toLocaleString("vi-VN")}</p>
           </div>
           <div>
-            <p className="text-muted">Giá mua TB</p>
+            <p className="text-muted-foreground">Giá mua TB</p>
             <p className="font-bold text-sm text-foreground">{formatCurrency(buyPrice)}</p>
           </div>
           <div>
-            <p className="text-muted">Giá thị trường</p>
-            <p className="font-bold text-sm text-brand">{formatCurrency(currentPrice)}</p>
+            <p className="text-muted-foreground">Giá thị trường</p>
+            <p className="font-bold text-sm text-orange-600">{formatCurrency(currentPrice)}</p>
           </div>
           <div>
-            <p className="text-muted">Tổng giá trị</p>
-            <p className="font-bold text-sm text-foreground">{formatCurrency(current)}</p>
+            <p className="text-muted-foreground">Tổng giá trị</p>
+            <p className="font-extrabold text-sm text-foreground">{formatCurrency(current)}</p>
           </div>
         </div>
+
+        {/* Target price & Note if available */}
+        {(targetPrice || inv.note) && (
+          <div className="mt-2.5 pt-2 border-t border-dashed border-border space-y-1 text-xs">
+            {targetPrice && (
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>🎯 Giá mục tiêu:</span>
+                <span className="font-bold text-foreground">
+                  {formatCurrency(targetPrice)}
+                  {currentPrice > 0 && (
+                    <span className="ml-1 text-[11px] font-normal text-emerald-600">
+                      ({(((targetPrice - currentPrice) / currentPrice) * 100).toFixed(1)}% nữa)
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+            {inv.note && (
+              <p className="text-[11px] text-muted-foreground italic truncate" title={inv.note}>
+                📝 {inv.note}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Action Tabs Toolbar */}
         <div className="flex gap-1.5 mt-3 pt-2 border-t border-border-strong text-xs">
