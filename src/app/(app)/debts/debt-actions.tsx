@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createDebt, recordPayment } from "@/actions/debts";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 export function DebtActions({
   debtId,
@@ -39,13 +40,12 @@ export function DebtActions({
         }}
         className="flex flex-wrap gap-2 items-center"
       >
-        <input
-          type="number"
+        <SmartCurrencyInput
           name="paidAmount"
           placeholder="Số tiền..."
           required
-          min="1"
-          className="w-24 text-xs bg-background rounded px-2 py-1 text-foreground focus:outline-none"
+          containerClassName="w-32"
+          className="text-xs bg-background rounded px-2 py-1 text-foreground focus:outline-none"
           style={{ border: "1px solid var(--border-strong)" }}
         />
         {wallets.length > 0 && (
@@ -139,14 +139,14 @@ export function DebtActions({
 
             <div>
               <label className="block text-sm text-muted mb-1">Số tiền</label>
-              <input
-                type="number"
+              <SmartCurrencyInput
                 name="amount"
                 required
-                min="1"
-                placeholder="VD: 1000000"
+                placeholder="VD: 1.000.000"
                 className="w-full bg-background rounded px-3 py-2 text-foreground focus:outline-none"
                 style={{ border: "1px solid var(--border-strong)" }}
+                showQuickButtons
+                showWordsPreview
               />
             </div>
 

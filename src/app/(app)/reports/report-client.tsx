@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CategoryPieChart } from "@/components/ui/CategoryPieChart";
 import { MonthComparisonChart } from "@/components/ui/MonthComparisonChart";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatMetric } from "@/lib/utils";
 import { exportTransactionsCSV } from "@/actions/reports";
 import {
   Download,
@@ -59,12 +59,12 @@ export function ReportClient({
 
   const incomeChange =
     lastMonthIncome > 0
-      ? (((currentMonthIncome - lastMonthIncome) / lastMonthIncome) * 100).toFixed(1)
+      ? formatMetric(((currentMonthIncome - lastMonthIncome) / lastMonthIncome) * 100)
       : null;
 
   const expenseChange =
     lastMonthExpense > 0
-      ? (((currentMonthExpense - lastMonthExpense) / lastMonthExpense) * 100).toFixed(1)
+      ? formatMetric(((currentMonthExpense - lastMonthExpense) / lastMonthExpense) * 100)
       : null;
 
   const comparePeriodLabel = isYearly ? "năm trước" : "tháng trước";

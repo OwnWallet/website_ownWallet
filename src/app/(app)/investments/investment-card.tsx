@@ -4,6 +4,7 @@ import { useState } from "react";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { updateCurrentPrice, addInvestLog, deleteInvestment } from "@/actions/investments";
 import { Trash2, PlusCircle, History, Edit3, X } from "lucide-react";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 interface InvestLog {
   id: string;
@@ -166,14 +167,13 @@ export function InvestmentCard({
                 <X size={12} />
               </button>
             </div>
-            <div className="flex gap-2">
-              <input
-                type="number"
+            <div className="flex gap-2 items-center">
+              <SmartCurrencyInput
                 name="currentPrice"
                 defaultValue={currentPrice}
-                step="any"
-                min="0.0001"
+                allowDecimals
                 placeholder="Giá thị trường..."
+                containerClassName="flex-1"
                 className="w-full bg-background border border-border-strong rounded px-2.5 py-1.5 text-xs outline-none focus:border-primary text-foreground"
                 required
               />
@@ -208,7 +208,7 @@ export function InvestmentCard({
             <div className="grid grid-cols-3 gap-2">
               <select
                 name="action"
-                className="bg-background border border-border-strong rounded px-2 py-1.5 text-xs outline-none focus:border-primary text-foreground"
+                className="bg-background border border-border-strong rounded px-2.5 py-1.5 text-xs outline-none focus:border-primary text-foreground"
               >
                 <option value="BUY">🟢 Mua thêm</option>
                 <option value="SELL">🔴 Bán bớt</option>
@@ -219,17 +219,15 @@ export function InvestmentCard({
                 placeholder="Số lượng..."
                 step="any"
                 min="0.00000001"
-                className="bg-background border border-border-strong rounded px-2 py-1.5 text-xs outline-none focus:border-primary text-foreground"
+                className="bg-background border border-border-strong rounded px-2.5 py-1.5 text-xs outline-none focus:border-primary text-foreground"
                 required
               />
-              <input
-                type="number"
+              <SmartCurrencyInput
                 name="price"
                 defaultValue={currentPrice}
+                allowDecimals
                 placeholder="Giá khớp..."
-                step="any"
-                min="0.0001"
-                className="bg-background border border-border-strong rounded px-2 py-1.5 text-xs outline-none focus:border-primary text-foreground"
+                className="bg-background border border-border-strong rounded px-2.5 py-1.5 text-xs outline-none focus:border-primary text-foreground"
                 required
               />
             </div>

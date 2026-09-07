@@ -5,6 +5,7 @@ import { createInvestment } from "@/actions/investments";
 import { redirect } from "next/navigation";
 import { InvestmentListClient } from "./investment-list-client";
 import { Plus, TrendingUp, Briefcase, BarChart3, Layers } from "lucide-react";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 
 export default async function InvestmentsPage() {
@@ -150,14 +151,14 @@ export default async function InvestmentsPage() {
             </div>
             <div>
               <label className="form-label form-label-required">Giá mua (₫)</label>
-              <input
-                type="number"
-                step="any"
-                min="0.0001"
+              <SmartCurrencyInput
                 name="buyPrice"
                 required
+                allowDecimals
                 className="form-input"
-                placeholder="100000"
+                placeholder="VD: 100.000"
+                showQuickButtons
+                showWordsPreview
               />
             </div>
             <div>

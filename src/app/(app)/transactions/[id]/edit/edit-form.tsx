@@ -9,6 +9,7 @@ import { updateTransaction } from "@/actions/transactions";
 import { TransactionSchema, type TransactionInput } from "@/schemas/transaction";
 import { toDate } from "@/lib/utils";
 import { EvidenceUpload } from "@/components/ui/evidence-upload";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 interface Props {
   transaction: {
@@ -48,6 +49,7 @@ export function EditTransactionForm({
     handleSubmit,
     formState: { errors, isSubmitting },
     setValue,
+    watch,
   } = useForm<TransactionInput>({
     resolver: zodResolver(TransactionSchema) as any,
     defaultValues: {
@@ -196,11 +198,12 @@ export function EditTransactionForm({
             >
               Số tiền (₫) *
             </label>
-            <input
-              {...register("amount")}
-              type="number"
-              min="1"
+            <SmartCurrencyInput
+              value={watch("amount") ?? ""}
+              onChangeValue={(val) => setValue("amount", val, { shouldValidate: true })}
               placeholder="0"
+              showQuickButtons
+              showWordsPreview
               style={{
                 ...inputStyle,
                 fontSize: "22px",

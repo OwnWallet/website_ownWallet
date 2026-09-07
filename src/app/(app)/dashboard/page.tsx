@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getWallets } from "@/actions/wallets";
-import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, getFilterDateRange, toInstant, toDate, serializeData, maskAccountNumber } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, formatMetric, getFilterDateRange, toInstant, toDate, serializeData, maskAccountNumber } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD } from "@/lib/constants";
 import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Plus, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import Link from "next/link";
@@ -521,7 +521,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           <span className="font-semibold text-foreground">{b.category?.name}</span>
                           {isWarn && <AlertTriangle size={12} className="text-amber-500" />}
                         </div>
-                        <span className={`font-bold ${textColor}`}>{pct}%</span>
+                        <span className={`font-bold ${textColor}`}>{formatMetric(pct)}%</span>
                       </div>
                       <div className="h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
                         <div
@@ -561,7 +561,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <div key={g.id} className="space-y-1">
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-semibold text-foreground">{g.name}</span>
-                        <span className="font-bold text-purple-700">{pct}%</span>
+                        <span className="font-bold text-purple-700">{formatMetric(pct)}%</span>
                       </div>
                       <div className="h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
                         <div

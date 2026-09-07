@@ -5,6 +5,7 @@ import type { ParsedTransaction } from "@/schemas/ai-import";
 import { confirmAiImport } from "@/actions/ai-import";
 import { useRouter } from "next/navigation";
 import { maskAccountNumber } from "@/lib/utils";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -362,17 +363,12 @@ export default function ImportReview({
                     </select>
                   </td>
 
-                  {/* Amount */}
                   <td className="cell-amount">
-                    <input
+                    <SmartCurrencyInput
                       id={`row-amount-${row._id}`}
-                      type="number"
                       value={row.amount}
-                      min={0}
-                      step={1000}
-                      onChange={(e) =>
-                        updateRow(row._id, "amount", parseFloat(e.target.value) || 0)
-                      }
+                      onChangeValue={(val) => updateRow(row._id, "amount", val)}
+                      currencySymbol=""
                       className={`amount-input ${row.type === "INCOME" ? "text-income" : "text-expense"}`}
                     />
                   </td>

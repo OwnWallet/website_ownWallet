@@ -1,7 +1,7 @@
 "use client";
 
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatMetric } from "@/lib/utils";
 
 interface CategoryData {
   name: string;
@@ -49,7 +49,7 @@ export function CategoryPieChart({ data }: Props) {
             content={({ active, payload }) => {
               if (active && payload && payload.length) {
                 const item = payload[0].payload as CategoryData;
-                const percent = total > 0 ? ((item.value / total) * 100).toFixed(1) : 0;
+                const percent = total > 0 ? formatMetric((item.value / total) * 100) : "0";
                 return (
                   <div className="bg-white border border-slate-200 rounded-lg p-2.5 shadow-lg text-xs space-y-1">
                     <p className="font-bold text-slate-900 flex items-center gap-1.5">

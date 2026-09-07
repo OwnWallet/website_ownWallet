@@ -1,9 +1,10 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, calcPercent, getFilterDateRange, toInstant, toDate } from "@/lib/utils";
+import { formatCurrency, calcPercent, formatMetric, getFilterDateRange, toInstant, toDate } from "@/lib/utils";
 import { upsertBudget } from "@/actions/budgets";
 import { BudgetListClient } from "./budget-list-client";
 import { PiggyBank, TrendingDown, AlertCircle, Wallet, Plus } from "lucide-react";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 
 
@@ -124,7 +125,7 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
             <span className="kpi-card-label text-rose-700">Đã chi tiêu</span>
           </div>
           <p className="kpi-card-value text-rose-600">{formatCurrency(totalSpent)}</p>
-          <p className="kpi-card-sub">Tỷ lệ: {overallPercent}%</p>
+          <p className="kpi-card-sub">Tỷ lệ: {formatMetric(overallPercent)}%</p>
         </div>
 
         <div className="kpi-card" style={{ "--kpi-accent": remaining >= 0 ? "#059669" : "#e11d48" } as React.CSSProperties}>
@@ -217,12 +218,12 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
 
           <div>
             <label className="form-label form-label-required">Hạn mức (₫)</label>
-            <input
-              type="number"
+            <SmartCurrencyInput
               name="limitAmount"
-              placeholder="VD: 5000000"
+              placeholder="VD: 5.000.000"
               className="form-input"
-              min="1"
+              showQuickButtons
+              showWordsPreview
               required
             />
           </div>
