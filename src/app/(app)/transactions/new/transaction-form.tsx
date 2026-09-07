@@ -8,6 +8,7 @@ import { Loader2, ArrowLeft, Calendar } from "lucide-react";
 import { createTransaction } from "@/actions/transactions";
 import { TransactionSchema, type TransactionInput } from "@/schemas/transaction";
 import { EvidenceUpload } from "@/components/ui/evidence-upload";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 interface Props {
   categories: { id: string; name: string; type: string; color: string; icon: string | null }[];
@@ -24,6 +25,7 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
     handleSubmit,
     formState: { errors, isSubmitting },
     setValue,
+    watch,
   } = useForm<TransactionInput>({
     resolver: zodResolver(TransactionSchema) as any,
     defaultValues: {
@@ -31,6 +33,8 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
       recordedAt: new Date(),
     },
   });
+
+  const currentAmount = watch("amount");
 
   const filteredCats = categories.filter((c) =>
     ["EXPENSE", "INCOME"].includes(c.type) ? c.type === txType : false
@@ -172,11 +176,12 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
             >
               Số tiền (₫) *
             </label>
-            <input
-              {...register("amount")}
-              type="number"
-              min="1"
+            <SmartCurrencyInput
+              value={currentAmount ?? ""}
+              onChangeValue={(val) => setValue("amount", val, { shouldValidate: true })}
               placeholder="0"
+              showQuickButtons
+              showWordsPreview
               style={{
                 ...inputStyle,
                 fontSize: "22px",

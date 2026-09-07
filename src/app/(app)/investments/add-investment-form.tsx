@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Plus } from "lucide-react";
 import { createInvestment } from "@/actions/investments";
-import { CurrencyInput } from "@/components/ui/currency-input";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 const ASSET_TYPES = [
   { value: "STOCK", label: "📈 Cổ phiếu", defaultExchange: "HOSE" },
@@ -190,7 +190,7 @@ export function AddInvestmentForm() {
           <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
             Giá mua vào (₫ / đv) <span className="text-rose-500">*</span>
           </label>
-          <CurrencyInput
+          <SmartCurrencyInput
             name="buyPrice"
             required
             min={1}
@@ -205,7 +205,7 @@ export function AddInvestmentForm() {
           <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
             Giá mục tiêu / Chốt lời (₫)
           </label>
-          <CurrencyInput
+          <SmartCurrencyInput
             name="targetPrice"
             disabled={isBusy}
             placeholder="VD: 150,000"

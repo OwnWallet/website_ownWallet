@@ -1,8 +1,9 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, calcPercent, toDate } from "@/lib/utils";
+import { formatCurrency, calcPercent, formatMetric, toDate } from "@/lib/utils";
 import { createGoal, deleteGoal, contributeToGoal } from "@/actions/goals";
 import { Trash2, Target, TrendingUp, PiggyBank, Plus } from "lucide-react";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 
 export default async function GoalsPage() {
@@ -56,7 +57,7 @@ export default async function GoalsPage() {
               <span className="kpi-card-label text-emerald-700">Đã tích lũy</span>
             </div>
             <p className="kpi-card-value text-emerald-600">{formatCurrency(totalSaved)}</p>
-            <p className="kpi-card-sub">Tiến độ tổng: {overallPercent}%</p>
+            <p className="kpi-card-sub">Tiến độ tổng: {formatMetric(overallPercent)}%</p>
           </div>
 
           <div className="kpi-card" style={{ "--kpi-accent": "var(--brand)" } as React.CSSProperties}>
@@ -66,7 +67,7 @@ export default async function GoalsPage() {
               </div>
               <span className="kpi-card-label text-orange-700">Tiến độ chung</span>
             </div>
-            <p className="kpi-card-value text-orange-600">{overallPercent}%</p>
+            <p className="kpi-card-value text-orange-600">{formatMetric(overallPercent)}%</p>
             <div className="mt-2 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
               <div
                 className="h-full bg-gradient-to-r from-purple-500 to-orange-500 rounded-full transition-all duration-700"
@@ -142,7 +143,7 @@ export default async function GoalsPage() {
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="font-bold text-purple-600">{percent}%</span>
+                        <span className="font-bold text-purple-600">{formatMetric(percent)}%</span>
                         <span className="text-muted-foreground text-xs">
                           Còn lại: <strong className="text-foreground">{formatCurrency(remaining)}</strong>
                         </span>
@@ -176,13 +177,12 @@ export default async function GoalsPage() {
                         }}
                         className="flex gap-2"
                       >
-                        <input
-                          type="number"
+                        <SmartCurrencyInput
                           name="amount"
                           placeholder="Số tiền nạp (₫)..."
                           className="form-input flex-1 text-sm"
+                          containerClassName="flex-1"
                           required
-                          min="1"
                         />
                         <button type="submit" className="btn-primary py-2 px-4 text-xs whitespace-nowrap cursor-pointer">
                           + Nạp tiền
@@ -223,13 +223,13 @@ export default async function GoalsPage() {
             </div>
             <div>
               <label className="form-label form-label-required">Số tiền mục tiêu</label>
-              <input
-                type="number"
+              <SmartCurrencyInput
                 name="targetAmount"
                 required
-                min="1"
                 className="form-input"
-                placeholder="50000000"
+                placeholder="VD: 50.000.000"
+                showQuickButtons
+                showWordsPreview
               />
             </div>
             <div>
