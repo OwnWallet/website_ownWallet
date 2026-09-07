@@ -92,17 +92,17 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
   const filterContent = (
     <div className="space-y-2">
       {/* Period Navigator Row */}
-      <div className="flex items-center justify-between bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-1 shadow-2xs">
+      <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg p-1 shadow-2xs">
         <button
           type="button"
           onClick={handlePrev}
           title="Kỳ trước"
-          className="p-1 rounded text-[var(--fg-subtle)] hover:text-[var(--fg)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
+          className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
         >
           <ChevronLeft size={15} />
         </button>
 
-        <span className="text-xs font-bold text-orange-700 truncate px-1">
+        <span className="text-xs font-bold text-orange-400 truncate px-1">
           {displayTitle}
         </span>
 
@@ -110,7 +110,7 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
           type="button"
           onClick={handleNext}
           title="Kỳ kế tiếp"
-          className="p-1 rounded text-[var(--fg-subtle)] hover:text-[var(--fg)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
+          className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
         >
           <ChevronRight size={15} />
         </button>
@@ -157,8 +157,8 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
           className={cn(
             "py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center",
             currentMonth === thisMonth && currentYear === thisYear
-              ? "bg-orange-600 text-white shadow-2xs font-bold"
-              : "bg-[var(--bg-card)] text-[var(--fg-muted)] hover:bg-[var(--bg-elevated)] border border-[var(--border)]"
+              ? "bg-orange-500 text-white shadow-2xs font-bold"
+              : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white border border-white/10"
           )}
         >
           Tháng này
@@ -170,8 +170,8 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
           className={cn(
             "py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center",
             currentMonth === lastMonthNum && currentYear === lastMonthYear
-              ? "bg-orange-600 text-white shadow-2xs font-bold"
-              : "bg-[var(--bg-card)] text-[var(--fg-muted)] hover:bg-[var(--bg-elevated)] border border-[var(--border)]"
+              ? "bg-orange-500 text-white shadow-2xs font-bold"
+              : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white border border-white/10"
           )}
         >
           Tháng trước
@@ -183,8 +183,8 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
           className={cn(
             "py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center",
             currentMonth === "ALL" && currentYear === thisYear
-              ? "bg-orange-600 text-white shadow-2xs font-bold"
-              : "bg-[var(--bg-card)] text-[var(--fg-muted)] hover:bg-[var(--bg-elevated)] border border-[var(--border)]"
+              ? "bg-orange-500 text-white shadow-2xs font-bold"
+              : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white border border-white/10"
           )}
         >
           Cả năm
@@ -201,11 +201,11 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
             title={`Thời gian lọc: ${displayTitle}`}
             className={cn(
               "w-full rounded-xl border transition-all cursor-pointer outline-none group text-left",
-              "p-2 flex items-center justify-center border-border hover:border-orange-300 hover:bg-orange-50/50",
+              "p-2 flex items-center justify-center border-white/10 bg-white/5 hover:border-orange-400/50 hover:bg-white/10",
               isPending && "opacity-70 animate-pulse"
             )}
           >
-            <div className="w-9 h-9 rounded-lg flex flex-col items-center justify-center font-extrabold text-[10px] border shadow-2xs bg-orange-50 text-orange-700 border-orange-200 group-hover:scale-105 transition-transform">
+            <div className="w-9 h-9 rounded-lg flex flex-col items-center justify-center font-extrabold text-[10px] border shadow-2xs bg-orange-500/20 text-orange-400 border-orange-500/30 group-hover:scale-105 transition-transform">
               <Calendar size={13} />
               <span className="text-[9px] font-black leading-none mt-0.5">
                 {currentMonth === "ALL" ? "NĂM" : `T${currentMonth}`}
@@ -236,17 +236,17 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
   }
 
   return (
-    <div className="mx-3 my-1.5 p-2.5 rounded-xl bg-[var(--bg-elevated)]/90 border border-[var(--border)] shadow-2xs">
+    <div className="mx-3 my-1.5 p-2.5 rounded-xl bg-white/5 border border-white/10 shadow-2xs">
       {/* Title */}
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5 text-[var(--fg)]">
-          <Calendar size={13} className="text-orange-600" />
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--fg-muted)]">
+        <div className="flex items-center gap-1.5 text-slate-300">
+          <Calendar size={13} className="text-orange-400" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
             Thời gian dữ liệu
           </span>
         </div>
         {isPending && (
-          <span className="text-[10px] text-orange-600 font-medium animate-pulse">
+          <span className="text-[10px] text-orange-400 font-medium animate-pulse">
             Đang tải...
           </span>
         )}

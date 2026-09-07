@@ -269,3 +269,14 @@ export function getFilterDateRange(
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * Mask số tài khoản: chỉ hiển thị 4 số cuối (hoặc giữ nguyên nếu <= 4 ký tự)
+ * @example maskAccountNumber("1234567890") → "•••• 7890"
+ */
+export function maskAccountNumber(acc: string | null | undefined): string {
+  if (!acc) return "";
+  const cleaned = String(acc).trim();
+  if (cleaned.length <= 4) return cleaned;
+  return `•••• ${cleaned.slice(-4)}`;
+}

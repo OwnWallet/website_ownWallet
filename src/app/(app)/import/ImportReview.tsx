@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import type { ParsedTransaction } from "@/schemas/ai-import";
 import { confirmAiImport } from "@/actions/ai-import";
 import { useRouter } from "next/navigation";
+import { maskAccountNumber } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -283,7 +284,7 @@ export default function ImportReview({
           >
             {wallets.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.bankName === "CASH" ? "💵" : "💳"} {w.name} {w.accountNumber && w.bankName !== "CASH" ? `(STK: ${w.accountNumber})` : ""}
+                {w.bankName === "CASH" ? "💵" : "💳"} {w.name} {w.accountNumber && w.bankName !== "CASH" ? `(STK: ${maskAccountNumber(w.accountNumber)})` : ""}
               </option>
             ))}
             <option value="">-- Chưa gán tài khoản --</option>

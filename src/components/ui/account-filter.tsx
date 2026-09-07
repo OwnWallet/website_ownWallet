@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { cn } from "@/lib/utils";
+import { cn, maskAccountNumber } from "@/lib/utils";
 import { Landmark, Building2, CreditCard, ChevronDown, Check, Banknote } from "lucide-react";
 import {
   DropdownMenu,
@@ -191,7 +191,7 @@ export function AccountFilter({
                   <span className="truncate">{w.name}</span>
                   {w.accountNumber && (
                     <span className="text-[10px] text-muted-foreground font-normal">
-                      STK: {w.accountNumber}
+                      STK: {maskAccountNumber(w.accountNumber)}
                     </span>
                   )}
                 </div>

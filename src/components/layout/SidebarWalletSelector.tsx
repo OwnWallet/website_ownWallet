@@ -14,7 +14,7 @@ import {
   Banknote,
 } from "lucide-react";
 import Link from "next/link";
-import { cn, formatCurrencyCompact } from "@/lib/utils";
+import { cn, formatCurrencyCompact, maskAccountNumber } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -123,9 +123,9 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
           className={cn(
             "w-full rounded-xl border transition-all cursor-pointer outline-none group text-left",
             isCollapsed
-              ? "p-2 flex items-center justify-center border-border hover:border-orange-300 hover:bg-orange-50/50"
-              : "p-2.5 flex items-center justify-between gap-2.5 bg-card border-border shadow-2xs hover:border-orange-300 hover:shadow-xs",
-            selectedWalletId !== "ALL" && !isCollapsed && "border-orange-300/80 bg-orange-50/30",
+              ? "p-2 flex items-center justify-center border-white/10 bg-white/5 hover:border-orange-400/50 hover:bg-white/10"
+              : "p-2.5 flex items-center justify-between gap-2.5 bg-white/5 border-white/10 shadow-2xs hover:border-orange-400/50 hover:bg-white/10",
+            selectedWalletId !== "ALL" && !isCollapsed && "border-orange-400/50 bg-orange-500/15",
             isPending && "opacity-70 animate-pulse"
           )}
         >
@@ -162,13 +162,13 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
 
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-bold text-foreground truncate leading-tight">
+                    <p className="text-xs font-bold text-slate-100 truncate leading-tight">
                       {selectedWallet ? selectedWallet.name : "Tất cả tài khoản"}
                     </p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">
+                  <p className="text-[10px] text-slate-400 truncate leading-tight mt-0.5">
                     {selectedWallet?.accountNumber
-                      ? `STK: ${selectedWallet.accountNumber}`
+                      ? `STK: ${maskAccountNumber(selectedWallet.accountNumber)}`
                       : selectedWallet
                       ? "Tài khoản riêng lẻ"
                       : `${wallets.length} tài khoản liên kết`}
@@ -176,7 +176,7 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
                 </div>
               </div>
 
-              <div className="shrink-0 text-muted-foreground group-hover:text-foreground transition-colors">
+              <div className="shrink-0 text-slate-400 group-hover:text-slate-200 transition-colors">
                 <ChevronsUpDown size={14} />
               </div>
             </>
@@ -252,7 +252,7 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
                         {wallet.name}
                       </p>
                       <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-                        {wallet.accountNumber ? `STK: ${wallet.accountNumber}` : "Tài khoản"}
+                        {wallet.accountNumber ? `STK: ${maskAccountNumber(wallet.accountNumber)}` : "Tài khoản"}
                         {balance !== undefined && ` · ${formatCurrencyCompact(balance)}`}
                       </p>
                     </div>
