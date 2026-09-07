@@ -151,6 +151,10 @@ model Investment {
   id           String   @id @default(cuid(2))
   name         String
   ticker       String?
+  assetType    String?
+  exchange     String?
+  targetPrice  Decimal?
+  note         String?
   quantity     Decimal
   buyPrice     Decimal
   currentPrice Decimal?
@@ -187,6 +191,7 @@ model Debt {
   paidAmount Decimal    @default("0")
   direction  DebtDir
   status     DebtStatus @default(PENDING)
+  priority   String     @default("NORMAL")
   dueDate    DateTime?
   note       String?
   createdAt  DateTime   @default(now())

@@ -115,9 +115,11 @@ export async function confirmAiImport(
   });
 
   try {
-    // Prisma 8 không có createMany — insert từng record
-    for (const txData of transactionData) {
-      await db.orm.public.Transaction.create(txData);
+    // Batch insert concurrently in chunks of 10 for optimal latency and throughput
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < transactionData.length; i += BATCH_SIZE) {
+      const chunk = transactionData.slice(i, i + BATCH_SIZE);
+      await Promise.all(chunk.map((txData) => db.orm.public.Transaction.create(txData)));
     }
 
     revalidatePath("/transactions");

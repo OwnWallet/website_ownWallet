@@ -3,6 +3,11 @@ import { z } from "zod";
 export const InvestmentSchema = z.object({
   name: z.string().min(1, "Nhập tên tài sản").max(100),
   ticker: z.string().max(20).optional(),
+  assetType: z.string().optional(),
+  exchange: z.string().optional(),
+  note: z.string().optional(),
+  targetPrice: z
+    .preprocess((val) => (val === "" || val === null || val === undefined ? undefined : val), z.coerce.number().positive().optional()),
   quantity: z.coerce.number().positive("Số lượng phải lớn hơn 0"),
   buyPrice: z.coerce.number().positive("Giá mua phải lớn hơn 0"),
   boughtAt: z.coerce.date({ error: "Chọn ngày mua" }),

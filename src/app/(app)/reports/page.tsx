@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ReportClient } from "./report-client";
 import { toInstant, toDate, getFilterDateRange } from "@/lib/utils";
-
 
 interface ReportsPageProps {
   searchParams: Promise<{
@@ -20,7 +20,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
   const resolvedSearchParams = (await searchParams) || {};
   const filterDate = getFilterDateRange(resolvedSearchParams.month, resolvedSearchParams.year);
-  const walletId = resolvedSearchParams.wallet || "ALL";
+  const cookieStore = await cookies();
+  const savedCookieWallet = cookieStore.get("ownwallet_selected_wallet")?.value;
+  const walletId = resolvedSearchParams.wallet || savedCookieWallet || "ALL";
   const isYearly = filterDate.month === "ALL";
 
   let startCurrent: Date;

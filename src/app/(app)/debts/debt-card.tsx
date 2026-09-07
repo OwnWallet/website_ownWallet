@@ -65,6 +65,15 @@ export function DebtCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {debt.priority === "HIGH" ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 shadow-2xs">
+                🔴 Ưu tiên cao
+              </span>
+            ) : debt.priority === "LOW" ? (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                🟢 Ưu tiên thấp
+              </span>
+            ) : null}
             <span
               className="text-xs font-semibold px-2 py-0.5 rounded"
               style={{
@@ -87,13 +96,13 @@ export function DebtCard({
           </div>
         </div>
 
-        <div className="flex justify-between text-xs">
-          <span className="text-muted">
-            Số tiền: <strong className="text-foreground">{formatCurrency(amount)}</strong>
+        <div className="flex justify-between items-baseline text-xs">
+          <span className="text-muted-foreground">
+            Tổng: <strong className="text-foreground text-sm font-bold">{formatCurrency(amount)}</strong>
           </span>
-          <span className="text-muted">
+          <span className="text-muted-foreground">
             Còn lại:{" "}
-            <strong style={{ color: debt.direction === "OWE" ? "var(--color-expense)" : "var(--color-income)" }}>
+            <strong className="text-sm font-extrabold" style={{ color: debt.direction === "OWE" ? "var(--color-expense)" : "var(--color-income)" }}>
               {formatCurrency(remain)}
             </strong>
           </span>

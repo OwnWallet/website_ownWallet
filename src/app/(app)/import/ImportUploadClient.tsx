@@ -27,6 +27,7 @@ const MAX_MB = 10;
 
 interface ImportUploadClientProps {
   wallets?: { id: string; name: string; bankName?: string | null; accountNumber?: string | null }[];
+  categories?: { id: string; name: string; type: string; color?: string; icon?: string | null }[];
 }
 
 const FORMAT_CHIPS = [
@@ -36,7 +37,7 @@ const FORMAT_CHIPS = [
   { ext: "CSV", icon: <FileText size={16} className="text-blue-500" />, desc: "CSV tùy ý", color: "border-blue-200 bg-blue-50/50" },
 ];
 
-export default function ImportUploadClient({ wallets = [] }: ImportUploadClientProps) {
+export default function ImportUploadClient({ wallets = [], categories = [] }: ImportUploadClientProps) {
   const [state, setState] = useState<UploadState>({ phase: "idle" });
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -148,6 +149,7 @@ export default function ImportUploadClient({ wallets = [] }: ImportUploadClientP
         skipped={state.skipped}
         duplicateCount={state.duplicateCount}
         wallets={wallets}
+        categories={categories}
         onReset={reset}
       />
     );
