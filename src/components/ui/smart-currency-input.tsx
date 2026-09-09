@@ -214,7 +214,7 @@ export const SmartCurrencyInput = forwardRef<HTMLInputElement, SmartCurrencyInpu
       e.preventDefault();
       const pastedText = e.clipboardData.getData("text");
       // Trích xuất chỉ số (và dấu phẩy/chấm nếu cho phép thập phân)
-      let cleaned = allowDecimals
+      const cleaned = allowDecimals
         ? pastedText.replace(/[^\d.,]/g, "")
         : pastedText.replace(/[^\d]/g, "");
 

@@ -333,7 +333,7 @@ export function getCurrentMonthRange(
 export function getFilterDateRange(
   monthParam?: number | string | null,
   yearParam?: number | string | null,
-  timezone = "Asia/Ho_Chi_Minh"
+  _timezone = "Asia/Ho_Chi_Minh"
 ): { from: Date; to: Date; month: number | "ALL"; year: number; label: string } {
   const now = new Date();
   const currentYear = now.getFullYear();

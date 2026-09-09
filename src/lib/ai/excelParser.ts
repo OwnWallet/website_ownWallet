@@ -10,7 +10,7 @@ import * as XLSX from "xlsx";
  * Nhận Buffer của file xlsx/xls/csv,
  * trả về chuỗi CSV (tất cả các sheet, ngăn cách bởi header sheet name).
  */
-export function parseExcelToText(buffer: Buffer, filename: string): string {
+export function parseExcelToText(buffer: Buffer, _filename?: string): string {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
 
   const parts: string[] = [];

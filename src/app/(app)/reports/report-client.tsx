@@ -48,7 +48,7 @@ export function ReportClient({
   lastMonthExpense,
   categorySpending,
   monthlyTrend,
-  currentMonth,
+  currentMonth: _currentMonth,
   currentYear,
   isYearly = false,
 }: Props) {
