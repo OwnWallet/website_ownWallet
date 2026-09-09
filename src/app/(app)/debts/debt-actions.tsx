@@ -20,7 +20,7 @@ export function DebtActions({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [isPending] = useTransition();
   const [hasDueDate, setHasDueDate] = useState(false);
   const [duplicatePrompt, setDuplicatePrompt] = useState<{
     match: any;

@@ -133,7 +133,6 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
     handleSubmit: handleProfile,
     formState: { isSubmitting: isSubmittingProfile },
   } = useForm<UpdateProfileInput>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(UpdateProfileSchema) as any,
     defaultValues: {
       name: user.name || "",
@@ -152,7 +151,6 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
     reset: resetPass,
     formState: { errors: passErrors, isSubmitting: isSubmittingPass },
   } = useForm<ChangePasswordInput>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(ChangePasswordSchema) as any,
   });
 
@@ -167,7 +165,6 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
     reset: resetCat,
     formState: { errors: catErrors, isSubmitting: isSubmittingCat },
   } = useForm<CreateCategoryInput>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(CreateCategorySchema) as any,
     defaultValues: {
       name: "",

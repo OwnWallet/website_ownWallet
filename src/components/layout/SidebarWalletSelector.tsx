@@ -9,7 +9,6 @@ import {
   Check,
   ChevronsUpDown,
   Wallet,
-  Sparkles,
   ArrowRight,
   Banknote,
 } from "lucide-react";

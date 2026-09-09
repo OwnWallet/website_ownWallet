@@ -39,7 +39,7 @@ const POPULAR_EXCHANGES = [
 export function AddInvestmentForm() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [isPending] = useTransition();
   const [assetType, setAssetType] = useState("STOCK");
 
   const isBusy = loading || isPending;

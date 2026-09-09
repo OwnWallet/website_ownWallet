@@ -18,7 +18,6 @@ import {
   Target,
   Settings,
   LogOut,
-  Coins,
   X,
   Sparkles,
   PiggyBank,
