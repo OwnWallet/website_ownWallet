@@ -49,7 +49,8 @@ export async function updateCurrentPrice(id: string, formData: FormData) {
 
 export async function addInvestLog(investmentId: string, formData: FormData) {
   const userId = await getUserId();
-  const parsed = InvestLogSchema.safeParse(Object.fromEntries(formData));
+  const rawData = Object.fromEntries(formData);
+  const parsed = InvestLogSchema.safeParse(rawData);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   const investment = await db.orm.public.Investment
@@ -57,8 +58,80 @@ export async function addInvestLog(investmentId: string, formData: FormData) {
     .first();
   if (!investment) return { error: "Không tìm thấy khoản đầu tư" };
 
+  const currentQty = Number(investment.quantity);
+  const tradeQty = parsed.data.quantity;
+  let newQty = currentQty;
+  let walletName: string | null = null;
+  const totalAmount = tradeQty * parsed.data.price;
+
+  if (parsed.data.action === "SELL") {
+    if (tradeQty > currentQty) {
+      return { error: `Số lượng bán (${tradeQty}) vượt quá số lượng đang có (${currentQty})` };
+    }
+    newQty = Math.max(0, currentQty - tradeQty);
+
+    // Cập nhật số lượng còn lại của khoản đầu tư
+    await db.orm.public.Investment
+      .where({ id: investmentId, userId })
+      .update({ quantity: String(newQty) });
+
+    // Nếu có chọn tài khoản nhận tiền
+    if (parsed.data.walletId) {
+      const wallet = await db.orm.public.Wallet
+        .where({ id: parsed.data.walletId, userId })
+        .first();
+
+      if (wallet) {
+        walletName = wallet.name;
+
+        // Tìm danh mục phù hợp (ưu tiên INVEST, sau đó INCOME)
+        let category = await db.orm.public.Category
+          .where({ userId, type: "INVEST" })
+          .first();
+
+        if (!category) {
+          category = await db.orm.public.Category
+            .where({ userId, type: "INCOME" })
+            .first();
+        }
+
+        if (!category) {
+          category = await db.orm.public.Category
+            .where({ userId })
+            .first();
+        }
+
+        if (category) {
+          await db.orm.public.Transaction.create({
+            amount: String(totalAmount),
+            type: "INCOME",
+            categoryId: category.id,
+            note: `Bán ${tradeQty.toLocaleString("vi-VN")} ${investment.name}${investment.ticker ? ` (${investment.ticker})` : ""}`,
+            walletId: wallet.id,
+            userId,
+            recordedAt: toInstant(parsed.data.recordedAt),
+          });
+        }
+      }
+    }
+  } else {
+    // BUY: Tăng số lượng và tính lại giá vốn trung bình
+    const currentBuyPrice = Number(investment.buyPrice);
+    const totalCost = currentQty * currentBuyPrice + tradeQty * parsed.data.price;
+    newQty = currentQty + tradeQty;
+    const newAvgPrice = newQty > 0 ? totalCost / newQty : parsed.data.price;
+
+    await db.orm.public.Investment
+      .where({ id: investmentId, userId })
+      .update({
+        quantity: String(newQty),
+        buyPrice: String(newAvgPrice),
+      });
+  }
+
+  // Ghi nhật ký giao dịch
   await db.orm.public.InvestLog.create({
-    ...parsed.data,
+    action: parsed.data.action,
     quantity: String(parsed.data.quantity),
     price: String(parsed.data.price),
     recordedAt: toInstant(parsed.data.recordedAt),
@@ -66,7 +139,20 @@ export async function addInvestLog(investmentId: string, formData: FormData) {
   });
 
   revalidatePath("/investments");
-  return { success: true };
+  revalidatePath("/wallets");
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath("/reports");
+
+  return {
+    success: true,
+    action: parsed.data.action,
+    quantity: tradeQty,
+    price: parsed.data.price,
+    totalAmount,
+    walletName,
+    newQuantity: newQty,
+  };
 }
 
 export async function deleteInvestment(id: string) {

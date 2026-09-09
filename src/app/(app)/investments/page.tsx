@@ -8,6 +8,8 @@ import { AddInvestmentForm } from "./add-investment-form";
 import { Plus, TrendingUp, Briefcase, BarChart3, Layers } from "lucide-react";
 
 
+import { getWallets } from "@/actions/wallets";
+
 export default async function InvestmentsPage() {
   const session = await auth();
   if (!session?.user?.id) {
@@ -15,11 +17,14 @@ export default async function InvestmentsPage() {
   }
 
   try {
-    const investments = await db.orm.public.Investment
-      .where((inv) => inv.userId.eq(session.user.id))
-      .include("logs", (log) => log.orderBy((l) => l.recordedAt.desc()).limit(10))
-      .orderBy((inv) => inv.createdAt.desc())
-      .all();
+    const [investments, wallets] = await Promise.all([
+      db.orm.public.Investment
+        .where((inv) => inv.userId.eq(session.user.id))
+        .include("logs", (log) => log.orderBy((l) => l.recordedAt.desc()).limit(10))
+        .orderBy((inv) => inv.createdAt.desc())
+        .all(),
+      getWallets(),
+    ]);
 
     let totalInvested = 0;
     let totalCurrentValue = 0;
@@ -104,7 +109,7 @@ export default async function InvestmentsPage() {
         <AddInvestmentForm />
 
         {/* Investment Cards Grid with Bulk Delete */}
-        <InvestmentListClient investments={plainInvestments} />
+        <InvestmentListClient investments={plainInvestments} wallets={wallets} />
       </div>
     );
   } catch (error) {

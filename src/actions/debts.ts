@@ -78,3 +78,42 @@ export async function deleteDebts(ids: string[]) {
   return { success: true, count };
 }
 
+export async function mergeDebt(debtId: string, additionalAmount: number, additionalNote?: string) {
+  const userId = await getUserId();
+  if (additionalAmount <= 0) return { error: "Số tiền gộp phải lớn hơn 0" };
+
+  const debt = await db.orm.public.Debt.where({ id: debtId, userId }).first();
+  if (!debt) return { error: "Không tìm thấy khoản nợ cũ để gộp" };
+
+  const newAmount = Number(debt.amount) + additionalAmount;
+  const newPaid = Number(debt.paidAmount);
+  const newStatus: "PAID" | "PARTIAL" | "PENDING" =
+    newPaid >= newAmount
+      ? "PAID"
+      : newPaid > 0
+      ? "PARTIAL"
+      : "PENDING";
+
+  let updatedNote = debt.note || "";
+  if (additionalNote) {
+    updatedNote = updatedNote ? `${updatedNote} | Gộp thêm: ${additionalNote}` : `Gộp thêm: ${additionalNote}`;
+  }
+
+  await db.orm.public.Debt
+    .where({ id: debtId, userId })
+    .update({
+      amount: String(newAmount),
+      status: newStatus,
+      note: updatedNote || null,
+    });
+
+  revalidatePath("/debts");
+  revalidatePath("/dashboard");
+  return {
+    success: true,
+    newAmount,
+    person: debt.person,
+    direction: debt.direction,
+  };
+}
+

@@ -21,6 +21,7 @@ export const InvestLogSchema = z.object({
   action: z.enum(["BUY", "SELL"] as const),
   quantity: z.coerce.number().positive("Số lượng phải lớn hơn 0"),
   price: z.coerce.number().positive("Giá phải lớn hơn 0"),
+  walletId: z.string().optional().nullable(),
   recordedAt: z.coerce.date().default(() => new Date()),
 });
 

@@ -1,23 +1,34 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createDebt, recordPayment } from "@/actions/debts";
+import { createDebt, recordPayment, mergeDebt } from "@/actions/debts";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
+import { formatCurrency } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function DebtActions({
   debtId,
   mode = "add",
   wallets = [],
+  existingDebts = [],
 }: {
   debtId?: string;
   inline?: boolean;
   mode?: "add" | "record";
   wallets?: { id: string; name: string; balance: string | number | { toString: () => string } }[];
+  existingDebts?: any[];
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [hasDueDate, setHasDueDate] = useState(false);
+  const [duplicatePrompt, setDuplicatePrompt] = useState<{
+    match: any;
+    fd: FormData;
+    newAmount: number;
+    person: string;
+    direction: "OWE" | "OWED";
+  } | null>(null);
 
   const isBusy = loading || isPending;
 
@@ -129,16 +140,48 @@ export function DebtActions({
             onSubmit={async (e) => {
               e.preventDefault();
               if (isBusy) return;
+
+              const fd = new FormData(e.currentTarget);
+              if (!hasDueDate) {
+                fd.delete("dueDate");
+              }
+
+              const person = fd.get("person")?.toString()?.trim() || "";
+              const direction = (fd.get("direction")?.toString() || "OWE") as "OWE" | "OWED";
+              const amount = Number(fd.get("amount") || 0);
+
+              // Kiểm tra xem đã có khoản nợ/vay cùng tên và cùng chiều chưa
+              const match = existingDebts.find(
+                (d) =>
+                  d.person?.trim().toLowerCase() === person.toLowerCase() &&
+                  d.direction === direction &&
+                  d.status !== "PAID"
+              );
+
+              if (match) {
+                // Hiển thị modal hỏi người dùng có muốn gộp nợ không
+                setDuplicatePrompt({
+                  match,
+                  fd,
+                  newAmount: amount,
+                  person,
+                  direction,
+                });
+                return;
+              }
+
               setLoading(true);
               try {
-                const fd = new FormData(e.currentTarget);
-                if (!hasDueDate) {
-                  fd.delete("dueDate");
+                const res: any = await createDebt(fd);
+                if (res?.error) {
+                  toast.error("Không thể tạo khoản nợ. Vui lòng kiểm tra lại thông tin.");
+                } else {
+                  toast.success(`Đã thêm khoản nợ với ${person} thành công!`);
+                  setIsOpen(false);
                 }
-                await createDebt(fd);
-                setIsOpen(false);
               } catch (err) {
                 console.error(err);
+                toast.error("Đã có lỗi xảy ra khi lưu khoản nợ");
               } finally {
                 setLoading(false);
               }
@@ -280,6 +323,120 @@ export function DebtActions({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Modal Dialog hỏi gộp nợ khi phát hiện trùng tên */}
+      {duplicatePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-card border border-border shadow-2xl rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4 animate-scale-in">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 text-xl font-bold">
+                ⚠️
+              </div>
+              <div>
+                <h4 className="font-bold text-base text-foreground">
+                  Phát hiện nợ trùng với &quot;{duplicatePrompt.person}&quot;
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Bạn đã có khoản {duplicatePrompt.direction === "OWE" ? "nợ phải trả" : "cho vay"} với người này từ trước.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-border text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Khoản nợ hiện có:</span>
+                <span className="font-bold text-foreground">{formatCurrency(Number(duplicatePrompt.match.amount))}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Đã thanh toán:</span>
+                <span className="text-emerald-600">{formatCurrency(Number(duplicatePrompt.match.paidAmount))}</span>
+              </div>
+              <div className="flex justify-between border-t border-border pt-1 font-semibold">
+                <span className="text-muted-foreground">Còn lại chưa thanh toán:</span>
+                <span className="text-rose-600 font-bold">
+                  {formatCurrency(Number(duplicatePrompt.match.amount) - Number(duplicatePrompt.match.paidAmount))}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-dashed border-border pt-1">
+                <span className="text-muted-foreground">Khoản mới muốn thêm:</span>
+                <span className="font-bold text-primary">+{formatCurrency(duplicatePrompt.newAmount)}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Bạn có muốn <strong>gộp số tiền này vào khoản nợ cũ</strong> (tổng nợ sau gộp sẽ là{" "}
+              <strong className="text-foreground">
+                {formatCurrency(Number(duplicatePrompt.match.amount) + duplicatePrompt.newAmount)}
+              </strong>
+              ) hay muốn tạo thành một <strong>khoản nợ riêng biệt</strong>?
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    const note = duplicatePrompt.fd.get("note")?.toString();
+                    const res: any = await mergeDebt(duplicatePrompt.match.id, duplicatePrompt.newAmount, note);
+                    if (res?.error) {
+                      toast.error(res.error);
+                    } else {
+                      toast.success(
+                        `Đã gộp ${formatCurrency(duplicatePrompt.newAmount)} vào khoản nợ với ${duplicatePrompt.person}! Tổng nợ mới: ${formatCurrency(res.newAmount)}`
+                      );
+                      setDuplicatePrompt(null);
+                      setIsOpen(false);
+                    }
+                  } catch (err: any) {
+                    toast.error(err?.message || "Lỗi khi gộp nợ");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="btn-primary py-2.5 px-4 text-xs font-bold rounded-xl flex-1 text-center cursor-pointer shadow-sm"
+              >
+                {loading ? "Đang gộp..." : "Gộp vào nợ cũ"}
+              </button>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    const res: any = await createDebt(duplicatePrompt.fd);
+                    if (res?.error) {
+                      toast.error("Không thể tạo khoản nợ");
+                    } else {
+                      toast.success(`Đã tạo khoản nợ riêng biệt với ${duplicatePrompt.person}`);
+                      setDuplicatePrompt(null);
+                      setIsOpen(false);
+                    }
+                  } catch (err: any) {
+                    toast.error(err?.message || "Lỗi khi tạo nợ");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-foreground py-2.5 px-3 text-xs font-semibold rounded-xl flex-1 text-center transition-colors cursor-pointer border border-border"
+              >
+                Tạo nợ riêng
+              </button>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => setDuplicatePrompt(null)}
+                className="py-2.5 px-3 text-xs text-muted-foreground hover:text-foreground text-center cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Hủy
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

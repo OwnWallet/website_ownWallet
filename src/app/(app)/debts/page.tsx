@@ -76,7 +76,7 @@ export default async function DebtsPage() {
       </div>
 
       {/* Add Debt Action */}
-      <DebtActions />
+      <DebtActions existingDebts={plainDebts} />
 
       {/* Debt Lists with Bulk Delete */}
       <DebtListClient owes={owes} oweds={oweds} />
