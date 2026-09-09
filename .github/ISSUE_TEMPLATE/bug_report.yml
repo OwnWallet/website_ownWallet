@@ -1,0 +1,57 @@
+name: "🐛 Báo cáo lỗi (Bug Report)"
+description: Tạo báo cáo khi gặp lỗi hoặc hành vi bất thường trong ứng dụng OwnWallet
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cảm ơn bạn đã báo cáo lỗi! Vui lòng điền thông tin chi tiết bên dưới để chúng tôi có thể tái hiện và khắc phục nhanh nhất.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Mô tả lỗi
+      description: Hãy mô tả ngắn gọn và rõ ràng lỗi xảy ra là gì.
+      placeholder: "Ví dụ: Không lưu được giao dịch khi chọn ví tiền mặt..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Các bước tái hiện lỗi
+      description: Liệt kê các bước cụ thể để người khác có thể gặp lại lỗi này.
+      placeholder: |
+        1. Mở trang '/transactions/new'
+        2. Nhập số tiền 50.000đ và chọn danh mục 'Ăn uống'
+        3. Bấm 'Lưu giao dịch'
+        4. Thấy lỗi thông báo '...'
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Hành vi mong đợi
+      description: Bạn kỳ vọng hệ thống xử lý như thế nào?
+      placeholder: "Giao dịch được lưu thành công và hiển thị ngay trên danh sách."
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: Môi trường & Thiết bị
+      description: Trình duyệt, hệ điều hành hoặc thiết bị bạn đang dùng.
+      placeholder: "Chrome 128 / Windows 11 / iOS Safari 17"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs_or_screenshots
+    attributes:
+      label: Console Logs hoặc Ảnh chụp màn hình
+      description: Đính kèm ảnh màn hình hoặc log console trình duyệt nếu có.
+    validations:
+      required: false
