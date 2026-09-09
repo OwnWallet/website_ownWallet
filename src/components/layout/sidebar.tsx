@@ -128,25 +128,25 @@ export function Sidebar({
           )}
         </div>
 
-        {/* Scrollable Middle Area: Wallets, Time Filter & Navigation */}
+        {/* Fixed Middle Area: Wallets & Time Filter (Non-scrollable) */}
+        {wallets && wallets.length > 0 && (
+          <div className="pt-1 pb-1 border-b border-white/10 transition-all shrink-0">
+            <SidebarWalletSelector
+              wallets={wallets}
+              isCollapsed={isCollapsed}
+              onClose={onClose}
+            />
+          </div>
+        )}
+
+        {/* Sidebar Time Filter (Month & Year) (Fixed) */}
+        <div className="border-b border-white/10 pb-2 transition-all shrink-0">
+          <SidebarTimeFilter isCollapsed={isCollapsed} onClose={onClose} />
+        </div>
+
+        {/* Scrollable Middle Area: Navigation Only */}
         <ScrollArea className="flex-1 min-h-0 w-full overflow-hidden">
           <div className="flex flex-col py-2">
-            {/* Card / Account Selector in Sidebar */}
-            {wallets && wallets.length > 0 && (
-              <div className="pt-0.5 pb-1 border-b border-white/10 transition-all shrink-0">
-                <SidebarWalletSelector
-                  wallets={wallets}
-                  isCollapsed={isCollapsed}
-                  onClose={onClose}
-                />
-              </div>
-            )}
-
-            {/* Sidebar Time Filter (Month & Year) */}
-            <div className="border-b border-white/10 pb-2 mb-2 transition-all shrink-0">
-              <SidebarTimeFilter isCollapsed={isCollapsed} onClose={onClose} />
-            </div>
-
             {/* Navigation Items */}
             <div className="px-2.5">
               <div className={cn("px-2.5 mb-2 transition-all", isCollapsed && "lg:hidden")}>

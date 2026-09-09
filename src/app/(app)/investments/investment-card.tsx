@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { updateCurrentPrice, addInvestLog, deleteInvestment } from "@/actions/investments";
-import { Trash2, PlusCircle, History, Edit3, X } from "lucide-react";
+import { Trash2, PlusCircle, History, Edit3, X, ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { toast } from "sonner";
 
 interface InvestLog {
   id: string;
@@ -52,15 +53,20 @@ function getAssetTypeBadge(type?: string | null) {
 
 export function InvestmentCard({
   inv,
+  wallets = [],
   selected,
   onToggleSelect,
 }: {
   inv: Investment;
+  wallets?: any[];
   selected?: boolean;
   onToggleSelect?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<"view" | "price" | "trade" | "logs">("view");
   const [loading, setLoading] = useState(false);
+  const [tradeAction, setTradeAction] = useState<"BUY" | "SELL">("SELL");
+  const [tradeQty, setTradeQty] = useState<string>("");
+  const [tradePrice, setTradePrice] = useState<string>("");
 
   const quantity = Number(inv.quantity);
   const buyPrice = Number(inv.buyPrice);
@@ -255,54 +261,147 @@ export function InvestmentCard({
         {/* Tab content: Trade Buy/Sell */}
         {activeTab === "trade" && (
           <form
-            action={async (fd) => {
+            onSubmit={async (e) => {
+              e.preventDefault();
               setLoading(true);
-              await addInvestLog(inv.id, fd);
-              setLoading(false);
-              setActiveTab("view");
+              try {
+                const fd = new FormData(e.currentTarget);
+                const res: any = await addInvestLog(inv.id, fd);
+                if (res?.error) {
+                  toast.error(typeof res.error === "string" ? res.error : "Không thể thực hiện giao dịch");
+                } else {
+                  if (res.action === "SELL") {
+                    if (res.walletName) {
+                      toast.success(
+                        `Đã bán thành công ${Number(res.quantity).toLocaleString("vi-VN")} ${inv.name}! Số tiền ${formatCurrency(res.totalAmount)} đã được chuyển vào tài khoản "${res.walletName}" và cập nhật lại các thông số.`
+                      );
+                    } else {
+                      toast.success(
+                        `Đã bán ${Number(res.quantity).toLocaleString("vi-VN")} ${inv.name} (+${formatCurrency(res.totalAmount)}). Đã cập nhật lại thông số danh mục!`
+                      );
+                    }
+                  } else {
+                    toast.success(
+                      `Đã mua thêm ${Number(res.quantity).toLocaleString("vi-VN")} ${inv.name}! Đã cập nhật lại giá vốn và số lượng.`
+                    );
+                  }
+                  setActiveTab("view");
+                }
+              } catch (err: any) {
+                toast.error(err?.message || "Đã xảy ra lỗi khi thực hiện giao dịch");
+              } finally {
+                setLoading(false);
+              }
             }}
             className="mt-3 p-3 bg-elevated rounded-lg border border-border-strong animate-fade-in space-y-2.5"
           >
             <div className="flex justify-between items-center text-xs font-semibold text-muted">
-              <span>Ghi nhận Mua / Bán</span>
+              <span className="flex items-center gap-1">
+                {tradeAction === "SELL" ? (
+                  <span className="text-rose-600 flex items-center gap-1 font-bold">
+                    <ArrowDownRight size={13} /> Bán tài sản
+                  </span>
+                ) : (
+                  <span className="text-emerald-600 flex items-center gap-1 font-bold">
+                    <ArrowUpRight size={13} /> Mua thêm tài sản
+                  </span>
+                )}
+              </span>
               <button type="button" onClick={() => setActiveTab("view")} className="text-muted hover:text-foreground cursor-pointer">
                 <X size={12} />
               </button>
             </div>
+
             <div className="grid grid-cols-3 gap-2">
-              <select
-                name="action"
-                className="bg-background border border-border-strong rounded px-2 py-1.5 text-xs outline-none focus:border-primary text-foreground"
-              >
-                <option value="BUY">🟢 Mua thêm</option>
-                <option value="SELL">🔴 Bán bớt</option>
-              </select>
-              <input
-                type="number"
-                name="quantity"
-                placeholder="Số lượng..."
-                step="any"
-                min="0.00000001"
-                className="bg-background border border-border-strong rounded px-2 py-1.5 text-xs outline-none focus:border-primary text-foreground"
-                required
-              />
-              <input
-                type="number"
-                name="price"
-                defaultValue={currentPrice}
-                placeholder="Giá khớp..."
-                step="any"
-                min="0.0001"
-                className="bg-background border border-border-strong rounded px-2 py-1.5 text-xs outline-none focus:border-primary text-foreground"
-                required
-              />
+              <div>
+                <label className="block text-[10px] text-muted-foreground font-semibold mb-1">Loại lệnh</label>
+                <select
+                  name="action"
+                  value={tradeAction}
+                  onChange={(e) => setTradeAction(e.target.value as "BUY" | "SELL")}
+                  className="w-full bg-background border border-border-strong rounded px-2 py-1.5 text-xs outline-none focus:border-primary text-foreground font-medium"
+                >
+                  <option value="SELL">🔴 Bán bớt</option>
+                  <option value="BUY">🟢 Mua thêm</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-muted-foreground font-semibold mb-1">
+                  Số lượng {tradeAction === "SELL" && <span className="text-rose-500 font-normal">({quantity.toLocaleString("vi-VN")})</span>}
+                </label>
+                <input
+                  type="number"
+                  name="quantity"
+                  value={tradeQty}
+                  onChange={(e) => setTradeQty(e.target.value)}
+                  placeholder="SL..."
+                  step="any"
+                  min="0.00000001"
+                  max={tradeAction === "SELL" ? quantity : undefined}
+                  className="w-full bg-background border border-border-strong rounded px-2 py-1.5 text-xs outline-none focus:border-primary text-foreground"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-muted-foreground font-semibold mb-1">Giá khớp</label>
+                <input
+                  type="number"
+                  name="price"
+                  value={tradePrice !== "" ? tradePrice : currentPrice}
+                  onChange={(e) => setTradePrice(e.target.value)}
+                  placeholder="Giá..."
+                  step="any"
+                  min="0.0001"
+                  className="w-full bg-background border border-border-strong rounded px-2 py-1.5 text-xs outline-none focus:border-primary text-foreground"
+                  required
+                />
+              </div>
             </div>
+
+            {/* Khi bán: chọn tài khoản nhận tiền về */}
+            {tradeAction === "SELL" && (
+              <div className="pt-1">
+                <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
+                  💳 Chuyển tiền về tài khoản:
+                </label>
+                <select
+                  name="walletId"
+                  className="w-full bg-background border border-border-strong rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-primary text-foreground"
+                >
+                  <option value="">-- Không chuyển vào tài khoản (chỉ ghi sổ) --</option>
+                  {wallets.map((w: any) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} {w.currentBalance !== undefined ? `(${formatCurrency(w.currentBalance)})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Tiền bán sẽ được tự động ghi nhận vào tài khoản được chọn và cập nhật số dư.
+                </p>
+              </div>
+            )}
+
+            {/* Preview số tiền ước tính */}
+            {tradeQty && Number(tradeQty) > 0 && (
+              <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-border text-xs flex justify-between items-center">
+                <span className="text-muted-foreground">
+                  {tradeAction === "SELL" ? "Tiền thu về ước tính:" : "Tổng chi phí mua:"}
+                </span>
+                <span className={`font-bold ${tradeAction === "SELL" ? "text-emerald-600" : "text-foreground"}`}>
+                  {tradeAction === "SELL" ? "+" : "-"}
+                  {formatCurrency(Number(tradeQty) * (Number(tradePrice) || currentPrice))}
+                </span>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full btn-primary py-1.5 text-xs flex justify-center cursor-pointer"
+              className="w-full btn-primary py-2 text-xs flex justify-center cursor-pointer font-semibold"
             >
-              {loading ? "Đang xử lý..." : "Xác nhận giao dịch"}
+              {loading ? "Đang xử lý..." : tradeAction === "SELL" ? "Xác nhận bán" : "Xác nhận mua thêm"}
             </button>
           </form>
         )}

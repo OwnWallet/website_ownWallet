@@ -8,9 +8,10 @@ import { deleteInvestments } from "@/actions/investments";
 
 interface InvestmentListClientProps {
   investments: any[];
+  wallets?: any[];
 }
 
-export function InvestmentListClient({ investments }: InvestmentListClientProps) {
+export function InvestmentListClient({ investments, wallets = [] }: InvestmentListClientProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   if (investments.length === 0) {
@@ -63,6 +64,7 @@ export function InvestmentListClient({ investments }: InvestmentListClientProps)
           <InvestmentCard
             key={inv.id}
             inv={inv}
+            wallets={wallets}
             selected={selectedIds.has(inv.id)}
             onToggleSelect={() => toggleSelectOne(inv.id)}
           />
