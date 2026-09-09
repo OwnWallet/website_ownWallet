@@ -10,7 +10,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatMetric } from "@/lib/utils";
 
 interface MonthData {
   month: string;
@@ -46,7 +46,7 @@ export function MonthComparisonChart({ data }: Props) {
             axisLine={false}
             tickLine={false}
             tick={{ fill: "#64748b", fontSize: 12 }}
-            tickFormatter={(value) => `${(value / 1000000).toFixed(0)}tr`}
+            tickFormatter={(value) => `${formatMetric(value / 1000000)}tr`}
             width={50}
           />
           <Tooltip

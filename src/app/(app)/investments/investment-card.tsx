@@ -5,6 +5,7 @@ import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { updateCurrentPrice, addInvestLog, deleteInvestment } from "@/actions/investments";
 import { Trash2, PlusCircle, History, Edit3, X, ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 interface InvestLog {
   id: string;
@@ -236,14 +237,13 @@ export function InvestmentCard({
                 <X size={12} />
               </button>
             </div>
-            <div className="flex gap-2">
-              <input
-                type="number"
+            <div className="flex gap-2 items-center">
+              <SmartCurrencyInput
                 name="currentPrice"
                 defaultValue={currentPrice}
-                step="any"
-                min="0.0001"
+                allowDecimals
                 placeholder="Giá thị trường..."
+                containerClassName="flex-1"
                 className="w-full bg-background border border-border-strong rounded px-2.5 py-1.5 text-xs outline-none focus:border-primary text-foreground"
                 required
               />
@@ -346,15 +346,14 @@ export function InvestmentCard({
 
               <div>
                 <label className="block text-[10px] text-muted-foreground font-semibold mb-1">Giá khớp</label>
-                <input
-                  type="number"
+                <SmartCurrencyInput
                   name="price"
-                  value={tradePrice !== "" ? tradePrice : currentPrice}
-                  onChange={(e) => setTradePrice(e.target.value)}
-                  placeholder="Giá..."
-                  step="any"
-                  min="0.0001"
-                  className="w-full bg-background border border-border-strong rounded px-2 py-1.5 text-xs outline-none focus:border-primary text-foreground"
+                  defaultValue={currentPrice}
+                  allowDecimals
+                  placeholder="Giá khớp..."
+                  onChangeValue={(val) => setTradePrice(String(val))}
+                  containerClassName="w-full"
+                  className="w-full bg-background border border-border-strong rounded px-2.5 py-1.5 text-xs outline-none focus:border-primary text-foreground"
                   required
                 />
               </div>

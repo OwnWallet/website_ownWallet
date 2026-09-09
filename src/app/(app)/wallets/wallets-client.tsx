@@ -16,6 +16,7 @@ import {
   Wallet as WalletIcon,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
+import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 import {
   createWallet,
   updateWallet,
@@ -581,11 +582,12 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
               <label className="text-xs font-semibold text-foreground block mb-1">
                 Số dư ban đầu (VNĐ)
               </label>
-              <input
-                type="number"
+              <SmartCurrencyInput
                 name="balance"
                 defaultValue={0}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-border bg-card outline-none focus:border-primary"
+                showQuickButtons
+                showWordsPreview
               />
             </div>
 
@@ -728,11 +730,12 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                 <label className="text-xs font-semibold text-foreground block mb-1">
                   Số dư ban đầu (VNĐ)
                 </label>
-                <input
-                  type="number"
+                <SmartCurrencyInput
                   name="balance"
                   defaultValue={editingWallet.balance}
                   className="w-full px-3 py-2 text-sm rounded-xl border border-border bg-card outline-none focus:border-primary"
+                  showQuickButtons
+                  showWordsPreview
                 />
               </div>
 

@@ -77,38 +77,140 @@ export function serializeData<T = any>(data: any): T {
   return data;
 }
 
+// ─── Number & Metric formatting ────────────────────────────────
+
+/**
+ * Làm tròn số đến hàng phần trăm / số thập phân hàng trăm (tối đa 2 chữ số thập phân)
+ * @example roundToHundredth(12.3456) → 12.35
+ * @example roundToHundredth(10) → 10
+ */
+export function roundToHundredth(num: number): number {
+  if (isNaN(num)) return 0;
+  return Math.round((num + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Format chỉ số số liệu / tỷ lệ làm tròn đến số thập phân hàng trăm (tối đa 2 chữ số thập phân)
+ * @example formatMetric(12.3456) → "12,35"
+ * @example formatMetric(50) → "50"
+ */
+export function formatMetric(num: number, maxDigits = 2): string {
+  if (isNaN(num)) return "0";
+  const rounded = roundToHundredth(num);
+  return new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: maxDigits,
+  }).format(rounded);
+}
+
 // ─── Currency formatting ───────────────────────────────────────
 const VND_FORMATTER = new Intl.NumberFormat("vi-VN", {
   style: "currency",
   currency: "VND",
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 
 /**
- * Format số thành chuỗi tiền VNĐ
+ * Format số thành chuỗi tiền VNĐ, làm tròn đến số thập phân hàng trăm nếu có phần thập phân
  * @example formatCurrency(3000000) → "3.000.000 ₫"
+ * @example formatCurrency(100.567) → "100,57 ₫"
  */
 export function formatCurrency(amount: number | string): string {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
   if (isNaN(num)) return "0 ₫";
-  return VND_FORMATTER.format(num);
+  return VND_FORMATTER.format(roundToHundredth(num));
 }
 
 /**
- * Format số tiền dạng compact
+ * Format số tiền dạng compact, làm tròn đến số thập phân hàng trăm
  * @example formatCurrencyCompact(3500000) → "3,5tr ₫"
+ * @example formatCurrencyCompact(1250000) → "1,25tr ₫"
  */
 export function formatCurrencyCompact(amount: number): string {
-  if (Math.abs(amount) >= 1_000_000_000) {
-    return `${(amount / 1_000_000_000).toFixed(1)}tỷ ₫`;
+  const abs = Math.abs(amount);
+  const formatWithDecimals = (val: number, unit: string) => {
+    const rounded = roundToHundredth(val);
+    const str = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(rounded);
+    return `${str}${unit} ₫`;
+  };
+
+  if (abs >= 1_000_000_000) {
+    return formatWithDecimals(amount / 1_000_000_000, "tỷ");
   }
-  if (Math.abs(amount) >= 1_000_000) {
-    return `${(amount / 1_000_000).toFixed(1)}tr ₫`;
+  if (abs >= 1_000_000) {
+    return formatWithDecimals(amount / 1_000_000, "tr");
   }
-  if (Math.abs(amount) >= 1_000) {
-    return `${(amount / 1_000).toFixed(0)}k ₫`;
+  if (abs >= 1_000) {
+    return formatWithDecimals(amount / 1_000, "k");
   }
   return `${amount} ₫`;
+}
+
+// ─── Vietnamese Currency Reader (Đọc tiền bằng chữ) ───────────
+const VIETNAMESE_DIGITS = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"];
+
+function readThreeDigits(triad: number, showLeadingZero: boolean): string {
+  const h = Math.floor(triad / 100);
+  const t = Math.floor((triad % 100) / 10);
+  const u = triad % 10;
+  const parts: string[] = [];
+
+  if (h > 0 || showLeadingZero) {
+    parts.push(`${VIETNAMESE_DIGITS[h]} trăm`);
+  }
+
+  if (t > 1) {
+    parts.push(`${VIETNAMESE_DIGITS[t]} mươi`);
+    if (u === 1) parts.push("mốt");
+    else if (u === 4) parts.push("tư");
+    else if (u === 5) parts.push("lăm");
+    else if (u > 0) parts.push(VIETNAMESE_DIGITS[u]);
+  } else if (t === 1) {
+    parts.push("mười");
+    if (u === 5) parts.push("lăm");
+    else if (u > 0) parts.push(VIETNAMESE_DIGITS[u]);
+  } else if (t === 0 && (h > 0 || showLeadingZero) && u > 0) {
+    parts.push("lẻ");
+    parts.push(VIETNAMESE_DIGITS[u]);
+  } else if (t === 0 && !showLeadingZero && h === 0 && u > 0) {
+    parts.push(VIETNAMESE_DIGITS[u]);
+  }
+
+  return parts.join(" ");
+}
+
+/**
+ * Đọc số tiền thành chuỗi chữ tiếng Việt
+ * @example readVietnameseCurrency(500000) → "Năm trăm nghìn đồng"
+ * @example readVietnameseCurrency(2500000) → "Hai triệu năm trăm nghìn đồng"
+ */
+export function readVietnameseCurrency(amount: number): string {
+  if (isNaN(amount) || amount <= 0) return "";
+  const integerPart = Math.floor(amount);
+  if (integerPart === 0) return "Không đồng";
+
+  const scales = ["", "nghìn", "triệu", "tỷ", "nghìn tỷ", "triệu tỷ"];
+  let num = integerPart;
+  const triads: number[] = [];
+
+  while (num > 0) {
+    triads.push(num % 1000);
+    num = Math.floor(num / 1000);
+  }
+
+  const resultParts: string[] = [];
+  for (let i = triads.length - 1; i >= 0; i--) {
+    const triad = triads[i];
+    if (triad > 0) {
+      const showLeadingZero = i < triads.length - 1;
+      const text = readThreeDigits(triad, showLeadingZero);
+      if (text) {
+        resultParts.push(`${text} ${scales[i]}`.trim());
+      }
+    }
+  }
+
+  const finalStr = resultParts.join(" ").trim() + " đồng";
+  return finalStr.charAt(0).toUpperCase() + finalStr.slice(1);
 }
 
 // ─── Date / Time formatting ────────────────────────────────────
@@ -196,10 +298,10 @@ export function formatDayHeader(date: any): { title: string; subtitle: string; i
 
 // ─── Misc helpers ──────────────────────────────────────────────
 
-/** Tính % tiến độ, clamp 0–100 */
+/** Tính % tiến độ, làm tròn đến số thập phân hàng trăm (tối đa 2 chữ số thập phân), clamp 0–100 */
 export function calcPercent(current: number, total: number): number {
   if (total <= 0) return 0;
-  return Math.min(100, Math.round((current / total) * 100));
+  return Math.min(100, Math.max(0, roundToHundredth((current / total) * 100)));
 }
 
 /** Lấy ngày đầu và cuối tháng hiện tại theo timezone người dùng */

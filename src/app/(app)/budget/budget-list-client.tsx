@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatMetric } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD, BUDGET_DANGER_THRESHOLD } from "@/lib/constants";
 import { deleteBudget, deleteBudgets } from "@/actions/budgets";
 import { BulkActionBar } from "@/components/ui/bulk-action-bar";
@@ -182,7 +182,7 @@ export function BudgetListClient({
                 </div>
                 <div className="mt-2 text-right">
                   <span className="text-xs font-bold" style={{ color: progressColor }}>
-                    {b.percent}%
+                    {formatMetric(b.percent)}%
                   </span>
                 </div>
               </div>
