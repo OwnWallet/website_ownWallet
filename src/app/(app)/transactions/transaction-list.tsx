@@ -91,7 +91,7 @@ interface Props {
 export function TransactionList({
   initialTransactions,
   categories,
-  wallets = [],
+  wallets: _wallets = [],
   initialMonth,
   initialYear,
   initialWallet = "ALL",

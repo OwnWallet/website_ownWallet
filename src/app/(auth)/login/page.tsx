@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { loginAction } from "@/actions/auth";
-import { Wallet, ArrowRight, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
+import { ArrowRight, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
 
 function LoginForm() {
   const [state, formAction, isPending] = useActionState(loginAction, null);

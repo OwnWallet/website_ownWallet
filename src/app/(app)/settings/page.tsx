@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { serializeData } from "@/lib/utils";
-import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SettingsClient } from "./settings-client";
 import { Settings } from "lucide-react";
@@ -31,7 +30,7 @@ export default async function SettingsPage() {
       return <div className="p-8 text-center text-muted">Không tìm thấy người dùng</div>;
     }
 
-    const { password: _pw, ...safeUser } = user as any;
+    const safeUser = user as any;
 
     return (
       <div className="space-y-6 animate-fade-in w-full">

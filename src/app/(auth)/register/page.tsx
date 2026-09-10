@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { registerAction } from "@/actions/auth";
-import { Wallet, ArrowRight, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
+import { ArrowRight, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();

@@ -1,11 +1,10 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatCurrency, serializeData } from "@/lib/utils";
-import { createInvestment } from "@/actions/investments";
 import { redirect } from "next/navigation";
 import { InvestmentListClient } from "./investment-list-client";
 import { AddInvestmentForm } from "./add-investment-form";
-import { Plus, TrendingUp, Briefcase, BarChart3, Layers } from "lucide-react";
+import { TrendingUp, Briefcase, BarChart3, Layers } from "lucide-react";
 
 
 import { getWallets } from "@/actions/wallets";

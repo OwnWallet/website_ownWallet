@@ -61,7 +61,7 @@ export default function ImportReview({
   transactions,
   totalFound,
   skipped,
-  duplicateCount,
+  duplicateCount: _duplicateCount,
   wallets = [],
   categories = [],
   onReset,

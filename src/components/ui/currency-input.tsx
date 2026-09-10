@@ -53,10 +53,11 @@ export function CurrencyInput({
   const initialNum = value !== undefined ? parseToNumber(String(value)) : (defaultValue !== undefined ? parseToNumber(String(defaultValue)) : 0);
   const [numericValue, setNumericValue] = useState<number>(initialNum);
   const [displayValue, setDisplayValue] = useState<string>(initialNum > 0 ? formatWithSeparators(initialNum) : "");
-  const [prevPropValue, setPrevPropValue] = useState(value);
+  const [prevValue, setPrevValue] = useState<number | string | undefined>(value);
 
-  if (value !== undefined && value !== prevPropValue) {
-    setPrevPropValue(value);
+  // Sync if controlled value changes
+  if (value !== undefined && value !== prevValue) {
+    setPrevValue(value);
     const num = parseToNumber(String(value));
     setNumericValue(num);
     setDisplayValue(num > 0 ? formatWithSeparators(num) : "");
