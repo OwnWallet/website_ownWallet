@@ -19,10 +19,12 @@ import {
 
 export function DebtCard({
   debt,
+  wallets = [],
   selected,
   onToggleSelect,
 }: {
   debt: any;
+  wallets?: any[];
   selected?: boolean;
   onToggleSelect?: () => void;
 }) {
@@ -130,7 +132,7 @@ export function DebtCard({
           </div>
 
           {debt.status !== "PAID" && (
-            <DebtActions debtId={debt.id} inline mode="record" />
+            <DebtActions debtId={debt.id} debt={debt} wallets={wallets} inline mode="record" />
           )}
         </div>
       </div>

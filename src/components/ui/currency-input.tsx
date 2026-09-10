@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useId } from "react";
+import React, { useState, useCallback, useId } from "react";
 import { cn } from "@/lib/utils";
 
 interface CurrencyInputProps {
@@ -53,15 +53,14 @@ export function CurrencyInput({
   const initialNum = value !== undefined ? parseToNumber(String(value)) : (defaultValue !== undefined ? parseToNumber(String(defaultValue)) : 0);
   const [numericValue, setNumericValue] = useState<number>(initialNum);
   const [displayValue, setDisplayValue] = useState<string>(initialNum > 0 ? formatWithSeparators(initialNum) : "");
+  const [prevPropValue, setPrevPropValue] = useState(value);
 
-  // Sync if controlled value changes
-  useEffect(() => {
-    if (value !== undefined) {
-      const num = parseToNumber(String(value));
-      setNumericValue(num);
-      setDisplayValue(num > 0 ? formatWithSeparators(num) : "");
-    }
-  }, [value]);
+  if (value !== undefined && value !== prevPropValue) {
+    setPrevPropValue(value);
+    const num = parseToNumber(String(value));
+    setNumericValue(num);
+    setDisplayValue(num > 0 ? formatWithSeparators(num) : "");
+  }
 
   const updateValue = useCallback(
     (newNum: number) => {

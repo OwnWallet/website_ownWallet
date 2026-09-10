@@ -49,7 +49,19 @@ export async function recordPayment(id: string, formData: FormData) {
     .update({ paidAmount: String(newPaid), status: newStatus });
 
   revalidatePath("/debts");
-  return { success: true };
+  revalidatePath("/dashboard");
+  revalidatePath("/wallets");
+
+  return {
+    success: true,
+    person: debt.person,
+    direction: debt.direction,
+    paidAmount: parsed.data.paidAmount,
+    newPaid,
+    totalAmount: Number(debt.amount),
+    remainAmount: Math.max(0, Number(debt.amount) - newPaid),
+    isCompleted: newPaid >= Number(debt.amount),
+  };
 }
 
 export async function deleteDebt(id: string) {
