@@ -8,6 +8,7 @@ function Toaster({ ...props }: ToasterProps) {
       className="toaster group"
       style={
         {
+          zIndex: 99999,
           "--normal-bg": "var(--bg-card)",
           "--normal-text": "var(--fg)",
           "--normal-border": "var(--border)",
