@@ -1,18 +1,30 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { createDebt, recordPayment, mergeDebt } from "@/actions/debts";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 
+const emptySubscribe = () => () => {};
+function useMounted() {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
 export function DebtActions({
   debtId,
+  debt,
   mode = "add",
   wallets = [],
   existingDebts = [],
 }: {
   debtId?: string;
+  debt?: any;
   inline?: boolean;
   mode?: "add" | "record";
   wallets?: { id: string; name: string; balance: string | number | { toString: () => string } }[];
@@ -20,8 +32,9 @@ export function DebtActions({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isPending, startTransition] = useTransition();
   const [hasDueDate, setHasDueDate] = useState(false);
+  const [paidAmountVal, setPaidAmountVal] = useState<number>(0);
+  const mounted = useMounted();
   const [duplicatePrompt, setDuplicatePrompt] = useState<{
     match: any;
     fd: FormData;
@@ -30,83 +43,216 @@ export function DebtActions({
     direction: "OWE" | "OWED";
   } | null>(null);
 
-  const isBusy = loading || isPending;
+  const isModalOpen = Boolean(duplicatePrompt || (mode === "record" && isOpen));
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isModalOpen]);
+
+  const isBusy = loading;
 
   if (mode === "record") {
-    if (!isOpen) {
-      return (
-        <button
-          onClick={() => setIsOpen(true)}
-          className="text-xs px-3 py-1.5 rounded transition-colors cursor-pointer"
-          style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-strong)" }}
-        >
-          Ghi nhận trả
-        </button>
-      );
-    }
+    const debtAmount = Number(debt?.amount || 0);
+    const debtPaid = Number(debt?.paidAmount || 0);
+    const debtRemain = Math.max(0, debtAmount - debtPaid);
+    const isOwe = debt?.direction === "OWE";
 
     return (
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (isBusy) return;
-          setLoading(true);
-          try {
-            const fd = new FormData(e.currentTarget);
-            await recordPayment(debtId!, fd);
-            setIsOpen(false);
-          } finally {
-            setLoading(false);
-          }
-        }}
-        className="flex flex-wrap gap-2 items-center"
-      >
-        <div className="w-36">
-          <SmartCurrencyInput
-            name="paidAmount"
-            placeholder="Số tiền..."
-            required
-            min={1}
-            disabled={isBusy}
-            showQuickButtons={false}
-          />
-        </div>
-        {wallets.length > 0 && (
-          <select
-            name="walletId"
-            disabled={isBusy}
-            className="text-xs bg-background rounded-xl px-2.5 py-2 text-foreground focus:outline-none border border-slate-200"
-          >
-            <option value="">-- Không qua ví --</option>
-            {wallets.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <button
-          type="submit"
-          disabled={isBusy}
-          className="text-xs px-3.5 py-2 rounded-xl font-medium cursor-pointer transition-opacity"
-          style={{
-            backgroundColor: "var(--primary)",
-            color: "var(--primary-foreground)",
-            opacity: isBusy ? 0.6 : 1,
-            pointerEvents: isBusy ? "none" : "auto",
-          }}
-        >
-          {isBusy ? "Đang lưu..." : "Lưu"}
-        </button>
+      <>
         <button
           type="button"
-          disabled={isBusy}
-          onClick={() => setIsOpen(false)}
-          className="text-xs px-2.5 py-2 text-muted-foreground hover:text-foreground cursor-pointer"
+          onClick={() => {
+            setPaidAmountVal(0);
+            setIsOpen(true);
+          }}
+          className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer shadow-2xs hover:shadow-xs flex items-center gap-1.5 active:scale-95"
+          style={{
+            backgroundColor: "var(--bg-elevated)",
+            border: "1px solid var(--border-strong)",
+            color: "var(--fg)",
+          }}
         >
-          Hủy
+          <span>💳</span>
+          <span>Ghi nhận trả</span>
         </button>
-      </form>
+
+        {mounted && isOpen && typeof document !== "undefined" && createPortal(
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+        <div
+          className="bg-card border border-border shadow-2xl rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4 animate-scale-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="record-payment-title"
+        >
+          {/* Header */}
+          <div className="flex justify-between items-start border-b border-border pb-3">
+            <div>
+              <h3 id="record-payment-title" className="font-bold text-base sm:text-lg text-foreground flex items-center gap-2">
+                <span>{isOwe ? "📤 Trả nợ cho" : "📩 Thu nợ từ"}</span>
+                <span className="text-primary">{debt?.person || "đối tác"}</span>
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isOwe
+                  ? "Ghi nhận khoản tiền bạn đã thanh toán cho chủ nợ"
+                  : "Ghi nhận khoản tiền người vay đã thanh toán cho bạn"}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => setIsOpen(false)}
+              className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              aria-label="Đóng"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Debt Summary Box */}
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-border text-xs space-y-2">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Tổng số nợ:</span>
+              <span className="font-bold text-foreground">{formatCurrency(debtAmount)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Đã thanh toán trước đó:</span>
+              <span className="text-emerald-600 font-semibold">{formatCurrency(debtPaid)}</span>
+            </div>
+            <div className="flex justify-between border-t border-border pt-1.5">
+              <span className="text-muted-foreground font-medium">Số tiền còn lại:</span>
+              <span className="text-rose-600 font-bold text-sm">
+                {formatCurrency(debtRemain)}
+              </span>
+            </div>
+          </div>
+
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (isBusy) return;
+
+              const fd = new FormData(e.currentTarget);
+              const amount = Number(fd.get("paidAmount") || paidAmountVal || 0);
+
+              if (!amount || amount <= 0) {
+                toast.warning("Vui lòng nhập số tiền thanh toán hợp lệ lớn hơn 0");
+                return;
+              }
+
+              setLoading(true);
+              try {
+                const res: any = await recordPayment(debtId!, fd);
+                if (res?.error) {
+                  const msg = typeof res.error === "string" ? res.error : "Không thể ghi nhận thanh toán";
+                  toast.error(msg);
+                } else {
+                  if (res.isCompleted) {
+                    toast.success(
+                      `🎉 Hoàn tất khoản nợ! Bạn đã thanh toán đủ ${formatCurrency(amount)} cho ${res.person || debt?.person}.`,
+                      { duration: 4500 }
+                    );
+                  } else {
+                    toast.success(
+                      `Đã ghi nhận trả ${formatCurrency(amount)} cho ${res.person || debt?.person}. Còn lại: ${formatCurrency(res.remainAmount)}`,
+                      { duration: 3500 }
+                    );
+                  }
+                  setIsOpen(false);
+                }
+              } catch (err: any) {
+                console.error(err);
+                toast.error(err?.message || "Đã có lỗi xảy ra khi ghi nhận thanh toán");
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="space-y-4"
+          >
+            {/* Input số tiền */}
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Số tiền thanh toán (₫)
+                </label>
+                {debtRemain > 0 && (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => setPaidAmountVal(debtRemain)}
+                    className="text-[11px] font-semibold text-primary hover:underline cursor-pointer transition-colors"
+                  >
+                    ⚡ Trả hết ({formatCurrency(debtRemain)})
+                  </button>
+                )}
+              </div>
+              <SmartCurrencyInput
+                name="paidAmount"
+                value={paidAmountVal > 0 ? paidAmountVal : undefined}
+                onChangeValue={(val) => setPaidAmountVal(val)}
+                placeholder="VD: 500,000"
+                required
+                min={1000}
+                disabled={isBusy}
+                showQuickButtons={true}
+                showWordsPreview={true}
+              />
+            </div>
+
+            {/* Chọn ví */}
+            {wallets.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Tài khoản / Ví nguồn tiền
+                </label>
+                <select
+                  name="walletId"
+                  disabled={isBusy}
+                  className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm focus:outline-none border border-slate-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                >
+                  <option value="">-- Không hạch toán qua ví --</option>
+                  {wallets.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({formatCurrency(Number(w.balance))})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Nút hành động */}
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-border">
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => setIsOpen(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={isBusy}
+                className="px-5 py-2.5 rounded-xl font-bold text-xs text-white cursor-pointer shadow-sm transition-all"
+                style={{
+                  backgroundColor: "var(--primary)",
+                  opacity: isBusy ? 0.7 : 1,
+                  pointerEvents: isBusy ? "none" : "auto",
+                }}
+              >
+                {isBusy ? "Đang lưu..." : "Xác nhận trả nợ"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
     );
   }
 
@@ -149,6 +295,16 @@ export function DebtActions({
               const person = fd.get("person")?.toString()?.trim() || "";
               const direction = (fd.get("direction")?.toString() || "OWE") as "OWE" | "OWED";
               const amount = Number(fd.get("amount") || 0);
+
+              if (!person) {
+                toast.warning("Vui lòng nhập tên người / đối tác");
+                return;
+              }
+
+              if (!amount || amount <= 0) {
+                toast.warning("Vui lòng nhập số tiền hợp lệ lớn hơn 0");
+                return;
+              }
 
               // Kiểm tra xem đã có khoản nợ/vay cùng tên và cùng chiều chưa
               const match = existingDebts.find(
@@ -326,9 +482,9 @@ export function DebtActions({
         </div>
       )}
 
-      {/* Modal Dialog hỏi gộp nợ khi phát hiện trùng tên */}
-      {duplicatePrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+      {/* Modal Dialog hỏi gộp nợ khi phát hiện trùng tên - Render qua Portal ra document.body */}
+      {mounted && duplicatePrompt && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-card border border-border shadow-2xl rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4 animate-scale-in">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 text-xl font-bold">
@@ -437,7 +593,8 @@ export function DebtActions({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

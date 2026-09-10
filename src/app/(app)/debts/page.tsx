@@ -7,19 +7,27 @@ import { HandCoins, TrendingDown, TrendingUp } from "lucide-react";
 
 
 
+import { getWallets } from "@/actions/wallets";
+
 export default async function DebtsPage() {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return null;
 
   let debts: any[] = [];
+  let wallets: any[] = [];
   try {
-    debts = await db.orm.public.Debt
-      .where((d) => d.userId.eq(userId))
-      .orderBy((d) => d.createdAt.desc())
-      .all();
+    const [fetchedDebts, fetchedWallets] = await Promise.all([
+      db.orm.public.Debt
+        .where((d) => d.userId.eq(userId))
+        .orderBy((d) => d.createdAt.desc())
+        .all(),
+      getWallets(),
+    ]);
+    debts = fetchedDebts;
+    wallets = fetchedWallets;
   } catch (error) {
-    console.error("Failed to fetch debts:", error);
+    console.error("Failed to fetch debts data:", error);
     return (
       <div className="empty-state">
         <span className="empty-state-icon">⚠️</span>
@@ -76,10 +84,10 @@ export default async function DebtsPage() {
       </div>
 
       {/* Add Debt Action */}
-      <DebtActions existingDebts={plainDebts} />
+      <DebtActions existingDebts={plainDebts} wallets={wallets} />
 
       {/* Debt Lists with Bulk Delete */}
-      <DebtListClient owes={owes} oweds={oweds} />
+      <DebtListClient owes={owes} oweds={oweds} wallets={wallets} />
     </div>
   );
 }
