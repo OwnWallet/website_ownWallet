@@ -137,6 +137,14 @@ export default function ImportReview({
       prev.map((r) => (r._id === id ? { ...r, [field]: value } : r))
     );
 
+  // ── Change type + reset category ──
+  const updateRowType = (id: string, newType: string) =>
+    setRows((prev) =>
+      prev.map((r) =>
+        r._id === id ? { ...r, type: newType as "INCOME" | "EXPENSE", categoryName: "" } : r
+      )
+    );
+
   // ── Confirm import ──
   const handleConfirm = () => {
     const selected = rows.filter((r) => r._selected);
@@ -177,26 +185,7 @@ export default function ImportReview({
 
   return (
     <div className="review-wrapper space-y-4">
-      {/* Category Suggestions Datalists */}
-      <datalist id="category-datalist-INCOME">
-        {categories
-          .filter((c) => c.type === "INCOME")
-          .map((c) => (
-            <option key={c.id} value={c.name} />
-          ))}
-      </datalist>
-      <datalist id="category-datalist-EXPENSE">
-        {categories
-          .filter((c) => c.type === "EXPENSE")
-          .map((c) => (
-            <option key={c.id} value={c.name} />
-          ))}
-      </datalist>
-      <datalist id="category-datalist-ALL">
-        {categories.map((c) => (
-          <option key={c.id} value={c.name} />
-        ))}
-      </datalist>
+
 
       {/* ── Header stats & Duplicate Alert Banner ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -378,7 +367,7 @@ export default function ImportReview({
                       id={`row-type-${row._id}`}
                       value={row.type}
                       onChange={(e) =>
-                        updateRow(row._id, "type", e.target.value)
+                        updateRowType(row._id, e.target.value)
                       }
                       className={`type-select ${row.type === "INCOME" ? "type-income" : "type-expense"}`}
                     >
@@ -399,17 +388,23 @@ export default function ImportReview({
 
                   {/* Category */}
                   <td>
-                    <input
+                    <select
                       id={`row-cat-${row._id}`}
-                      type="text"
-                      list={row.type === "INCOME" ? "category-datalist-INCOME" : "category-datalist-EXPENSE"}
                       value={row.categoryName}
-                      placeholder="Chọn hoặc nhập..."
                       onChange={(e) =>
                         updateRow(row._id, "categoryName", e.target.value)
                       }
                       className="cat-input"
-                    />
+                    >
+                      <option value="">-- Chọn danh mục --</option>
+                      {categories
+                        .filter((c) => c.type === row.type)
+                        .map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.icon ? `${c.icon} ` : ""}{c.name}
+                          </option>
+                        ))}
+                    </select>
                   </td>
 
                   {/* Note & Duplicate Info */}
