@@ -19,6 +19,7 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
   const router = useRouter();
   const [txType, setTxType] = useState<"EXPENSE" | "INCOME">("EXPENSE");
   const [evidenceUrl, setEvidenceUrl] = useState<string | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const {
     register,
@@ -34,6 +35,7 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
     },
   });
 
+  const isLoading = isSubmitting || isNavigating;
   const currentAmount = watch("amount");
 
   const filteredCats = categories.filter((c) =>
@@ -55,7 +57,10 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
     }
     formData.append("recordedAt", data.recordedAt.toISOString());
     const result = await createTransaction(formData);
-    if (result?.success) router.push("/transactions");
+    if (result?.success) {
+      setIsNavigating(true);
+      router.push("/transactions");
+    }
   }
 
   const inputStyle: React.CSSProperties = {
@@ -329,7 +334,7 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
           {/* Submit */}
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isLoading}
             style={{
               padding: "12px",
               borderRadius: "8px",
@@ -338,17 +343,17 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
               fontSize: "14px",
               fontWeight: 600,
               border: "none",
-              cursor: isSubmitting ? "not-allowed" : "pointer",
+              cursor: isLoading ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: "8px",
-              opacity: isSubmitting ? 0.7 : 1,
+              opacity: isLoading ? 0.7 : 1,
               transition: "opacity 0.15s",
             }}
           >
-            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-            {isSubmitting ? "Đang lưu..." : "Lưu giao dịch"}
+            {isLoading && <Loader2 size={16} className="animate-spin" />}
+            {isLoading ? (isNavigating ? "Đang chuyển trang..." : "Đang lưu...") : "Lưu giao dịch"}
           </button>
         </div>
       </form>
