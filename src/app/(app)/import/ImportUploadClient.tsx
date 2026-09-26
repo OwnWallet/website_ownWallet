@@ -28,6 +28,7 @@ const MAX_MB = 10;
 interface ImportUploadClientProps {
   wallets?: { id: string; name: string; bankName?: string | null; accountNumber?: string | null }[];
   categories?: { id: string; name: string; type: string; color?: string; icon?: string | null }[];
+  defaultModel?: string;
 }
 
 const FORMAT_CHIPS = [
@@ -37,8 +38,13 @@ const FORMAT_CHIPS = [
   { ext: "CSV", icon: <FileText size={16} className="text-blue-500" />, desc: "CSV tùy ý", color: "border-blue-200 bg-blue-50/50" },
 ];
 
-export default function ImportUploadClient({ wallets = [], categories = [] }: ImportUploadClientProps) {
+export default function ImportUploadClient({
+  wallets = [],
+  categories = [],
+  defaultModel = "gemini-3.7-flash",
+}: ImportUploadClientProps) {
   const [state, setState] = useState<UploadState>({ phase: "idle" });
+  const [selectedModel, setSelectedModel] = useState<string>(defaultModel);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -65,6 +71,7 @@ export default function ImportUploadClient({ wallets = [], categories = [] }: Im
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("model", selectedModel);
 
     const progressInterval = setInterval(() => {
       setState((prev) => {
@@ -108,7 +115,7 @@ export default function ImportUploadClient({ wallets = [], categories = [] }: Im
       const msg = err instanceof Error ? err.message : "Không thể kết nối máy chủ.";
       setState({ phase: "error", message: msg });
     }
-  }, []);
+  }, [selectedModel]);
 
   // ── Drag & Drop ──
   const onDrop = useCallback(
@@ -179,6 +186,42 @@ export default function ImportUploadClient({ wallets = [], categories = [] }: Im
       {/* ── Drop zone ── */}
       {(state.phase === "idle" || state.phase === "error") && (
         <>
+          {/* ── Model Selector Bar ── */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white border border-border-strong/90 rounded-2xl shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-2xs">
+                <Brain size={17} />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-foreground flex items-center gap-2">
+                  <span>Model AI trích xuất:</span>
+                  <span className="text-[10px] font-medium bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                    ⚡ Hybrid (Text ➔ Vision)
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Tự động trích xuất text siêu tốc đối với sao kê số; tự động dùng Vision nếu là bản scan
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                id="ai-import-model-select"
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="bg-slate-50 border border-slate-300 hover:border-orange-400 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 cursor-pointer transition-colors shadow-2xs"
+              >
+                <option value="gemini-3.7-flash">gemini-3.7-flash (Mới nhất - Khuyến nghị)</option>
+                <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash (Nhanh & Thông minh)</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro (Chuyên sâu)</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash (Tốc độ cao)</option>
+                <option value="gemini-1.5-flash">gemini-1.5-flash (Rất ổn định, ít nghẽn)</option>
+                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+              </select>
+            </div>
+          </div>
           <div
             id="import-dropzone"
             className={`relative group cursor-pointer rounded-2xl border-2 border-dashed p-8 sm:p-12 text-center transition-all duration-200 ${
@@ -259,7 +302,7 @@ export default function ImportUploadClient({ wallets = [], categories = [] }: Im
           <p className="text-sm text-muted-foreground mb-1">📄 {state.filename}</p>
           <p className="text-xs text-muted-foreground mb-5">
             {state.phase === "analyzing"
-              ? "Gemini đang đọc và trích xuất giao dịch. Vui lòng chờ trong giây lát…"
+              ? `Gemini (${selectedModel}) đang đọc và trích xuất giao dịch. Vui lòng chờ trong giây lát…`
               : "Đang gửi file đến máy chủ…"}
           </p>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden max-w-sm mx-auto border border-slate-200/60">

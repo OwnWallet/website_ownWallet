@@ -63,10 +63,10 @@ interface Props {
 export function SettingsClient({ user, categories, initialAiConfig }: Props) {
   // AI Config Form
   const [aiConfig, setAiConfig] = useState(
-    initialAiConfig || { isConfigured: false, maskedKey: "", model: "gemini-3.6-flash" }
+    initialAiConfig || { isConfigured: false, maskedKey: "", model: "gemini-3.7-flash" }
   );
   const [apiKeyInput, setApiKeyInput] = useState("");
-  const [modelInput, setModelInput] = useState(aiConfig.model || "gemini-3.6-flash");
+  const [modelInput, setModelInput] = useState(aiConfig.model || "gemini-3.7-flash");
   const [showApiKey, setShowApiKey] = useState(false);
   const [isSavingAi, setIsSavingAi] = useState(false);
   const [isTestingAi, setIsTestingAi] = useState(false);
@@ -115,7 +115,7 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
     setAiTestResult(null);
     setAiSaveError(null);
 
-    const res = await testAiApiKey(apiKeyInput.trim() || undefined);
+    const res = await testAiApiKey(apiKeyInput.trim() || undefined, modelInput.trim() || undefined);
     setIsTestingAi(false);
 
     if (res?.success) {
@@ -490,8 +490,12 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
                   onChange={(e) => setModelInput(e.target.value)}
                   className="w-full bg-elevated border border-border-strong rounded-lg px-2.5 py-2 text-xs outline-none focus:border-primary text-foreground cursor-pointer"
                 >
-                  <option value="gemini-3.6-flash">gemini-3.6-flash (Khuyến nghị 2026)</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                  <option value="gemini-3.7-flash">gemini-3.7-flash (Mới nhất - Khuyến nghị)</option>
+                  <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+                  <option value="gemini-2.5-flash">gemini-2.5-flash (Nhanh & Thông minh)</option>
+                  <option value="gemini-2.5-pro">gemini-2.5-pro (Chuyên sâu & Suy luận)</option>
+                  <option value="gemini-2.0-flash">gemini-2.0-flash (Tốc độ cao)</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash (Rất ổn định, ít khi quá tải)</option>
                   <option value="gemini-1.5-pro">gemini-1.5-pro</option>
                 </select>
               </div>

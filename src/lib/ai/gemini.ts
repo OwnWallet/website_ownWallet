@@ -33,6 +33,12 @@ export async function getGeminiModel(customModel?: string) {
   }
 
   const modelName =
-    customModel ?? process.env.GEMINI_MODEL ?? (await getSystemSetting("GEMINI_MODEL", "gemini-3.6-flash"));
-  return getGeminiClient().getGenerativeModel({ model: modelName });
+    customModel ?? process.env.GEMINI_MODEL ?? (await getSystemSetting("GEMINI_MODEL", "gemini-3.7-flash"));
+  return getGeminiClient().getGenerativeModel({
+    model: modelName,
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 8192,
+    },
+  });
 }
