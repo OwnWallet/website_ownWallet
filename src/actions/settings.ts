@@ -122,7 +122,7 @@ export async function deleteCategory(id: string) {
 export async function getAiConfig() {
   await getUserId();
   const apiKey = (await getSystemSetting("GEMINI_API_KEY", process.env.GEMINI_API_KEY || "")).trim();
-  const model = (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.6-flash")).trim();
+  const model = (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.7-flash")).trim();
   const isConfigured = Boolean(apiKey && apiKey.length > 10);
 
   let maskedKey = "";
@@ -144,7 +144,7 @@ export async function getAiConfig() {
 export async function updateAiApiKey(formData: FormData) {
   await getUserId();
   const rawApiKey = (formData.get("apiKey") as string)?.trim() || "";
-  const rawModel = ((formData.get("model") as string)?.trim()) || "gemini-3.6-flash";
+  const rawModel = ((formData.get("model") as string)?.trim()) || "gemini-3.7-flash";
 
   if (!rawApiKey) {
     return { error: "API Key không được để trống" };
@@ -215,7 +215,7 @@ export async function updateAiApiKey(formData: FormData) {
   }
 }
 
-export async function testAiApiKey(apiKeyToTest?: string) {
+export async function testAiApiKey(apiKeyToTest?: string, modelToTest?: string) {
   await getUserId();
   const key =
     apiKeyToTest?.trim() ||
@@ -224,10 +224,12 @@ export async function testAiApiKey(apiKeyToTest?: string) {
     return { success: false, error: "Chưa nhập API Key để kiểm tra." };
   }
 
+  const modelName =
+    modelToTest?.trim() ||
+    (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.7-flash")).trim();
+
   try {
     const ai = new GoogleGenerativeAI(key);
-    const modelName =
-      (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.6-flash")).trim();
     const model = ai.getGenerativeModel({ model: modelName });
     const result = await model.generateContent("Ping. Trả lời đúng một từ: PONG");
     const text = result.response.text();
@@ -240,8 +242,20 @@ export async function testAiApiKey(apiKeyToTest?: string) {
     let msg = err?.message || "Không thể kết nối tới Google Gemini";
     if (msg.includes("API_KEY_INVALID")) {
       msg = "API Key không hợp lệ. Vui lòng kiểm tra lại trên Google AI Studio.";
+    } else if (
+      msg.includes("503") ||
+      msg.toLowerCase().includes("high demand") ||
+      msg.toLowerCase().includes("unavailable")
+    ) {
+      msg = `Máy chủ Google cho model ${modelName} đang quá tải (Lỗi 503 Service Unavailable). Vui lòng thử lại sau giây lát hoặc chọn model khác (ví dụ: gemini-3.7-flash, gemini-2.5-flash hoặc gemini-1.5-flash).`;
+    } else if (
+      msg.includes("429") ||
+      msg.toLowerCase().includes("resource exhausted") ||
+      msg.toLowerCase().includes("quota")
+    ) {
+      msg = `Tài khoản của bạn đã đạt hạn ngạch lượt yêu cầu (Lỗi 429 Rate Limit / Quota Exceeded). Vui lòng đợi một lát hoặc đổi sang model khác.`;
     } else if (msg.includes("404")) {
-      msg = "Model không tồn tại hoặc đã bị ngừng hỗ trợ.";
+      msg = `Model "${modelName}" không tồn tại hoặc tài khoản chưa có quyền truy cập.`;
     }
     return { success: false, error: msg };
   }

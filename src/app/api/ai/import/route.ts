@@ -29,6 +29,8 @@ export async function POST(request: NextRequest) {
   }
 
   const file = formData.get("file") as File | null;
+  const requestedModel = (formData.get("model") as string)?.trim() || undefined;
+
   if (!file) {
     return NextResponse.json(
       { error: "Không tìm thấy file trong request." },
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   // ── Gọi AI ──
   try {
-    const result = await parseDocument(buffer, file.name, categoryNames);
+    const result = await parseDocument(buffer, file.name, categoryNames, requestedModel);
 
     // ── Đối chiếu với database để phát hiện trùng lặp ──
     const reconciledTransactions = await reconcileTransactionsWithDb(
@@ -69,8 +71,25 @@ export async function POST(request: NextRequest) {
       duplicateCount,
     });
   } catch (err: unknown) {
-    const message =
+    let message =
       err instanceof Error ? err.message : "Lỗi không xác định từ AI.";
+
+    if (
+      message.includes("503") ||
+      message.toLowerCase().includes("high demand") ||
+      message.toLowerCase().includes("service unavailable")
+    ) {
+      message =
+        "Máy chủ Google Gemini đang quá tải toàn cầu (Lỗi 503). Vui lòng thử lại sau giây lát hoặc đổi sang model khác (như gemini-3.7-flash, gemini-2.5-flash hoặc gemini-1.5-flash) trong Cài đặt.";
+    } else if (
+      message.includes("429") ||
+      message.toLowerCase().includes("resource exhausted") ||
+      message.toLowerCase().includes("quota")
+    ) {
+      message =
+        "Tài khoản Google Gemini đã hết hạn ngạch yêu cầu trong ngày (Lỗi 429 Quota Exceeded). Vui lòng đợi Google làm mới hạn ngạch hoặc nâng cấp tài khoản.";
+    }
+
     return NextResponse.json({ error: message }, { status: 422 });
   }
 }

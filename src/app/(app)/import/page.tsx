@@ -3,6 +3,7 @@ import ImportUploadClient from "./ImportUploadClient";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { serializeData } from "@/lib/utils";
+import { getSystemSetting } from "@/lib/system-settings";
 import { Sparkles } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -14,9 +15,11 @@ export default async function ImportPage() {
   const session = await auth();
   let wallets: any[] = [];
   let categories: any[] = [];
+  let defaultModel = "gemini-3.7-flash";
+
   if (session?.user?.id) {
     try {
-      const [rawWallets, rawCategories] = await Promise.all([
+      const [rawWallets, rawCategories, settingModel] = await Promise.all([
         db.orm.public.Wallet
           .where((w) => w.userId.eq(session.user.id))
           .orderBy((w) => w.createdAt.asc())
@@ -25,9 +28,11 @@ export default async function ImportPage() {
           .where((c) => c.userId.eq(session.user.id))
           .orderBy((c) => c.name.asc())
           .all(),
+        getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.7-flash"),
       ]);
       wallets = serializeData(rawWallets);
       categories = serializeData(rawCategories);
+      defaultModel = settingModel.trim() || "gemini-3.7-flash";
     } catch (err) {
       console.error("Failed to load wallets or categories for import:", err);
     }
@@ -52,7 +57,11 @@ export default async function ImportPage() {
         </div>
       </div>
 
-      <ImportUploadClient wallets={wallets} categories={categories} />
+      <ImportUploadClient
+        wallets={wallets}
+        categories={categories}
+        defaultModel={defaultModel}
+      />
     </div>
   );
 }
