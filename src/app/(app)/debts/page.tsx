@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { formatCurrency, serializeData } from "@/lib/utils";
 import { DebtActions } from "./debt-actions";
 import { DebtListClient } from "./debt-list-client";
+import { DebtSyncModal } from "./debt-sync-modal";
 import { HandCoins, TrendingDown, TrendingUp } from "lucide-react";
 
 
@@ -46,7 +47,7 @@ export default async function DebtsPage() {
   return (
     <div className="space-y-6 animate-fade-in w-full">
       {/* Page Header */}
-      <div className="page-header">
+      <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-sm">
             <HandCoins size={20} />
@@ -56,6 +57,7 @@ export default async function DebtsPage() {
             <p className="page-header-subtitle">Theo dõi các khoản vay và cho vay</p>
           </div>
         </div>
+        <DebtSyncModal />
       </div>
 
       {/* Overview Cards */}

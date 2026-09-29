@@ -6,6 +6,7 @@ import { createDebt, recordPayment, mergeDebt } from "@/actions/debts";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
+import { DebtSyncModal } from "./debt-sync-modal";
 
 const emptySubscribe = () => () => {};
 function useMounted() {
@@ -260,13 +261,16 @@ export function DebtActions({
   return (
     <div className="mt-8">
       {!isOpen ? (
-        <button
-          onClick={() => setIsOpen(true)}
-          className="px-4 py-2.5 rounded-xl font-semibold transition-colors cursor-pointer shadow-sm hover:opacity-95"
-          style={{ backgroundColor: "var(--primary)", color: "var(--primary-foreground)" }}
-        >
-          + Thêm khoản nợ mới
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setIsOpen(true)}
+            className="px-4 py-2.5 rounded-xl font-semibold transition-colors cursor-pointer shadow-sm hover:opacity-95"
+            style={{ backgroundColor: "var(--primary)", color: "var(--primary-foreground)" }}
+          >
+            + Thêm khoản nợ mới
+          </button>
+          <DebtSyncModal />
+        </div>
       ) : (
         <div
           className="card bg-card border border-border shadow-md rounded-2xl p-5 sm:p-6 animate-fade-in"

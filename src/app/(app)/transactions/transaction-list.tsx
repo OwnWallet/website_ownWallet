@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { WalletBadge } from "@/components/ui/wallet-badge";
 import { EvidenceModal } from "@/components/ui/evidence-modal";
+import { isDebtCategory, extractDebtPerson } from "@/lib/debt-sync";
 
 interface Category {
  id: string;
@@ -708,6 +709,34 @@ export function TransactionList({
                           {tx.category?.name}
                         </span>
 
+                        {/* Debt Person Badge */}
+                        {(() => {
+                          const isDebt = isDebtCategory(tx.category);
+                          const { person } = extractDebtPerson(tx.note || tx.description);
+                          const isSynced = (tx.note || tx.description)?.includes("[Đã vào sổ nợ]");
+                          if (!isDebt && !person) return null;
+                          return (
+                            <>
+                              {person && (
+                                <>
+                                  <span>•</span>
+                                  <span className="inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full text-[11px] bg-amber-500/10 text-amber-600 border border-amber-500/25">
+                                    👤 {person}
+                                  </span>
+                                </>
+                              )}
+                              {isSynced && (
+                                <>
+                                  <span>•</span>
+                                  <span className="inline-flex items-center gap-1 font-medium px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                    📖 Đã vào sổ nợ
+                                  </span>
+                                </>
+                              )}
+                            </>
+                          );
+                        })()}
+
                         {/* Wallet Badge */}
                         {tx.wallet && (
                           <>
@@ -864,6 +893,26 @@ export function TransactionList({
             >
               {tx.category?.name}
             </span>
+            {(() => {
+              const isDebt = isDebtCategory(tx.category);
+              const { person } = extractDebtPerson(tx.note || tx.description);
+              const isSynced = (tx.note || tx.description)?.includes("[Đã vào sổ nợ]");
+              if (!isDebt && !person) return null;
+              return (
+                <>
+                  {person && (
+                    <span className="inline-block text-[11px] px-2 py-0.5 rounded-full font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/25 truncate max-w-[140px]">
+                      👤 {person}
+                    </span>
+                  )}
+                  {isSynced && (
+                    <span className="inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                      📖 Đã vào sổ nợ
+                    </span>
+                  )}
+                </>
+              );
+            })()}
             {tx.wallet && (
               <WalletBadge
                 wallet={tx.wallet}

@@ -12,6 +12,8 @@ export const TransactionSchema = z.object({
   goalId: z.string().optional().nullable(),
   walletId: z.string().optional().nullable(),
   evidenceUrl: z.string().optional().nullable(),
+  debtPerson: z.string().max(100).optional().nullable(),
+  syncToDebt: z.coerce.boolean().optional().nullable(),
 });
 
 export type TransactionInput = z.infer<typeof TransactionSchema>;

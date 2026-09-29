@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { TransactionSchema } from "@/schemas/transaction";
-import { toInstant } from "@/lib/utils";
+import { toInstant, formatDate, formatCurrency } from "@/lib/utils";
+import { isDebtCategory, getDebtDirection, formatDebtNote, buildSyncTag } from "@/lib/debt-sync";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -22,12 +23,21 @@ export async function createTransaction(formData: FormData) {
   }
 
   const data = parsed.data;
-  const note = data.note || data.description || null;
+  let note = data.note || data.description || null;
 
   // Xác thực quyền sở hữu danh mục
   const category = await db.orm.public.Category.where({ id: data.categoryId, userId }).first();
   if (!category) {
     return { error: { categoryId: ["Danh mục không tồn tại hoặc không thuộc quyền sở hữu"] } };
+  }
+
+  // Xử lý người sở hữu khoản nợ nếu là danh mục Vay / Cho vay
+  const debtPerson = (data.debtPerson || raw.debtPerson)?.toString()?.trim() || "";
+  const syncToDebt =
+    data.syncToDebt === true || raw.syncToDebt === "true" || raw.syncToDebt === "on";
+
+  if (isDebtCategory(category) && debtPerson) {
+    note = formatDebtNote(debtPerson, note);
   }
 
   // Xác thực quyền sở hữu ví (nếu có chọn ví)
@@ -47,7 +57,7 @@ export async function createTransaction(formData: FormData) {
   }
 
   await db.transaction(async (tx: any) => {
-    await tx.orm.public.Transaction.create({
+    const createdTx = await tx.orm.public.Transaction.create({
       amount: String(data.amount),
       type: data.type,
       categoryId: data.categoryId,
@@ -68,12 +78,67 @@ export async function createTransaction(formData: FormData) {
           .update({ savedAmount: String(Number(goal.savedAmount) + Number(data.amount)) });
       }
     }
+
+    // Tự động đồng bộ sang Sổ nợ nếu được bật
+    if (isDebtCategory(category) && syncToDebt && debtPerson) {
+      const direction = getDebtDirection(category, data.type);
+      const person = debtPerson;
+      const allDebts = await tx.orm.public.Debt
+        .where((d: any) => d.userId.eq(userId))
+        .all();
+      const matchedDebt = allDebts.find(
+        (d: any) =>
+          d.direction === direction &&
+          d.status !== "PAID" &&
+          d.person?.trim().toLowerCase() === person.toLowerCase()
+      );
+
+      const txDateStr = formatDate(data.recordedAt);
+      // BUG-1: Dùng tag chuẩn, ghi vào Debt.note (KHÔNG ghi vào Transaction.note)
+      const syncTag = buildSyncTag(createdTx.id);
+
+      if (matchedDebt) {
+        const oldAmount = Number(matchedDebt.amount);
+        const newAmount = oldAmount + Number(data.amount);
+        const paid = Number(matchedDebt.paidAmount || 0);
+        const newStatus = paid >= newAmount ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
+        const logNote = `Gộp thêm từ GD ngày ${txDateStr}: +${formatCurrency(data.amount)} ${syncTag}`;
+        const updatedNote = matchedDebt.note ? `${matchedDebt.note} | ${logNote}` : logNote;
+
+        await tx.orm.public.Debt
+          .where({ id: matchedDebt.id, userId })
+          .update({
+            amount: String(newAmount),
+            status: newStatus,
+            note: updatedNote,
+          });
+      } else {
+        const initNote = `Tạo từ GD ngày ${txDateStr} ${syncTag}`;
+        await tx.orm.public.Debt.create({
+          person,
+          amount: String(data.amount),
+          paidAmount: "0",
+          direction,
+          status: "PENDING",
+          priority: "NORMAL",
+          note: initNote,
+          userId,
+        });
+      }
+      // Ghi display hint vào Transaction.note để transaction-list hiển thị badge "Đã vào sổ nợ"
+      // (Chỉ dùng cho UI display — nguồn sự thật cho duplicate check là Debt.note chứa tag chuẩn)
+      const markedNote = note ? `${note} [Đã vào sổ nợ]` : `[Đã vào sổ nợ]`;
+      await tx.orm.public.Transaction
+        .where({ id: createdTx.id, userId })
+        .update({ note: markedNote });
+    }
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
   revalidatePath("/wallets");
   revalidatePath("/reports");
+  revalidatePath("/debts");
   return { success: true };
 }
 
@@ -87,7 +152,7 @@ export async function updateTransaction(id: string, formData: FormData) {
   }
 
   const data = parsed.data;
-  const note = data.note || data.description || null;
+  let note = data.note || data.description || null;
 
   // Kiểm tra giao dịch tồn tại và thuộc quyền sở hữu của user
   const existingTx = await db.orm.public.Transaction.where({ id, userId }).first();
@@ -99,6 +164,11 @@ export async function updateTransaction(id: string, formData: FormData) {
   const category = await db.orm.public.Category.where({ id: data.categoryId, userId }).first();
   if (!category) {
     return { error: { categoryId: ["Danh mục không tồn tại hoặc không thuộc quyền sở hữu"] } };
+  }
+
+  const debtPerson = (data.debtPerson || raw.debtPerson)?.toString()?.trim() || "";
+  if (isDebtCategory(category) && debtPerson) {
+    note = formatDebtNote(debtPerson, note);
   }
 
   // Xác thực quyền sở hữu ví (nếu có chọn ví)
@@ -134,6 +204,7 @@ export async function updateTransaction(id: string, formData: FormData) {
   revalidatePath("/transactions");
   revalidatePath("/wallets");
   revalidatePath("/reports");
+  revalidatePath("/debts");
   return { success: true };
 }
 
