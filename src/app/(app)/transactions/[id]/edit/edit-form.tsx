@@ -4,12 +4,13 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, Calendar } from "lucide-react";
+import { Loader2, ArrowLeft, Calendar, HandCoins } from "lucide-react";
 import { updateTransaction } from "@/actions/transactions";
 import { TransactionSchema, type TransactionInput } from "@/schemas/transaction";
 import { toDate } from "@/lib/utils";
 import { EvidenceUpload } from "@/components/ui/evidence-upload";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
+import { isDebtCategory, extractDebtPerson } from "@/lib/debt-sync";
 
 interface Props {
   transaction: {
@@ -45,6 +46,10 @@ export function EditTransactionForm({
     .toISOString()
     .slice(0, 16);
 
+  const { person: initialDebtPerson, cleanNote: initialCleanNote } = extractDebtPerson(
+    transaction.note || transaction.description
+  );
+
   const {
     register,
     handleSubmit,
@@ -58,17 +63,30 @@ export function EditTransactionForm({
       type: transaction.type,
       categoryId: transaction.categoryId,
       walletId: transaction.walletId || undefined,
-      description: transaction.note || transaction.description || "",
+      debtPerson: initialDebtPerson || undefined,
+      description: initialCleanNote || "",
       goalId: transaction.goalId || undefined,
       recordedAt: initialDate,
     },
   });
 
   const isLoading = isSubmitting || isNavigating;
+  const selectedCatId = watch("categoryId");
+  const selectedCat = categories.find((c) => c.id === selectedCatId);
+  const isDebt = isDebtCategory(selectedCat);
 
-  const filteredCats = categories.filter((c) =>
-    ["EXPENSE", "INCOME"].includes(c.type) ? c.type === txType : false
-  );
+  const filteredCats = categories.filter((c) => {
+    if (c.type === txType) return true;
+    if (c.type === "DEBT") {
+      const lower = c.name.toLowerCase();
+      if (txType === "INCOME") {
+        return !lower.includes("cho vay") && !lower.includes("cho mượn") && !lower.includes("nợ phải thu");
+      } else {
+        return !lower.includes("đi vay") && !lower.includes("nợ phải trả");
+      }
+    }
+    return false;
+  });
 
   async function onSubmit(data: TransactionInput) {
     const formData = new FormData();
@@ -76,6 +94,7 @@ export function EditTransactionForm({
     formData.append("type", data.type);
     if (data.walletId) formData.append("walletId", data.walletId);
     formData.append("categoryId", data.categoryId);
+    if (data.debtPerson) formData.append("debtPerson", data.debtPerson);
     if (data.description || data.note) {
       formData.append("note", (data.description || data.note)!);
       formData.append("description", (data.description || data.note)!);
@@ -288,6 +307,52 @@ export function EditTransactionForm({
               </p>
             )}
           </div>
+
+          {/* Trường thông tin đối tác / người sở hữu khi chọn danh mục Vay / Cho vay */}
+          {isDebt && (
+            <div
+              className="p-4 rounded-xl border space-y-3 animate-fade-in"
+              style={{
+                backgroundColor: "color-mix(in srgb, var(--color-debt, #f59e0b) 8%, var(--background-card))",
+                borderColor: "color-mix(in srgb, var(--color-debt, #f59e0b) 30%, transparent)",
+              }}
+            >
+              <div className="flex items-center gap-2 pb-2 border-b border-border/60">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0">
+                  <HandCoins size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-foreground">
+                    Thông tin liên kết Sổ nợ
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground">
+                    Ghi nhận đối tác để quản lý và đối chiếu trong tab Sổ nợ
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">
+                  Người sở hữu / Đối tác (Người vay hoặc cho vay) *
+                </label>
+                <input
+                  type="text"
+                  {...register("debtPerson")}
+                  required={isDebt}
+                  placeholder="VD: Nguyễn Văn A, Anh Tuấn..."
+                  style={{
+                    ...inputStyle,
+                    borderColor: errors.debtPerson ? "var(--color-danger)" : "var(--border-strong)",
+                  }}
+                />
+                {errors.debtPerson && (
+                  <p style={{ fontSize: "12px", color: "var(--color-danger)", marginTop: "3px" }}>
+                    {errors.debtPerson.message}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Date/Time */}
           <div>
