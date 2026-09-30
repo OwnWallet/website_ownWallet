@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { formatCurrency, formatDate, calcPercent, toDate } from "@/lib/utils";
 import { deleteDebt } from "@/actions/debts";
 import { DebtActions } from "./debt-actions";
+import { DebtLogModal } from "./debt-log-modal";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -86,6 +87,7 @@ export function DebtCard({
             >
               {statusText}
             </span>
+            <DebtLogModal debtId={debt.id} debtPerson={debt.person} />
             <button
               type="button"
               onClick={() => setShowDeleteDialog(true)}

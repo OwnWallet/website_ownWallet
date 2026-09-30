@@ -12,6 +12,7 @@ export const DebtSchema = z.object({
 
 export const DebtPaymentSchema = z.object({
   paidAmount: z.coerce.number().positive("Số tiền phải lớn hơn 0"),
+  note: z.string().max(200).optional(),
 });
 
 export type DebtInput = z.infer<typeof DebtSchema>;

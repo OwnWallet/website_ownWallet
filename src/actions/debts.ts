@@ -24,12 +24,21 @@ export async function createDebt(formData: FormData) {
   const parsed = DebtSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await db.orm.public.Debt.create({
+  const debt = await db.orm.public.Debt.create({
     ...parsed.data,
     amount: String(parsed.data.amount),
     dueDate: parsed.data.dueDate ? toInstant(parsed.data.dueDate) : null,
     userId,
   });
+
+  // Ghi lịch sử: khởi tạo khoản nợ
+  await db.orm.public.DebtLog.create({
+    type: "INIT",
+    amount: String(parsed.data.amount),
+    note: parsed.data.note || null,
+    debtId: debt.id,
+  });
+
   revalidatePath("/debts");
   revalidatePath("/dashboard");
   return { success: true };
@@ -54,6 +63,14 @@ export async function recordPayment(id: string, formData: FormData) {
   await db.orm.public.Debt
     .where({ id, userId })
     .update({ paidAmount: String(newPaid), status: newStatus });
+
+  // Ghi lịch sử: ghi nhận thanh toán
+  await db.orm.public.DebtLog.create({
+    type: "PAYMENT",
+    amount: String(parsed.data.paidAmount),
+    note: parsed.data.note || null,
+    debtId: id,
+  });
 
   revalidatePath("/debts");
   revalidatePath("/dashboard");
@@ -125,6 +142,14 @@ export async function mergeDebt(debtId: string, additionalAmount: number, additi
       status: newStatus,
       note: updatedNote || null,
     });
+
+  // Ghi lịch sử: cộng dồn khoản nợ
+  await db.orm.public.DebtLog.create({
+    type: "TOPUP",
+    amount: String(additionalAmount),
+    note: additionalNote || null,
+    debtId,
+  });
 
   revalidatePath("/debts");
   revalidatePath("/dashboard");
@@ -388,6 +413,15 @@ export async function syncTransactionsToDebts(txIds: string[]) {
             note: updatedNote,
           });
 
+        // Ghi lịch sử: cộng dồn từ giao dịch
+        await tx.orm.public.DebtLog.create({
+          type: "TOPUP",
+          amount: String(amount),
+          note: `Đồng bộ từ GD ngày ${txDateStr}`,
+          txId: t.id,
+          debtId: match.id,
+        });
+
         // Cập nhật bản địa để các vòng lặp sau dùng đúng amount mới
         match.amount = newAmount;
         match.status = newStatus;
@@ -409,6 +443,15 @@ export async function syncTransactionsToDebts(txIds: string[]) {
           priority: "NORMAL",
           note: initNote,
           userId,
+        });
+
+        // Ghi lịch sử: khởi tạo từ giao dịch
+        await tx.orm.public.DebtLog.create({
+          type: "INIT",
+          amount: String(amount),
+          note: `Tạo từ GD ngày ${txDateStr}`,
+          txId: t.id,
+          debtId: newDebt.id,
         });
 
         currentDebts.push({
@@ -491,4 +534,22 @@ export async function unlinkTxFromDebts(txId: string) {
 
   revalidatePath("/debts");
   return { success: true, unlinkedCount };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Lấy lịch sử (DebtLog) của một khoản nợ
+// ─────────────────────────────────────────────────────────────────
+export async function getDebtLogs(debtId: string) {
+  const userId = await getUserId();
+
+  // Verify ownership
+  const debt = await db.orm.public.Debt.where({ id: debtId, userId }).first();
+  if (!debt) return { error: "Không tìm thấy khoản nợ" };
+
+  const rawLogs = await db.orm.public.DebtLog
+    .where((l) => l.debtId.eq(debtId))
+    .orderBy((l) => l.recordedAt.asc())
+    .all();
+
+  return { success: true, logs: serializeData(rawLogs) };
 }
