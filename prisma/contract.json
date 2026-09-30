@@ -16,6 +16,10 @@
       "model": "Debt",
       "namespace": "public"
     },
+    "DebtLog": {
+      "model": "DebtLog",
+      "namespace": "public"
+    },
     "Goal": {
       "model": "Goal",
       "namespace": "public"
@@ -80,6 +84,27 @@
               {
                 "name": "OWED",
                 "value": "OWED"
+              }
+            ]
+          },
+          "DebtLogType": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "INIT",
+                "value": "INIT"
+              },
+              {
+                "name": "TOPUP",
+                "value": "TOPUP"
+              },
+              {
+                "name": "PAYMENT",
+                "value": "PAYMENT"
+              },
+              {
+                "name": "NOTE",
+                "value": "NOTE"
               }
             ]
           },
@@ -473,6 +498,21 @@
               }
             },
             "relations": {
+              "logs": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "debtId"
+                  ]
+                },
+                "to": {
+                  "model": "DebtLog",
+                  "namespace": "public"
+                }
+              },
               "user": {
                 "cardinality": "N:1",
                 "on": {
@@ -530,6 +570,119 @@
               },
               "namespaceId": "public",
               "table": "Debt"
+            }
+          },
+          "DebtLog": {
+            "fields": {
+              "amount": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "debtId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "note": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "recordedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "txId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "type": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "DebtLogType",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              }
+            },
+            "relations": {
+              "debt": {
+                "cardinality": "N:1",
+                "on": {
+                  "localFields": [
+                    "debtId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Debt",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "amount": {
+                  "column": "amount"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "debtId": {
+                  "column": "debtId"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "note": {
+                  "column": "note"
+                },
+                "recordedAt": {
+                  "column": "recordedAt"
+                },
+                "txId": {
+                  "column": "txId"
+                },
+                "type": {
+                  "column": "type"
+                }
+              },
+              "namespaceId": "public",
+              "table": "DebtLog"
             }
           },
           "Goal": {
@@ -1861,6 +2014,115 @@
               },
               "uniques": []
             },
+            "DebtLog": {
+              "checks": [
+                {
+                  "expression": "\"type\" IN ('INIT', 'TOPUP', 'PAYMENT', 'NOTE')",
+                  "name": "DebtLog_type_check_be3c8d36",
+                  "prefix": "DebtLog_type_check"
+                }
+              ],
+              "columns": {
+                "amount": {
+                  "codecId": "pg/numeric@1",
+                  "nativeType": "numeric",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "debtId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "note": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
+                "recordedAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "txId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
+                "type": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "DebtLogType",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "debtId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "DebtLog"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Debt"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "debtId"
+                  ],
+                  "name": "DebtLog_debtId_idx_a05c3fb8",
+                  "prefix": "DebtLog_debtId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "debtId",
+                    "recordedAt"
+                  ],
+                  "name": "DebtLog_debtId_recordedAt_idx_490e8817",
+                  "prefix": "DebtLog_debtId_recordedAt_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "Goal": {
               "columns": {
                 "createdAt": {
@@ -2575,6 +2837,15 @@
                 "OWED"
               ]
             },
+            "DebtLogType": {
+              "kind": "valueSet",
+              "values": [
+                "INIT",
+                "TOPUP",
+                "PAYMENT",
+                "NOTE"
+              ]
+            },
             "DebtStatus": {
               "kind": "valueSet",
               "values": [
@@ -2603,10 +2874,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2390b50e165fbad23c3d47ae713e416dca562ed958253c0d63351f950b488c48"
+    "storageHash": "b1b5c9eef55653ce758903571359c888eddfd25a272c0e40562d8c258f0b94c3"
   },
   "execution": {
-    "executionHash": "5b45af12a04ed43a4f9ac0de55f25cabb9020fe7f82138bab5079eb90074b356",
+    "executionHash": "cef3df40b431133737229c94813c224bf1891b012f90b328104b6e27db514fb5",
     "mutations": {
       "defaults": [
         {
@@ -2655,6 +2926,17 @@
             "column": "updatedAt",
             "namespace": "public",
             "table": "Debt"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "id",
+            "namespace": "public",
+            "table": "DebtLog"
           }
         },
         {

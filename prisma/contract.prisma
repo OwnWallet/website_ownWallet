@@ -39,6 +39,14 @@ enum InvestAction {
   SELL = "SELL"
 }
 
+enum DebtLogType {
+  @@type("pg/text@1")
+  INIT    = "INIT"    // Khởi tạo khoản nợ
+  TOPUP   = "TOPUP"   // Cộng thêm vào nợ
+  PAYMENT = "PAYMENT" // Trả nợ (ghi nhận thanh toán)
+  NOTE    = "NOTE"    // Ghi chú thuần tuý
+}
+
 // ─────────────────────────────────────────
 // MODELS
 // ─────────────────────────────────────────
@@ -199,10 +207,28 @@ model Debt {
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs   DebtLog[]
 
   @@index([userId, status])
   @@index([userId, direction])
   @@map("Debt")
+}
+
+model DebtLog {
+  id         String      @id @default(cuid(2))
+  type       DebtLogType
+  amount     Decimal?    // Số tiền liên quan (TOPUP / PAYMENT)
+  note       String?     // Mô tả bổ sung
+  txId       String?     // ID Transaction liên kết (nếu có)
+  recordedAt DateTime    @default(now())
+  createdAt  DateTime    @default(now())
+
+  debtId String
+  debt   Debt   @relation(fields: [debtId], references: [id], onDelete: Cascade)
+
+  @@index([debtId])
+  @@index([debtId, recordedAt])
+  @@map("DebtLog")
 }
 
 model Goal {
