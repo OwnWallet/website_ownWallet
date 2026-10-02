@@ -14,6 +14,7 @@ import {
   BarChart3,
   Wallet,
   TrendingUp,
+  Banknote,
   HandCoins,
   Target,
   Settings,
@@ -28,6 +29,7 @@ import {
 
 export const NAV_ITEMS = [
   { href: "/dashboard",    label: "Tổng quan",      icon: LayoutDashboard },
+  { href: "/income",       label: "Dòng tiền",      icon: Banknote        },
   { href: "/transactions", label: "Giao dịch",      icon: ArrowLeftRight  },
   { href: "/wallets",      label: "Tài khoản",      icon: Landmark        },
   { href: "/import",       label: "AI Import",      icon: Sparkles        },

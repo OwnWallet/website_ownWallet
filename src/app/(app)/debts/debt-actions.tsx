@@ -6,7 +6,7 @@ import { createDebt, recordPayment, mergeDebt } from "@/actions/debts";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
-import { DebtSyncModal } from "./debt-sync-modal";
+import { encodeDebtMetadata, calculateDebtAmortization } from "@/lib/debt-schedule";
 
 const emptySubscribe = () => () => {};
 function useMounted() {
@@ -35,6 +35,25 @@ export function DebtActions({
   const [loading, setLoading] = useState(false);
   const [hasDueDate, setHasDueDate] = useState(false);
   const [paidAmountVal, setPaidAmountVal] = useState<number>(0);
+  const [addAmountVal, setAddAmountVal] = useState<number>(0);
+
+  // Cấu hình Lãi suất & Trả góp theo tháng
+  const [hasInterest, setHasInterest] = useState(false);
+  const [interestRate, setInterestRate] = useState<number>(12);
+  const [rateType, setRateType] = useState<"year" | "month">("year");
+  const [interestMethod, setInterestMethod] = useState<"annuity" | "linear">("annuity");
+  const [isMonthly, setIsMonthly] = useState(false);
+  const [termMonths, setTermMonths] = useState<number>(12);
+
+  const { monthlyPayment: calculatedMonthlyPayment, totalInterest: calculatedTotalInterest } =
+    calculateDebtAmortization(
+      addAmountVal,
+      hasInterest ? interestRate : 0,
+      rateType,
+      termMonths,
+      interestMethod
+    );
+
   const mounted = useMounted();
   const [duplicatePrompt, setDuplicatePrompt] = useState<{
     match: any;
@@ -85,7 +104,7 @@ export function DebtActions({
         {mounted && isOpen && typeof document !== "undefined" && createPortal(
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
         <div
-          className="bg-card border border-border shadow-2xl rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4 animate-scale-in"
+          className="bg-card border border-border shadow-2xl rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4 animate-scale-in max-h-[90vh] overflow-y-auto"
           role="dialog"
           aria-modal="true"
           aria-labelledby="record-payment-title"
@@ -225,6 +244,24 @@ export function DebtActions({
               </div>
             )}
 
+            {/* Ghi chú thanh toán */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Mô tả / Ghi chú thanh toán (Tùy chọn)
+              </label>
+              <input
+                type="text"
+                name="note"
+                disabled={isBusy}
+                placeholder={
+                  isOwe
+                    ? "VD: Chuyển khoản đợt 1 qua Techcombank, trả tiền mặt cà phê..."
+                    : "VD: Người vay chuyển khoản Momo, trả đợt tháng 10..."
+                }
+                className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm focus:outline-none border border-slate-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+              />
+            </div>
+
             {/* Nút hành động */}
             <div className="flex justify-end gap-2.5 pt-2 border-t border-border">
               <button
@@ -269,7 +306,6 @@ export function DebtActions({
           >
             + Thêm khoản nợ mới
           </button>
-          <DebtSyncModal />
         </div>
       ) : (
         <div
@@ -298,7 +334,7 @@ export function DebtActions({
 
               const person = fd.get("person")?.toString()?.trim() || "";
               const direction = (fd.get("direction")?.toString() || "OWE") as "OWE" | "OWED";
-              const amount = Number(fd.get("amount") || 0);
+              const amount = Number(fd.get("amount") || addAmountVal || 0);
 
               if (!person) {
                 toast.warning("Vui lòng nhập tên người / đối tác");
@@ -309,6 +345,19 @@ export function DebtActions({
                 toast.warning("Vui lòng nhập số tiền hợp lệ lớn hơn 0");
                 return;
               }
+
+              // Đóng gói cấu hình lãi suất và kỳ hạn vào note
+              const rawNote = fd.get("note")?.toString()?.trim() || "";
+              const encodedNote = encodeDebtMetadata(rawNote, {
+                hasInterest,
+                rate: hasInterest ? interestRate : 0,
+                rateType,
+                isMonthly,
+                months: isMonthly ? termMonths : undefined,
+                method: interestMethod,
+                startDate: hasDueDate ? (fd.get("dueDate")?.toString() || undefined) : undefined,
+              });
+              fd.set("note", encodedNote);
 
               // Kiểm tra xem đã có khoản nợ/vay cùng tên và cùng chiều chưa
               const match = existingDebts.find(
@@ -404,11 +453,12 @@ export function DebtActions({
                 disabled={isBusy}
                 placeholder="VD: 1,000,000"
                 showQuickButtons={true}
+                onChangeValue={(val) => setAddAmountVal(val)}
               />
             </div>
 
             {/* Có thời hạn hay không */}
-            <div className="md:col-span-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+            <div className="md:col-span-2 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-sm font-semibold text-foreground block">
@@ -446,15 +496,136 @@ export function DebtActions({
               )}
             </div>
 
+            {/* Cấu hình Lãi suất & Trả góp theo tháng */}
+            <div className="md:col-span-2 p-3.5 rounded-xl bg-orange-50/50 dark:bg-orange-950/20 border border-orange-200/80 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <span>🧮</span>
+                    <span>Tính lãi suất & Lịch trả theo từng tháng</span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Áp dụng tính tiền lãi và lập lịch trả nợ/thu nợ định kỳ
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-orange-200/50">
+                {/* Switch Lãi suất */}
+                <div className="p-3 bg-card border border-border rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground">Có tính lãi suất?</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hasInterest}
+                        disabled={isBusy}
+                        onChange={(e) => setHasInterest(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+                    </label>
+                  </div>
+
+                  {hasInterest && (
+                    <div className="space-y-2 pt-1 animate-fade-in">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          value={interestRate}
+                          onChange={(e) => setInterestRate(Number(e.target.value) || 0)}
+                          placeholder="12"
+                          className="w-24 bg-background rounded-lg px-2.5 py-1.5 text-sm border border-slate-200 focus:border-orange-500 focus:outline-none"
+                        />
+                        <select
+                          value={rateType}
+                          onChange={(e) => setRateType(e.target.value as any)}
+                          className="bg-background rounded-lg px-2.5 py-1.5 text-xs border border-slate-200 focus:border-orange-500 focus:outline-none"
+                        >
+                          <option value="year">%/năm</option>
+                          <option value="month">%/tháng</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-muted-foreground mb-1">Phương thức tính:</label>
+                        <select
+                          value={interestMethod}
+                          onChange={(e) => setInterestMethod(e.target.value as any)}
+                          className="w-full bg-background rounded-lg px-2.5 py-1.5 text-xs border border-slate-200 focus:border-orange-500 focus:outline-none"
+                        >
+                          <option value="annuity">Trả góp đều hàng tháng (Annuity)</option>
+                          <option value="linear">Dư nợ giảm dần (Linear)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Switch Trả theo từng tháng */}
+                <div className="p-3 bg-card border border-border rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground">Trả theo từng tháng?</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isMonthly}
+                        disabled={isBusy}
+                        onChange={(e) => setIsMonthly(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+                    </label>
+                  </div>
+
+                  {isMonthly && (
+                    <div className="space-y-2 pt-1 animate-fade-in">
+                      <div>
+                        <label className="block text-[11px] text-muted-foreground mb-1">Kỳ hạn (Số tháng):</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="360"
+                            value={termMonths}
+                            onChange={(e) => setTermMonths(Math.max(1, Number(e.target.value) || 12))}
+                            className="w-24 bg-background rounded-lg px-2.5 py-1.5 text-sm border border-slate-200 focus:border-orange-500 focus:outline-none"
+                          />
+                          <span className="text-xs text-muted-foreground">tháng</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Dự toán nhanh nếu có bật */}
+              {(hasInterest || isMonthly) && addAmountVal > 0 && (
+                <div className="p-2.5 rounded-lg bg-orange-100/70 dark:bg-orange-900/30 text-xs text-orange-950 dark:text-orange-200 flex flex-wrap items-center justify-between gap-2 animate-fade-in">
+                  <span>
+                    💡 Dự kiến trả: <strong>{formatCurrency(calculatedMonthlyPayment)}</strong> /tháng
+                  </span>
+                  {hasInterest && (
+                    <span>
+                      Tổng lãi dự kiến: <strong>{formatCurrency(calculatedTotalInterest)}</strong>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Ghi chú (Tùy chọn)
+                Mô tả / Ghi chú mục đích (Tùy chọn)
               </label>
               <input
                 type="text"
                 name="note"
                 disabled={isBusy}
-                placeholder="Ghi chú thêm mục đích vay, lãi suất..."
+                placeholder="VD: Vay mua xe, mượn tiền kinh doanh, cho bạn bè vay..."
                 className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm focus:outline-none border border-slate-200 focus:border-orange-500"
               />
             </div>

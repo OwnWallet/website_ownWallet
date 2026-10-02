@@ -66,6 +66,7 @@ export const DEFAULT_CATEGORIES: {
 // ─────────────────────────────────────────
 export const NAV_ITEMS = [
   { href: "/dashboard",    label: "Tổng quan",   icon: "LayoutDashboard" },
+  { href: "/income",       label: "Dòng tiền",   icon: "Banknote"        },
   { href: "/transactions", label: "Giao dịch",   icon: "ArrowLeftRight"  },
   { href: "/import",       label: "AI Import",   icon: "Sparkles"        },
   { href: "/reports",      label: "Báo cáo",     icon: "BarChart3"       },

@@ -4,6 +4,7 @@ import { formatCurrency, serializeData } from "@/lib/utils";
 import { DebtActions } from "./debt-actions";
 import { DebtListClient } from "./debt-list-client";
 import { DebtSyncModal } from "./debt-sync-modal";
+import { DebtCalculatorModal } from "./debt-calculator-modal";
 import { HandCoins, TrendingDown, TrendingUp } from "lucide-react";
 
 
@@ -41,8 +42,12 @@ export default async function DebtsPage() {
   const owes = plainDebts.filter((d: any) => d.direction === "OWE");
   const oweds = plainDebts.filter((d: any) => d.direction === "OWED");
 
-  const totalOwe = owes.reduce((sum: number, d: any) => sum + Number(d.amount) - Number(d.paidAmount), 0);
-  const totalOwed = oweds.reduce((sum: number, d: any) => sum + Number(d.amount) - Number(d.paidAmount), 0);
+  // Chỉ đếm khoản chưa hoàn tất để hiển thị đúng số lượng
+  const openOwes = owes.filter((d: any) => d.status !== "PAID");
+  const openOweds = oweds.filter((d: any) => d.status !== "PAID");
+
+  const totalOwe = openOwes.reduce((sum: number, d: any) => sum + Number(d.amount) - Number(d.paidAmount), 0);
+  const totalOwed = openOweds.reduce((sum: number, d: any) => sum + Number(d.amount) - Number(d.paidAmount), 0);
 
   return (
     <div className="space-y-6 animate-fade-in w-full">
@@ -57,7 +62,10 @@ export default async function DebtsPage() {
             <p className="page-header-subtitle">Theo dõi các khoản vay và cho vay</p>
           </div>
         </div>
-        <DebtSyncModal />
+        <div className="flex items-center gap-2">
+          <DebtCalculatorModal />
+          <DebtSyncModal />
+        </div>
       </div>
 
       {/* Overview Cards */}
@@ -70,7 +78,7 @@ export default async function DebtsPage() {
             <span className="kpi-card-label text-rose-700">Tổng nợ phải trả</span>
           </div>
           <p className="kpi-card-value text-rose-600">{formatCurrency(totalOwe)}</p>
-          <p className="kpi-card-sub">{owes.length} khoản nợ đang mở</p>
+          <p className="kpi-card-sub">{openOwes.length} khoản nợ đang mở</p>
         </div>
 
         <div className="kpi-card" style={{ "--kpi-accent": "#059669" } as React.CSSProperties}>
@@ -81,7 +89,7 @@ export default async function DebtsPage() {
             <span className="kpi-card-label text-emerald-700">Tổng nợ phải thu</span>
           </div>
           <p className="kpi-card-value text-emerald-600">{formatCurrency(totalOwed)}</p>
-          <p className="kpi-card-sub">{oweds.length} khoản đang chờ thu</p>
+          <p className="kpi-card-sub">{openOweds.length} khoản đang chờ thu</p>
         </div>
       </div>
 

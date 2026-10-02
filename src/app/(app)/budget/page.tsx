@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { formatCurrency, calcPercent, formatMetric, getFilterDateRange, toInstant, toDate } from "@/lib/utils";
 import { upsertBudget } from "@/actions/budgets";
 import { BudgetListClient } from "./budget-list-client";
+import { BudgetRolloverForm } from "./budget-rollover-form";
 import { PiggyBank, TrendingDown, AlertCircle, Wallet, Plus } from "lucide-react";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
@@ -165,6 +166,14 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
         isMonthAll={filterDate.month === "ALL"}
         filterLabel={filterDate.label}
       />
+
+      {/* Budget Rollover */}
+      {filterDate.month !== "ALL" && (
+        <BudgetRolloverForm
+          currentMonth={typeof filterDate.month === "number" ? filterDate.month : new Date().getMonth() + 1}
+          currentYear={filterDate.year}
+        />
+      )}
 
       {/* Add / Upsert Budget Form */}
       <div className="card bg-gradient-to-br from-orange-50/40 to-white border-orange-200/60">

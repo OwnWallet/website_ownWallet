@@ -8,6 +8,9 @@ import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Plus, ArrowUpRight, Ar
 import Link from "next/link";
 import { DashboardChart } from "@/components/ui/DashboardChart";
 import { Card } from "@/components/ui/card";
+import { SpendingPieChart } from "@/components/dashboard/SpendingPieChart";
+import { CashFlowTrendChart } from "@/components/dashboard/CashFlowTrendChart";
+import { FinancialHealthScore } from "@/components/dashboard/FinancialHealthScore";
 
 async function getDashboardData(
   userId: string,
@@ -49,7 +52,14 @@ async function getDashboardData(
       }
     }
 
-    const [monthTransactions, investments, debts, budgets, goals, recentTx, realWallets] = await Promise.all([
+    // 6-month historical data for cash flow trend
+    const sixMonthsAgo = new Date(from);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+    const sixMonthsAgoInstant = toInstant(sixMonthsAgo);
+
+    const [monthTransactions, investments, debts, allDebts, budgets, goals, recentTx, realWallets, historicalTx, categoryData] = await Promise.all([
       txQuery
         .orderBy((t) => t.recordedAt.asc())
         .all(),
@@ -61,6 +71,11 @@ async function getDashboardData(
         .where((t) => t.status.neq("PAID"))
         .orderBy((t) => t.dueDate.asc())
         .limit(5)
+        .all(),
+      // All active debts for health score
+      db.orm.public.Debt
+        .where((t) => t.userId.eq(userId))
+        .where((t) => t.status.neq("PAID"))
         .all(),
       budgetQuery
         .include("category", (cat) => cat)
@@ -77,6 +92,17 @@ async function getDashboardData(
         .limit(8)
         .all(),
       getWallets(),
+      // 6-month historical transactions for trend chart
+      db.orm.public.Transaction
+        .where((t) => t.userId.eq(userId))
+        .where((t) => t.recordedAt.gte(sixMonthsAgoInstant))
+        .where((t) => t.recordedAt.lte(toInstantVal))
+        .orderBy((t) => t.recordedAt.asc())
+        .all(),
+      // Transactions with category for spending pie
+      txQuery
+        .include("category", (cat) => cat)
+        .all(),
     ]);
 
     let income = 0;
@@ -100,10 +126,72 @@ async function getDashboardData(
       return sum;
     }, 0);
 
+    const totalInvestmentValue = investments.reduce((sum: number, inv: any) => {
+      const price = inv.currentPrice ?? inv.buyPrice;
+      return sum + Number(price) * Number(inv.quantity);
+    }, 0);
+
     const budgetsWithSpend = budgets.map((b: any) => ({
       ...b,
       limitAmount: Number(b.limitAmount),
       spent: spentMap.get(b.categoryId) ?? 0,
+    }));
+
+    // Spending by category for pie chart
+    const categorySpendMap = new Map<string, { name: string; color: string; icon: string; value: number }>();
+    for (const tx of categoryData as any[]) {
+      if (tx.type !== "EXPENSE") continue;
+      const cat = tx.category;
+      const key = cat?.id ?? "__none__";
+      const existing = categorySpendMap.get(key);
+      if (existing) {
+        existing.value += Number(tx.amount);
+      } else {
+        categorySpendMap.set(key, {
+          name: cat?.name ?? "Khác",
+          color: cat?.color ?? "#64748b",
+          icon: cat?.icon ?? "📦",
+          value: Number(tx.amount),
+        });
+      }
+    }
+    const spendingByCategory = Array.from(categorySpendMap.values())
+      .sort((a, b) => b.value - a.value);
+
+    // 6-month trend
+    const monthlyMap = new Map<string, { month: string; income: number; expense: number }>();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(from);
+      d.setMonth(d.getMonth() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = `T${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`;
+      monthlyMap.set(key, { month: label, income: 0, expense: 0 });
+    }
+    for (const tx of historicalTx as any[]) {
+      const d = toDate(tx.recordedAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const entry = monthlyMap.get(key);
+      if (!entry) continue;
+      const amt = Number(tx.amount);
+      if (tx.type === "INCOME") entry.income += amt;
+      else if (tx.type === "EXPENSE") entry.expense += amt;
+    }
+    const cashFlowTrend = Array.from(monthlyMap.values());
+
+    // Total outstanding debt
+    const totalOutstandingDebt = (allDebts as any[]).reduce((sum, d) => {
+      return sum + Math.max(0, Number(d.amount) - Number(d.paidAmount));
+    }, 0);
+
+    // Total wallet balance
+    const totalWalletBalance = (realWallets as any[]).reduce((sum, w) => {
+      return sum + (Number(w.currentBalance ?? w.balance ?? 0));
+    }, 0);
+
+    // Budget health for score
+    const budgetHealth = budgetsWithSpend.map((b: any) => ({
+      spent: b.spent,
+      limitAmount: b.limitAmount,
     }));
 
     const plainMonthTransactions = monthTransactions.map((t: any) => ({
@@ -148,6 +236,12 @@ async function getDashboardData(
       recentTx: serializeData(plainRecentTx),
       monthTransactions: serializeData(plainMonthTransactions),
       wallets,
+      spendingByCategory,
+      cashFlowTrend,
+      totalOutstandingDebt,
+      totalWalletBalance,
+      totalInvestmentValue,
+      budgetHealth,
     };
   } catch (error) {
     console.error("Failed to load dashboard data:", error);
@@ -161,6 +255,12 @@ async function getDashboardData(
       recentTx: [],
       monthTransactions: [],
       wallets: [],
+      spendingByCategory: [],
+      cashFlowTrend: [],
+      totalOutstandingDebt: 0,
+      totalWalletBalance: 0,
+      totalInvestmentValue: 0,
+      budgetHealth: [],
     };
   }
 }
@@ -183,15 +283,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const savedCookieWallet = cookieStore.get("ownwallet_selected_wallet")?.value;
   const selectedWalletId = resolvedSearchParams.wallet || savedCookieWallet || "ALL";
 
-  const { income, expense, investPnL, debts, budgetsWithSpend, goals, recentTx, monthTransactions, wallets } =
-    await getDashboardData(
-      session.user.id,
-      filterDate.from,
-      filterDate.to,
-      filterDate.month,
-      filterDate.year,
-      selectedWalletId
-    );
+  const {
+    income,
+    expense,
+    investPnL,
+    debts,
+    budgetsWithSpend,
+    goals,
+    recentTx,
+    monthTransactions,
+    wallets,
+    spendingByCategory,
+    cashFlowTrend,
+    totalOutstandingDebt,
+    totalWalletBalance,
+    totalInvestmentValue,
+    budgetHealth,
+  } = await getDashboardData(
+    session.user.id,
+    filterDate.from,
+    filterDate.to,
+    filterDate.month,
+    filterDate.year,
+    selectedWalletId
+  );
   const netBalance = income - expense;
 
   const monthLabel = filterDate.label;
@@ -330,7 +445,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         ))}
       </div>
 
-      {/* Chart */}
+      {/* Daily cash flow chart */}
       <Card className="p-5 border-border bg-card shadow-xs">
         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-5">
           <div>
@@ -349,6 +464,58 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </div>
         <DashboardChart transactions={monthTransactions} />
+      </Card>
+
+      {/* Financial Health + Spending Breakdown (side by side) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Financial Health Score */}
+        <Card className="p-5 border-border bg-card shadow-xs">
+          <div className="flex justify-between items-center mb-4 pb-3 border-b border-border">
+            <div>
+              <h2 className="text-base font-bold text-foreground">🏥 Sức khỏe Tài chính</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Chỉ số tổng thể tháng này</p>
+            </div>
+            <Link href="/income" className="text-xs font-semibold text-orange-600 hover:underline">
+              Dòng tiền →
+            </Link>
+          </div>
+          <FinancialHealthScore
+            income={income}
+            expense={expense}
+            totalDebt={totalOutstandingDebt}
+            totalWalletBalance={totalWalletBalance}
+            totalInvestmentValue={totalInvestmentValue}
+            budgets={budgetHealth}
+          />
+        </Card>
+
+        {/* Spending pie + trend */}
+        <div className="flex flex-col gap-5">
+          {/* Spending pie chart */}
+          <Card className="p-5 border-border bg-card shadow-xs flex-1">
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-border">
+              <div>
+                <h2 className="text-base font-bold text-foreground">🎯 Chi tiêu theo danh mục</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{monthLabel}</p>
+              </div>
+              <Link href="/transactions" className="text-xs font-semibold text-orange-600 hover:underline">
+                Xem →
+              </Link>
+            </div>
+            <SpendingPieChart data={spendingByCategory} totalExpense={expense} />
+          </Card>
+        </div>
+      </div>
+
+      {/* Cash flow trend (6 months) */}
+      <Card className="p-5 border-border bg-card shadow-xs">
+        <div className="flex justify-between items-center mb-4 pb-3 border-b border-border">
+          <div>
+            <h2 className="text-base font-bold text-foreground">📈 Xu hướng dòng tiền</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">6 tháng gần nhất</p>
+          </div>
+        </div>
+        <CashFlowTrendChart data={cashFlowTrend} />
       </Card>
 
       {/* 2-col responsive grid */}

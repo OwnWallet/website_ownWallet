@@ -47,6 +47,26 @@ enum DebtLogType {
   NOTE    = "NOTE"    // Ghi chú thuần tuý
 }
 
+enum CashFlowSourceType {
+  @@type("pg/text@1")
+  SALARY              = "SALARY"              // Tiền lương định kỳ
+  INVESTMENT_DIVIDEND = "INVESTMENT_DIVIDEND" // Cổ tức / Lợi tức đầu tư
+  RENTAL              = "RENTAL"              // Tiền cho thuê BĐS / tài sản
+  INTEREST            = "INTEREST"            // Tiền lãi gửi / trái phiếu
+  BUSINESS            = "BUSINESS"            // Lợi nhuận kinh doanh / freelance
+  OTHER               = "OTHER"               // Thu nhập định kỳ khác
+}
+
+enum CashFlowFrequency {
+  @@type("pg/text@1")
+  MONTHLY   = "MONTHLY"   // Hàng tháng
+  BIWEEKLY  = "BIWEEKLY"  // 2 tuần một lần
+  WEEKLY    = "WEEKLY"    // Hàng tuần
+  QUARTERLY = "QUARTERLY" // Hàng quý
+  YEARLY    = "YEARLY"    // Hàng năm
+  ONE_TIME  = "ONE_TIME"  // Một lần trong tương lai
+}
+
 // ─────────────────────────────────────────
 // MODELS
 // ─────────────────────────────────────────
@@ -67,6 +87,7 @@ model User {
   categories   Category[]
   budgets      Budget[]
   wallets      Wallet[]
+  cashFlowSources CashFlowSource[]
 
   @@map("User")
 }
@@ -86,6 +107,7 @@ model Wallet {
   userId        String
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions  Transaction[]
+  cashFlowSources CashFlowSource[]
 
   @@index([userId])
   @@map("Wallet")
@@ -105,6 +127,7 @@ model Category {
 
   transactions Transaction[]
   budgets      Budget[]
+  cashFlowSources CashFlowSource[]
 
   @@unique([userId, name])
   @@map("Category")
@@ -174,6 +197,7 @@ model Investment {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   logs InvestLog[]
+  cashFlowSources CashFlowSource[]
 
   @@map("Investment")
 }
@@ -246,5 +270,35 @@ model Goal {
   contributions Transaction[]
 
   @@map("Goal")
+}
+
+model CashFlowSource {
+  id               String             @id @default(cuid(2))
+  name             String
+  amount           Decimal
+  type             CashFlowSourceType @default(SALARY)
+  frequency        CashFlowFrequency  @default(MONTHLY)
+  dayOfMonth       Int?               // Ngày nhận trong tháng (1 - 31) nếu MONTHLY
+  nextExpectedDate DateTime           // Ngày dự kiến nhận tiền tiếp theo
+  isActive         Boolean            @default(true)
+  note             String?
+  createdAt        DateTime           @default(now())
+  updatedAt        temporal.updatedAt()
+
+  userId           String
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  walletId         String?
+  wallet           Wallet?            @relation(fields: [walletId], references: [id])
+
+  categoryId       String?
+  category         Category?          @relation(fields: [categoryId], references: [id])
+
+  investmentId     String?
+  investment       Investment?        @relation(fields: [investmentId], references: [id])
+
+  @@index([userId, isActive])
+  @@index([userId, nextExpectedDate])
+  @@map("CashFlowSource")
 }
 
