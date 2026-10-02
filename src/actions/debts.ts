@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { DebtSchema, DebtPaymentSchema } from "@/schemas/debt";
+import { DebtSchema, DebtUpdateSchema, DebtPaymentSchema } from "@/schemas/debt";
 import { toInstant, formatDate, formatCurrency, serializeData } from "@/lib/utils";
 import {
   isDebtCategory,
@@ -31,16 +31,78 @@ export async function createDebt(formData: FormData) {
     userId,
   });
 
-  // Ghi lịch sử: khởi tạo khoản nợ
+  const initialNote = parsed.data.note?.trim() || (
+    parsed.data.direction === "OWE"
+      ? `Khởi tạo khoản vay ${formatCurrency(parsed.data.amount)} từ ${parsed.data.person}`
+      : `Khởi tạo khoản cho ${parsed.data.person} vay ${formatCurrency(parsed.data.amount)}`
+  );
+
+  // Ghi lịch sử: khởi tạo khoản nợ với description rõ ràng
   await db.orm.public.DebtLog.create({
     type: "INIT",
     amount: String(parsed.data.amount),
-    note: parsed.data.note || null,
+    note: initialNote,
     debtId: debt.id,
   });
 
   revalidatePath("/debts");
   revalidatePath("/dashboard");
+  revalidatePath("/income");
+  return { success: true };
+}
+
+export async function updateDebt(id: string, formData: FormData) {
+  const userId = await getUserId();
+  const parsed = DebtUpdateSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+
+  const debt = await db.orm.public.Debt.where({ id, userId }).first();
+  if (!debt) return { error: "Không tìm thấy khoản nợ cần cập nhật" };
+
+  const newAmount = parsed.data.amount;
+  const newPaid = parsed.data.paidAmount !== undefined ? parsed.data.paidAmount : Number(debt.paidAmount || 0);
+
+  const newStatus: "PAID" | "PARTIAL" | "PENDING" =
+    newPaid >= newAmount
+      ? "PAID"
+      : newPaid > 0
+      ? "PARTIAL"
+      : "PENDING";
+
+  await db.orm.public.Debt
+    .where({ id, userId })
+    .update({
+      person: parsed.data.person,
+      amount: String(newAmount),
+      paidAmount: String(newPaid),
+      direction: parsed.data.direction,
+      priority: parsed.data.priority,
+      dueDate: parsed.data.dueDate ? toInstant(parsed.data.dueDate) : null,
+      note: parsed.data.note?.trim() || null,
+      status: newStatus,
+    });
+
+  // Ghi lịch sử chỉnh sửa
+  const changes = [];
+  if (debt.person !== parsed.data.person) changes.push(`đổi tên "${debt.person}" -> "${parsed.data.person}"`);
+  if (Number(debt.amount) !== newAmount) changes.push(`số tiền ${formatCurrency(Number(debt.amount))} -> ${formatCurrency(newAmount)}`);
+  if (debt.direction !== parsed.data.direction) changes.push(`chiều nợ -> ${parsed.data.direction === "OWE" ? "Tôi đi vay" : "Cho vay"}`);
+  if (debt.priority !== parsed.data.priority) changes.push(`mức ưu tiên -> ${parsed.data.priority}`);
+
+  const logNote = changes.length > 0
+    ? `Cập nhật thông tin khoản nợ: ${changes.join(", ")}`
+    : "Cập nhật thông tin khoản nợ";
+
+  await db.orm.public.DebtLog.create({
+    type: "NOTE",
+    amount: String(newAmount),
+    note: logNote,
+    debtId: id,
+  });
+
+  revalidatePath("/debts");
+  revalidatePath("/dashboard");
+  revalidatePath("/income");
   return { success: true };
 }
 
@@ -52,7 +114,11 @@ export async function recordPayment(id: string, formData: FormData) {
   const debt = await db.orm.public.Debt.where({ id, userId }).first();
   if (!debt) return { error: "Không tìm thấy khoản nợ" };
 
-  const newPaid = Number(debt.paidAmount) + parsed.data.paidAmount;
+  const debtRemain = Math.max(0, Number(debt.amount) - Number(debt.paidAmount));
+  // Cap số tiền trả tối đa bằng số còn lại (không thể trả nhiều hơn nợ)
+  const cappedPayment = Math.min(parsed.data.paidAmount, debtRemain > 0 ? debtRemain : parsed.data.paidAmount);
+
+  const newPaid = Number(debt.paidAmount) + cappedPayment;
   const newStatus: "PAID" | "PARTIAL" | "PENDING" =
     newPaid >= Number(debt.amount)
       ? "PAID"
@@ -64,23 +130,66 @@ export async function recordPayment(id: string, formData: FormData) {
     .where({ id, userId })
     .update({ paidAmount: String(newPaid), status: newStatus });
 
-  // Ghi lịch sử: ghi nhận thanh toán
+  const walletId = formData.get("walletId")?.toString();
+  let walletName = "";
+  let linkedTxId: string | null = null;
+
+  if (walletId) {
+    const wallet = await db.orm.public.Wallet.where({ id: walletId, userId }).first();
+    if (wallet) {
+      walletName = wallet.name;
+      const currentBal = Number(wallet.balance ?? 0);
+      const isOwe = debt.direction === "OWE";
+      const newBal = isOwe ? currentBal - cappedPayment : currentBal + cappedPayment;
+
+      await db.orm.public.Wallet.where({ id: walletId, userId }).update({
+        balance: String(newBal),
+      });
+
+      // Tìm danh mục nợ tương ứng
+      const catName = isOwe ? "Nợ phải trả" : "Nợ phải thu";
+      const category = await db.orm.public.Category.where({ userId, name: catName }).first();
+
+      if (category) {
+        const tx = await db.orm.public.Transaction.create({
+          amount: String(cappedPayment),
+          type: isOwe ? "EXPENSE" : "INCOME",
+          note: parsed.data.note?.trim() || `${isOwe ? "Trả nợ cho" : "Thu nợ từ"} ${debt.person}`,
+          recordedAt: toInstant(new Date()),
+          categoryId: category.id,
+          walletId,
+          userId,
+        });
+        linkedTxId = tx.id;
+      }
+    }
+  }
+
+  const paymentNote =
+    parsed.data.note?.trim() ||
+    (debt.direction === "OWE"
+      ? `Thanh toán ${formatCurrency(cappedPayment)} cho ${debt.person}${walletName ? ` qua ví ${walletName}` : ""}`
+      : `Thu nợ ${formatCurrency(cappedPayment)} từ ${debt.person}${walletName ? ` vào ví ${walletName}` : ""}`);
+
+  // Ghi lịch sử: ghi nhận thanh toán kèm description đầy đủ và txId nếu có
   await db.orm.public.DebtLog.create({
     type: "PAYMENT",
-    amount: String(parsed.data.paidAmount),
-    note: parsed.data.note || null,
+    amount: String(cappedPayment),
+    note: paymentNote,
+    txId: linkedTxId,
     debtId: id,
   });
 
   revalidatePath("/debts");
   revalidatePath("/dashboard");
   revalidatePath("/wallets");
+  revalidatePath("/transactions");
 
   return {
     success: true,
     person: debt.person,
     direction: debt.direction,
-    paidAmount: parsed.data.paidAmount,
+    paidAmount: cappedPayment,
     newPaid,
     totalAmount: Number(debt.amount),
     remainAmount: Math.max(0, Number(debt.amount) - newPaid),
@@ -92,6 +201,8 @@ export async function deleteDebt(id: string) {
   const userId = await getUserId();
   await db.orm.public.Debt.where({ id, userId }).delete();
   revalidatePath("/debts");
+  revalidatePath("/income");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
@@ -537,7 +648,7 @@ export async function unlinkTxFromDebts(txId: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Lấy lịch sử (DebtLog) của một khoản nợ
+// Lấy lịch sử (DebtLog) của một khoản nợ, kèm thông tin giao dịch liên kết
 // ─────────────────────────────────────────────────────────────────
 export async function getDebtLogs(debtId: string) {
   const userId = await getUserId();
@@ -551,5 +662,52 @@ export async function getDebtLogs(debtId: string) {
     .orderBy((l) => l.recordedAt.asc())
     .all();
 
-  return { success: true, logs: serializeData(rawLogs) };
+  const serializedLogs = serializeData(rawLogs);
+
+  // Collect txIds to enrich
+  const txIds = serializedLogs
+    .map((l: any) => l.txId)
+    .filter(Boolean) as string[];
+
+  const txMap: Record<string, any> = {};
+  if (txIds.length > 0) {
+    try {
+      const rawTxs = await db.orm.public.Transaction
+        .where((t) => t.userId.eq(userId))
+        .include("category", (cat) => cat)
+        .all();
+      const allTxs = serializeData(rawTxs);
+      for (const tx of allTxs) {
+        if (txIds.includes(tx.id)) {
+          txMap[tx.id] = {
+            id: tx.id,
+            amount: Number(tx.amount),
+            note: tx.note ?? null,
+            type: tx.type,
+            recordedAt: tx.recordedAt,
+            category: tx.category
+              ? { name: tx.category.name, icon: tx.category.icon ?? null, color: tx.category.color }
+              : null,
+          };
+        }
+      }
+    } catch (err) {
+      console.error("[getDebtLogs] Failed to enrich with tx data:", err);
+    }
+  }
+
+  // Merge tx info into logs
+  const enrichedLogs = serializedLogs.map((log: any) => ({
+    ...log,
+    tx: log.txId ? (txMap[log.txId] ?? null) : null,
+  }));
+
+  return {
+    success: true,
+    debtPerson: debt.person,
+    debtDirection: debt.direction,
+    debtAmount: Number(debt.amount),
+    debtPaidAmount: Number(debt.paidAmount),
+    logs: enrichedLogs,
+  };
 }

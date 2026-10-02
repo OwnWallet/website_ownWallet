@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Calculator } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency, formatDate, calcPercent, toDate } from "@/lib/utils";
 import { deleteDebt } from "@/actions/debts";
 import { DebtActions } from "./debt-actions";
 import { DebtLogModal } from "./debt-log-modal";
+import { DebtCalculatorModal } from "./debt-calculator-modal";
+import { DebtEditModal } from "./debt-edit-modal";
+import { parseDebtMetadata } from "@/lib/debt-schedule";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -36,7 +39,10 @@ export function DebtCard({
   const remain = Math.max(0, amount - paid);
   const percent = calcPercent(paid, amount);
 
-  let statusColor = "var(--foreground-muted)";
+  const meta = parseDebtMetadata(debt.note);
+  const schedule = meta.schedule;
+
+  let statusColor = "var(--muted-foreground)";
   let statusText = "Chờ trả";
   if (debt.status === "PAID") {
     statusColor = "var(--color-income)";
@@ -64,7 +70,7 @@ export function DebtCard({
             )}
             <div>
               <h3 className="font-bold text-base">{debt.person}</h3>
-              {debt.note && <p className="text-xs text-muted mt-0.5">{debt.note}</p>}
+              {meta.cleanNote && <p className="text-xs text-muted mt-0.5">{meta.cleanNote}</p>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -87,7 +93,8 @@ export function DebtCard({
             >
               {statusText}
             </span>
-            <DebtLogModal debtId={debt.id} debtPerson={debt.person} />
+            <DebtEditModal debt={debt} />
+            <DebtLogModal debtId={debt.id} debtPerson={debt.person} debtAmount={amount} debtPaidAmount={paid} />
             <button
               type="button"
               onClick={() => setShowDeleteDialog(true)}
@@ -99,6 +106,20 @@ export function DebtCard({
             </button>
           </div>
         </div>
+
+        {/* Schedule & Interest Tag */}
+        {(schedule?.hasInterest || schedule?.isMonthly) && (
+          <div className="flex items-center gap-2 flex-wrap text-[11px] font-semibold text-orange-800 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 border border-orange-200/80 px-2.5 py-1 rounded-lg w-fit">
+            <span>🧮</span>
+            {schedule.hasInterest && (
+              <span>Lãi {schedule.rate}%/{schedule.rateType === "month" ? "tháng" : "năm"}</span>
+            )}
+            {schedule.hasInterest && schedule.isMonthly && <span>·</span>}
+            {schedule.isMonthly && (
+              <span>{schedule.months} tháng ({schedule.method === "linear" ? "Dư nợ giảm" : "Góp đều"})</span>
+            )}
+          </div>
+        )}
 
         <div className="flex justify-between items-baseline text-xs">
           <span className="text-muted-foreground">
@@ -122,7 +143,7 @@ export function DebtCard({
           />
         </div>
 
-        <div className="flex justify-between items-center mt-1">
+        <div className="flex flex-wrap justify-between items-center gap-2 mt-1">
           <div className="text-xs">
             {debt.dueDate ? (
               <span style={{ color: isOverdue ? "var(--color-expense)" : "var(--foreground-subtle)" }}>
@@ -133,9 +154,26 @@ export function DebtCard({
             )}
           </div>
 
-          {debt.status !== "PAID" && (
-            <DebtActions debtId={debt.id} debt={debt} wallets={wallets} inline mode="record" />
-          )}
+          <div className="flex items-center gap-2">
+            {/* Nút xem lịch trả nợ */}
+            <DebtCalculatorModal
+              debt={debt}
+              trigger={
+                <button
+                  type="button"
+                  title="Xem lịch trả nợ & tính lãi chi tiết"
+                  className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-all cursor-pointer shadow-2xs hover:shadow-xs flex items-center gap-1.5 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 border border-violet-200 dark:border-violet-800 hover:bg-violet-100 active:scale-95"
+                >
+                  <Calculator size={12} />
+                  <span>{debt.direction === "OWE" ? "Lịch trả nợ" : "Lịch thu nợ"}</span>
+                </button>
+              }
+            />
+
+            {debt.status !== "PAID" && (
+              <DebtActions debtId={debt.id} debt={debt} wallets={wallets} inline mode="record" />
+            )}
+          </div>
         </div>
       </div>
 

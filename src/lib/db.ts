@@ -17,8 +17,13 @@ function createDb() {
 }
 
 function getDb(): ReturnType<typeof createDb> {
-  // Tự động khởi tạo lại client nếu chưa có hoặc thiếu model mới như Wallet trong singleton cache dev
-  if (!globalForDb.db || !(globalForDb.db as any).orm?.public?.Wallet) {
+  const currentDb = globalForDb.db as any;
+  const models = Object.keys((contractJson as any).domain?.namespaces?.public?.models ?? {});
+  const isMissingAnyModel =
+    !currentDb?.orm?.public || models.some((m) => !currentDb.orm.public[m]);
+
+  // Tự động khởi tạo lại client nếu chưa có hoặc thiếu bất kỳ model nào từ contract.json (ví dụ CashFlowSource sau migration)
+  if (!globalForDb.db || isMissingAnyModel) {
     globalForDb.db = createDb();
   }
   return globalForDb.db;

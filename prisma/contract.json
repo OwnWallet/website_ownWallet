@@ -8,6 +8,10 @@
       "model": "Budget",
       "namespace": "public"
     },
+    "CashFlowSource": {
+      "model": "CashFlowSource",
+      "namespace": "public"
+    },
     "Category": {
       "model": "Category",
       "namespace": "public"
@@ -49,6 +53,64 @@
     "namespaces": {
       "public": {
         "enum": {
+          "CashFlowFrequency": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "MONTHLY",
+                "value": "MONTHLY"
+              },
+              {
+                "name": "BIWEEKLY",
+                "value": "BIWEEKLY"
+              },
+              {
+                "name": "WEEKLY",
+                "value": "WEEKLY"
+              },
+              {
+                "name": "QUARTERLY",
+                "value": "QUARTERLY"
+              },
+              {
+                "name": "YEARLY",
+                "value": "YEARLY"
+              },
+              {
+                "name": "ONE_TIME",
+                "value": "ONE_TIME"
+              }
+            ]
+          },
+          "CashFlowSourceType": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "SALARY",
+                "value": "SALARY"
+              },
+              {
+                "name": "INVESTMENT_DIVIDEND",
+                "value": "INVESTMENT_DIVIDEND"
+              },
+              {
+                "name": "RENTAL",
+                "value": "RENTAL"
+              },
+              {
+                "name": "INTEREST",
+                "value": "INTEREST"
+              },
+              {
+                "name": "BUSINESS",
+                "value": "BUSINESS"
+              },
+              {
+                "name": "OTHER",
+                "value": "OTHER"
+              }
+            ]
+          },
           "CategoryType": {
             "codecId": "pg/text@1",
             "members": [
@@ -255,6 +317,240 @@
               "table": "Budget"
             }
           },
+          "CashFlowSource": {
+            "fields": {
+              "amount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar"
+                }
+              },
+              "categoryId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "dayOfMonth": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "frequency": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "CashFlowFrequency",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "investmentId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "isActive": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "nextExpectedDate": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "note": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "type": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "CashFlowSourceType",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "walletId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "category": {
+                "cardinality": "N:1",
+                "on": {
+                  "localFields": [
+                    "categoryId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Category",
+                  "namespace": "public"
+                }
+              },
+              "investment": {
+                "cardinality": "N:1",
+                "on": {
+                  "localFields": [
+                    "investmentId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Investment",
+                  "namespace": "public"
+                }
+              },
+              "user": {
+                "cardinality": "N:1",
+                "on": {
+                  "localFields": [
+                    "userId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "wallet": {
+                "cardinality": "N:1",
+                "on": {
+                  "localFields": [
+                    "walletId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Wallet",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "amount": {
+                  "column": "amount"
+                },
+                "categoryId": {
+                  "column": "categoryId"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "dayOfMonth": {
+                  "column": "dayOfMonth"
+                },
+                "frequency": {
+                  "column": "frequency"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "investmentId": {
+                  "column": "investmentId"
+                },
+                "isActive": {
+                  "column": "isActive"
+                },
+                "name": {
+                  "column": "name"
+                },
+                "nextExpectedDate": {
+                  "column": "nextExpectedDate"
+                },
+                "note": {
+                  "column": "note"
+                },
+                "type": {
+                  "column": "type"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                },
+                "userId": {
+                  "column": "userId"
+                },
+                "walletId": {
+                  "column": "walletId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "CashFlowSource"
+            }
+          },
           "Category": {
             "fields": {
               "color": {
@@ -333,6 +629,21 @@
                 },
                 "to": {
                   "model": "Budget",
+                  "namespace": "public"
+                }
+              },
+              "cashFlowSources": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "categoryId"
+                  ]
+                },
+                "to": {
+                  "model": "CashFlowSource",
                   "namespace": "public"
                 }
               },
@@ -1022,6 +1333,21 @@
               }
             },
             "relations": {
+              "cashFlowSources": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "investmentId"
+                  ]
+                },
+                "to": {
+                  "model": "CashFlowSource",
+                  "namespace": "public"
+                }
+              },
               "logs": {
                 "cardinality": "1:N",
                 "on": {
@@ -1368,6 +1694,21 @@
                   "namespace": "public"
                 }
               },
+              "cashFlowSources": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "userId"
+                  ]
+                },
+                "to": {
+                  "model": "CashFlowSource",
+                  "namespace": "public"
+                }
+              },
               "categories": {
                 "cardinality": "1:N",
                 "on": {
@@ -1568,6 +1909,21 @@
               }
             },
             "relations": {
+              "cashFlowSources": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "walletId"
+                  ]
+                },
+                "to": {
+                  "model": "CashFlowSource",
+                  "namespace": "public"
+                }
+              },
               "transactions": {
                 "cardinality": "1:N",
                 "on": {
@@ -1749,6 +2105,250 @@
                   ]
                 }
               ]
+            },
+            "CashFlowSource": {
+              "checks": [
+                {
+                  "expression": "\"frequency\" IN ('MONTHLY', 'BIWEEKLY', 'WEEKLY', 'QUARTERLY', 'YEARLY', 'ONE_TIME')",
+                  "name": "CashFlowSource_frequency_check_45997274",
+                  "prefix": "CashFlowSource_frequency_check"
+                },
+                {
+                  "expression": "\"type\" IN ('SALARY', 'INVESTMENT_DIVIDEND', 'RENTAL', 'INTEREST', 'BUSINESS', 'OTHER')",
+                  "name": "CashFlowSource_type_check_d8044ae3",
+                  "prefix": "CashFlowSource_type_check"
+                }
+              ],
+              "columns": {
+                "amount": {
+                  "codecId": "pg/numeric@1",
+                  "nativeType": "numeric",
+                  "nullable": false
+                },
+                "categoryId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "dayOfMonth": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": true
+                },
+                "frequency": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "MONTHLY"
+                  },
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "CashFlowFrequency",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "investmentId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
+                "isActive": {
+                  "codecId": "pg/bool@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  },
+                  "nativeType": "bool",
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "nextExpectedDate": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "note": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
+                "type": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "SALARY"
+                  },
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "CashFlowSourceType",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "updatedAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "userId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "walletId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "CashFlowSource"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                },
+                {
+                  "source": {
+                    "columns": [
+                      "walletId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "CashFlowSource"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Wallet"
+                  }
+                },
+                {
+                  "source": {
+                    "columns": [
+                      "categoryId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "CashFlowSource"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Category"
+                  }
+                },
+                {
+                  "source": {
+                    "columns": [
+                      "investmentId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "CashFlowSource"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Investment"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "categoryId"
+                  ],
+                  "name": "CashFlowSource_categoryId_idx_15c304f2",
+                  "prefix": "CashFlowSource_categoryId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "investmentId"
+                  ],
+                  "name": "CashFlowSource_investmentId_idx_a040f76a",
+                  "prefix": "CashFlowSource_investmentId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "userId"
+                  ],
+                  "name": "CashFlowSource_userId_idx_a489d58a",
+                  "prefix": "CashFlowSource_userId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "userId",
+                    "isActive"
+                  ],
+                  "name": "CashFlowSource_userId_isActive_idx_c5d1c334",
+                  "prefix": "CashFlowSource_userId_isActive_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "userId",
+                    "nextExpectedDate"
+                  ],
+                  "name": "CashFlowSource_userId_nextExpectedDate_idx_649cf52f",
+                  "prefix": "CashFlowSource_userId_nextExpectedDate_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "walletId"
+                  ],
+                  "name": "CashFlowSource_walletId_idx_2e003173",
+                  "prefix": "CashFlowSource_walletId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
             },
             "Category": {
               "checks": [
@@ -2820,6 +3420,28 @@
             }
           },
           "valueSet": {
+            "CashFlowFrequency": {
+              "kind": "valueSet",
+              "values": [
+                "MONTHLY",
+                "BIWEEKLY",
+                "WEEKLY",
+                "QUARTERLY",
+                "YEARLY",
+                "ONE_TIME"
+              ]
+            },
+            "CashFlowSourceType": {
+              "kind": "valueSet",
+              "values": [
+                "SALARY",
+                "INVESTMENT_DIVIDEND",
+                "RENTAL",
+                "INTEREST",
+                "BUSINESS",
+                "OTHER"
+              ]
+            },
             "CategoryType": {
               "kind": "valueSet",
               "values": [
@@ -2874,10 +3496,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b1b5c9eef55653ce758903571359c888eddfd25a272c0e40562d8c258f0b94c3"
+    "storageHash": "de6eebc66d533408774fe0efb52f8a039ecddfe1cb562f8c69f0dcec6d7bb765"
   },
   "execution": {
-    "executionHash": "cef3df40b431133737229c94813c224bf1891b012f90b328104b6e27db514fb5",
+    "executionHash": "288b36db1497fdbad063c7f236151383840d6533f126816138f10711bd53f843",
     "mutations": {
       "defaults": [
         {
@@ -2889,6 +3511,32 @@
             "column": "id",
             "namespace": "public",
             "table": "Budget"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "id",
+            "namespace": "public",
+            "table": "CashFlowSource"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "updatedAt",
+            "namespace": "public",
+            "table": "CashFlowSource"
           }
         },
         {
