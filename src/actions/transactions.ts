@@ -187,25 +187,79 @@ export async function updateTransaction(id: string, formData: FormData) {
     }
   }
 
-  await db.orm.public.Transaction
-    .where({ id, userId })
-    .update({
-      amount: String(data.amount),
-      type: data.type,
-      categoryId: data.categoryId,
-      note,
-      evidenceUrl: data.evidenceUrl || null,
-      recordedAt: toInstant(data.recordedAt),
-      goalId: data.goalId || null,
-      walletId: data.walletId || null,
-    });
+  const oldGoalId = existingTx.goalId || null;
+  const newGoalId = data.goalId || null;
+  const oldAmount = Number(existingTx.amount);
+  const newAmount = Number(data.amount);
+
+  await db.transaction(async (t: any) => {
+    await t.orm.public.Transaction
+      .where({ id, userId })
+      .update({
+        amount: String(data.amount),
+        type: data.type,
+        categoryId: data.categoryId,
+        note,
+        evidenceUrl: data.evidenceUrl || null,
+        recordedAt: toInstant(data.recordedAt),
+        goalId: newGoalId,
+        walletId: data.walletId || null,
+      });
+
+    // Đồng bộ Goal.savedAmount khi thay đổi goalId hoặc thay đổi số tiền
+    if (oldGoalId && oldGoalId !== newGoalId) {
+      const oldGoal = await t.orm.public.Goal.where({ id: oldGoalId, userId }).first();
+      if (oldGoal) {
+        await t.orm.public.Goal
+          .where({ id: oldGoalId, userId })
+          .update({ savedAmount: String(Math.max(0, Number(oldGoal.savedAmount) - oldAmount)) });
+      }
+    }
+
+    if (newGoalId) {
+      const newGoal = await t.orm.public.Goal.where({ id: newGoalId, userId }).first();
+      if (newGoal) {
+        const baseSaved =
+          oldGoalId === newGoalId
+            ? Math.max(0, Number(newGoal.savedAmount) - oldAmount)
+            : Number(newGoal.savedAmount);
+        await t.orm.public.Goal
+          .where({ id: newGoalId, userId })
+          .update({ savedAmount: String(Math.max(0, baseSaved + newAmount)) });
+      }
+    }
+  });
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
   revalidatePath("/wallets");
   revalidatePath("/reports");
   revalidatePath("/debts");
+  revalidatePath("/goals");
+  revalidatePath("/income");
   return { success: true };
+}
+
+async function reverseDebtLogsForTx(t: any, txId: string, userId: string) {
+  const linkedLogs = await t.orm.public.DebtLog.where({ txId }).all();
+  for (const log of linkedLogs) {
+    const debt = await t.orm.public.Debt.where({ id: log.debtId, userId }).first();
+    if (debt && log.type === "PAYMENT") {
+      const logAmt = Number(log.amount);
+      const updatedPaid = Math.max(0, Number(debt.paidAmount) - logAmt);
+      const totalAmt = Number(debt.amount);
+      const updatedStatus: "PAID" | "PARTIAL" | "PENDING" =
+        updatedPaid >= totalAmt ? "PAID" : updatedPaid > 0 ? "PARTIAL" : "PENDING";
+
+      await t.orm.public.Debt
+        .where({ id: debt.id, userId })
+        .update({
+          paidAmount: String(updatedPaid),
+          status: updatedStatus,
+        });
+    }
+    await t.orm.public.DebtLog.where({ id: log.id }).delete();
+  }
 }
 
 export async function deleteTransaction(id: string) {
@@ -226,11 +280,18 @@ export async function deleteTransaction(id: string) {
           .update({ savedAmount: String(Math.max(0, Number(goal.savedAmount) - Number(tx.amount))) });
       }
     }
+
+    // Hoàn tác lịch sử trả nợ/thu nợ nếu giao dịch này được tạo từ Sổ nợ
+    await reverseDebtLogsForTx(t, id, userId);
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
+  revalidatePath("/wallets");
   revalidatePath("/reports");
+  revalidatePath("/debts");
+  revalidatePath("/goals");
+  revalidatePath("/income");
   return { success: true };
 }
 
@@ -255,6 +316,8 @@ export async function deleteTransactions(ids: string[]) {
             .update({ savedAmount: String(Math.max(0, Number(goal.savedAmount) - Number(tx.amount))) });
         }
       }
+
+      await reverseDebtLogsForTx(t, id, userId);
     }
   });
 
@@ -262,6 +325,9 @@ export async function deleteTransactions(ids: string[]) {
   revalidatePath("/transactions");
   revalidatePath("/wallets");
   revalidatePath("/reports");
+  revalidatePath("/debts");
+  revalidatePath("/goals");
+  revalidatePath("/income");
   return { success: true, count };
 }
 

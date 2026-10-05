@@ -51,7 +51,21 @@ export async function POST(request: NextRequest) {
 
   // ── Gọi AI ──
   try {
+    if (request.signal.aborted) {
+      return NextResponse.json(
+        { error: "Đã dừng phân tích theo yêu cầu của người dùng." },
+        { status: 499 }
+      );
+    }
+
     const result = await parseDocument(buffer, file.name, categoryNames, requestedModel);
+
+    if (request.signal.aborted) {
+      return NextResponse.json(
+        { error: "Đã dừng phân tích theo yêu cầu của người dùng." },
+        { status: 499 }
+      );
+    }
 
     // ── Đối chiếu với database để phát hiện trùng lặp ──
     const reconciledTransactions = await reconcileTransactionsWithDb(
@@ -69,6 +83,10 @@ export async function POST(request: NextRequest) {
       totalFound: result.totalFound,
       skipped: result.skipped,
       duplicateCount,
+      modeUsed: result.modeUsed ?? "ai",
+      fallbackReason: result.fallbackReason,
+      detectedBank: result.detectedBank,
+      detectedAccountNumber: result.detectedAccountNumber,
     });
   } catch (err: unknown) {
     let message =

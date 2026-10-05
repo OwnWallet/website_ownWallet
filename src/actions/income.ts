@@ -3,6 +3,8 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { toInstant, toDate, serializeData } from "@/lib/utils";
+import { getWallets } from "@/actions/wallets";
+import { getAutoRolloverBudgets } from "@/actions/budgets";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -86,8 +88,8 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   const ninetyDaysInstant = toInstant(ninetyDaysAgo);
 
   const [wallets, debts, investments, goals, recentTransactions, budgets] = await Promise.all([
-    // Tất cả ví
-    db.orm.public.Wallet.where((w) => w.userId.eq(userId)).all(),
+    // Tất cả ví kèm số dư lũy kế thực tế (T9 + T10 + ...)
+    getWallets(),
 
     // Tất cả khoản nợ
     db.orm.public.Debt.where((d) => d.userId.eq(userId)).all(),
@@ -104,12 +106,8 @@ export async function getCashFlowData(): Promise<CashFlowData> {
       .where((t) => t.recordedAt.gte(ninetyDaysInstant))
       .all(),
 
-    // Ngân sách tháng hiện tại
-    db.orm.public.Budget
-      .where((b) => b.userId.eq(userId))
-      .where((b) => b.month.eq(now.getMonth() + 1))
-      .where((b) => b.year.eq(now.getFullYear()))
-      .all(),
+    // Ngân sách tháng hiện tại (kèm cộng dồn tự động từ tháng trước)
+    getAutoRolloverBudgets(userId, now.getMonth() + 1, now.getFullYear()),
   ]);
 
   // 1. Phân loại ví tiền & Tính tổng tiền mặt
@@ -221,11 +219,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   const averageMonthlyIncome = Math.round(total90dIncome / 3);
   let monthlyBurnRate = Math.round(total90dExpense / 3);
 
-  // Nếu chưa có giao dịch chi tiêu trong 90 ngày, lấy tổng ngân sách tháng làm mốc chi tiêu tham chiếu
-  const totalMonthlyBudget = (budgets as any[]).reduce(
-    (sum, b) => sum + Number(b.limitAmount ?? 0),
-    0
-  );
+  const totalMonthlyBudget = budgets.totalEffectiveLimit;
 
   if (monthlyBurnRate <= 0 && totalMonthlyBudget > 0) {
     monthlyBurnRate = totalMonthlyBudget;

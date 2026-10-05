@@ -35,19 +35,54 @@ export async function contributeToGoal(goalId: string, formData: FormData) {
   const goal = await db.orm.public.Goal.where({ id: goalId, userId }).first();
   if (!goal) return { error: "Không tìm thấy mục tiêu" };
 
-  // Tìm category savings mặc định
-  const savingsCategory = await db.orm.public.Category
-    .where({ userId, type: "SAVINGS", isDefault: true })
+  // Tìm category savings an toàn (không dùng non-null assertion gây crash)
+  let savingsCategory = await db.orm.public.Category
+    .where({ userId, type: "SAVINGS" })
     .first();
+
+  if (!savingsCategory) {
+    savingsCategory = await db.orm.public.Category
+      .where({ userId, type: "EXPENSE" })
+      .first();
+  }
+
+  if (!savingsCategory) {
+    savingsCategory = await db.orm.public.Category.create({
+      name: "Tiết kiệm & Mục tiêu",
+      type: "SAVINGS",
+      icon: "🎯",
+      color: "#10b981",
+      isDefault: true,
+      userId,
+    });
+  }
+
+  // Xác định ví trích tiền (ưu tiên walletId truyền lên, nếu không có thì lấy ví mặc định của user)
+  const requestedWalletId = formData.get("walletId")?.toString() || null;
+  let resolvedWalletId: string | null = null;
+
+  if (requestedWalletId) {
+    const w = await db.orm.public.Wallet.where({ id: requestedWalletId, userId }).first();
+    if (w) resolvedWalletId = w.id;
+  } else {
+    const defaultWallet = await db.orm.public.Wallet.where({ userId, isDefault: true }).first();
+    if (defaultWallet) {
+      resolvedWalletId = defaultWallet.id;
+    } else {
+      const firstWallet = await db.orm.public.Wallet.where({ userId }).first();
+      if (firstWallet) resolvedWalletId = firstWallet.id;
+    }
+  }
 
   await db.transaction(async (tx: any) => {
     await tx.orm.public.Transaction.create({
       amount: String(parsed.data.amount),
       type: "EXPENSE",
-      categoryId: savingsCategory!.id,
+      categoryId: savingsCategory.id,
       note: parsed.data.note ?? `Nạp vào "${goal.name}"`,
       recordedAt: toInstant(parsed.data.recordedAt),
       goalId,
+      walletId: resolvedWalletId,
       userId,
     });
 
@@ -58,6 +93,9 @@ export async function contributeToGoal(goalId: string, formData: FormData) {
 
   revalidatePath("/goals");
   revalidatePath("/dashboard");
+  revalidatePath("/wallets");
+  revalidatePath("/transactions");
+  revalidatePath("/income");
   return { success: true };
 }
 

@@ -2,7 +2,8 @@ import { auth } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { getWallets } from "@/actions/wallets";
-import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, formatMetric, getFilterDateRange, toInstant, toDate, serializeData, maskAccountNumber } from "@/lib/utils";
+import { getAutoRolloverBudgets } from "@/actions/budgets";
+import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, formatMetric, getFilterDateRange, getVNDateParts, toInstant, toDate, serializeData, maskAccountNumber } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD } from "@/lib/constants";
 import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Plus, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import Link from "next/link";
@@ -23,15 +24,13 @@ async function getDashboardData(
   const fromInstant = toInstant(from);
   const toInstantVal = toInstant(to);
 
+  // Xác định khoảng thời gian kỳ liền trước (ví dụ: Tháng 9/2026 khi đang xem Tháng 10/2026)
+  const prevRange =
+    month === "ALL"
+      ? getFilterDateRange("ALL", year - 1)
+      : getFilterDateRange(month === 1 ? 12 : month - 1, month === 1 ? year - 1 : year);
+
   try {
-    let budgetQuery = db.orm.public.Budget
-      .where((b) => b.userId.eq(userId))
-      .where((b) => b.year.eq(year));
-
-    if (month !== "ALL") {
-      budgetQuery = budgetQuery.where((b) => b.month.eq(month));
-    }
-
     let txQuery = db.orm.public.Transaction
       .where((t) => t.userId.eq(userId))
       .where((t) => t.recordedAt.gte(fromInstant))
@@ -42,13 +41,19 @@ async function getDashboardData(
       .where((t) => t.recordedAt.gte(fromInstant))
       .where((t) => t.recordedAt.lte(toInstantVal));
 
+    let allPriorAndCurrentTxQuery = db.orm.public.Transaction
+      .where((t) => t.userId.eq(userId))
+      .where((t) => t.recordedAt.lte(toInstantVal));
+
     if (walletId && walletId !== "ALL") {
       if (walletId === "UNASSIGNED") {
         txQuery = txQuery.where({ walletId: null });
         recentTxQuery = recentTxQuery.where({ walletId: null });
+        allPriorAndCurrentTxQuery = allPriorAndCurrentTxQuery.where({ walletId: null });
       } else {
         txQuery = txQuery.where({ walletId });
         recentTxQuery = recentTxQuery.where({ walletId });
+        allPriorAndCurrentTxQuery = allPriorAndCurrentTxQuery.where({ walletId });
       }
     }
 
@@ -59,7 +64,19 @@ async function getDashboardData(
     sixMonthsAgo.setHours(0, 0, 0, 0);
     const sixMonthsAgoInstant = toInstant(sixMonthsAgo);
 
-    const [monthTransactions, investments, debts, allDebts, budgets, goals, recentTx, realWallets, historicalTx, categoryData] = await Promise.all([
+    const [
+      monthTransactions,
+      investments,
+      debts,
+      allDebts,
+      autoBudgetResult,
+      goals,
+      recentTx,
+      realWallets,
+      historicalTx,
+      categoryData,
+      allPriorAndCurrentTxs,
+    ] = await Promise.all([
       txQuery
         .orderBy((t) => t.recordedAt.asc())
         .all(),
@@ -77,9 +94,7 @@ async function getDashboardData(
         .where((t) => t.userId.eq(userId))
         .where((t) => t.status.neq("PAID"))
         .all(),
-      budgetQuery
-        .include("category", (cat) => cat)
-        .all(),
+      getAutoRolloverBudgets(userId, month, year, walletId),
       db.orm.public.Goal
         .where((t) => t.userId.eq(userId))
         .orderBy((t) => t.deadline.asc())
@@ -103,6 +118,8 @@ async function getDashboardData(
       txQuery
         .include("category", (cat) => cat)
         .all(),
+      // All transactions up to current period end for automatic balance carry-over
+      allPriorAndCurrentTxQuery.all(),
     ]);
 
     let income = 0;
@@ -119,6 +136,38 @@ async function getDashboardData(
       }
     });
 
+    // Tính số dư kỳ trước (ví dụ: Tháng 9/2026) và tổng lũy kế trước kỳ đang xem
+    let prevPeriodIncome = 0;
+    let prevPeriodExpense = 0;
+    let allPriorIncome = 0;
+    let allPriorExpense = 0;
+
+    const fromMs = from.getTime();
+    const prevFromMs = prevRange.from.getTime();
+    const prevToMs = prevRange.to.getTime();
+
+    for (const t of allPriorAndCurrentTxs as any[]) {
+      const recMs = toDate(t.recordedAt).getTime();
+      const amt = Number(t.amount);
+      if (recMs < fromMs) {
+        if (t.type === "INCOME") allPriorIncome += amt;
+        else if (t.type === "EXPENSE") allPriorExpense += amt;
+      }
+      if (recMs >= prevFromMs && recMs <= prevToMs) {
+        if (t.type === "INCOME") prevPeriodIncome += amt;
+        else if (t.type === "EXPENSE") prevPeriodExpense += amt;
+      }
+    }
+
+    const initialWalletBalance = (realWallets as any[]).reduce((sum, w) => {
+      if (!walletId || walletId === "ALL") return sum + Number(w.balance ?? 0);
+      if (walletId === "UNASSIGNED") return 0;
+      return w.id === walletId ? sum + Number(w.balance ?? 0) : sum;
+    }, 0);
+
+    const prevMonthNet = prevPeriodIncome - prevPeriodExpense;
+    const openingCumulativeBalance = initialWalletBalance + (allPriorIncome - allPriorExpense);
+
     const investPnL = investments.reduce((sum: number, inv: any) => {
       if (inv.currentPrice) {
         return sum + (Number(inv.currentPrice) - Number(inv.buyPrice)) * Number(inv.quantity);
@@ -131,11 +180,7 @@ async function getDashboardData(
       return sum + Number(price) * Number(inv.quantity);
     }, 0);
 
-    const budgetsWithSpend = budgets.map((b: any) => ({
-      ...b,
-      limitAmount: Number(b.limitAmount),
-      spent: spentMap.get(b.categoryId) ?? 0,
-    }));
+    const budgetsWithSpend = autoBudgetResult.budgets;
 
     // Spending by category for pie chart
     const categorySpendMap = new Map<string, { name: string; color: string; icon: string; value: number }>();
@@ -158,18 +203,20 @@ async function getDashboardData(
     const spendingByCategory = Array.from(categorySpendMap.values())
       .sort((a, b) => b.value - a.value);
 
-    // 6-month trend
+    // 6-month trend (chuẩn hóa theo múi giờ Việt Nam UTC+7)
     const monthlyMap = new Map<string, { month: string; income: number; expense: number }>();
+    const { year: anchorYear, month: anchorMonth } = getVNDateParts(from);
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(from);
-      d.setMonth(d.getMonth() - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = `T${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`;
+      const d = new Date(Date.UTC(anchorYear, anchorMonth - 1 - i, 1));
+      const y = d.getUTCFullYear();
+      const m = d.getUTCMonth() + 1;
+      const key = `${y}-${String(m).padStart(2, "0")}`;
+      const label = `T${m}/${String(y).slice(2)}`;
       monthlyMap.set(key, { month: label, income: 0, expense: 0 });
     }
     for (const tx of historicalTx as any[]) {
-      const d = toDate(tx.recordedAt);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const { year: y, month: m } = getVNDateParts(tx.recordedAt);
+      const key = `${y}-${String(m).padStart(2, "0")}`;
       const entry = monthlyMap.get(key);
       if (!entry) continue;
       const amt = Number(tx.amount);
@@ -178,10 +225,17 @@ async function getDashboardData(
     }
     const cashFlowTrend = Array.from(monthlyMap.values());
 
-    // Total outstanding debt
-    const totalOutstandingDebt = (allDebts as any[]).reduce((sum, d) => {
-      return sum + Math.max(0, Number(d.amount) - Number(d.paidAmount));
-    }, 0);
+    // Tách biệt Nợ phải trả (OWE) và Khoản cho vay phải thu (OWED)
+    let totalOutstandingDebt = 0; // Chỉ tính OWE (mình nợ người khác)
+    let totalReceivableDebt = 0;  // Chỉ tính OWED (người khác nợ mình)
+    for (const d of allDebts as any[]) {
+      const remain = Math.max(0, Number(d.amount) - Number(d.paidAmount));
+      if (d.direction === "OWED") {
+        totalReceivableDebt += remain;
+      } else {
+        totalOutstandingDebt += remain;
+      }
+    }
 
     // Total wallet balance
     const totalWalletBalance = (realWallets as any[]).reduce((sum, w) => {
@@ -229,6 +283,8 @@ async function getDashboardData(
     return {
       income,
       expense,
+      prevMonthNet,
+      openingCumulativeBalance,
       investPnL,
       debts: serializeData(plainDebts),
       budgetsWithSpend: serializeData(budgetsWithSpend),
@@ -239,6 +295,7 @@ async function getDashboardData(
       spendingByCategory,
       cashFlowTrend,
       totalOutstandingDebt,
+      totalReceivableDebt,
       totalWalletBalance,
       totalInvestmentValue,
       budgetHealth,
@@ -248,6 +305,8 @@ async function getDashboardData(
     return {
       income: 0,
       expense: 0,
+      prevMonthNet: 0,
+      openingCumulativeBalance: 0,
       investPnL: 0,
       debts: [],
       budgetsWithSpend: [],
@@ -258,6 +317,7 @@ async function getDashboardData(
       spendingByCategory: [],
       cashFlowTrend: [],
       totalOutstandingDebt: 0,
+      totalReceivableDebt: 0,
       totalWalletBalance: 0,
       totalInvestmentValue: 0,
       budgetHealth: [],
@@ -286,6 +346,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const {
     income,
     expense,
+    prevMonthNet,
+    openingCumulativeBalance,
     investPnL,
     debts,
     budgetsWithSpend,
@@ -296,7 +358,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     spendingByCategory,
     cashFlowTrend,
     totalOutstandingDebt,
-    totalWalletBalance,
+    totalReceivableDebt,
     totalInvestmentValue,
     budgetHealth,
   } = await getDashboardData(
@@ -308,8 +370,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     selectedWalletId
   );
   const netBalance = income - expense;
+  // Tự động cộng dồn lũy kế toàn phần đến cuối kỳ đang xem (khớp 100% với tổng số dư Ví)
+  const closingCumulativeBalance = openingCumulativeBalance + netBalance;
 
   const monthLabel = filterDate.label;
+  const prevShortLabel =
+    typeof filterDate.month === "number"
+      ? `T${filterDate.month === 1 ? 12 : filterDate.month - 1}`
+      : `Năm ${filterDate.year - 1}`;
+  const currShortLabel =
+    typeof filterDate.month === "number"
+      ? `T${filterDate.month}`
+      : `Năm ${filterDate.year}`;
 
   const activeWallet =
     selectedWalletId === "ALL"
@@ -329,6 +401,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       icon: TrendingUp,
       prefix: "+",
       desc: filterDate.label,
+      extraDesc: null as string | null,
     },
     {
       label: "Chi tiêu",
@@ -340,17 +413,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       icon: TrendingDown,
       prefix: "",
       desc: filterDate.label,
+      extraDesc: null as string | null,
     },
     {
-      label: "Số dư ròng",
-      value: netBalance,
-      color: netBalance >= 0 ? "text-amber-700" : "text-rose-700",
-      iconColor: netBalance >= 0 ? "text-amber-600" : "text-rose-600",
-      bgIcon: netBalance >= 0 ? "bg-amber-100/80" : "bg-rose-100/80",
-      bgCard: netBalance >= 0 ? "bg-amber-50/60 border-amber-200/80" : "bg-rose-50/60 border-rose-200/80",
+      label: `Số dư lũy kế (${currShortLabel})`,
+      value: closingCumulativeBalance,
+      color: closingCumulativeBalance >= 0 ? "text-amber-700" : "text-rose-700",
+      iconColor: closingCumulativeBalance >= 0 ? "text-amber-600" : "text-rose-600",
+      bgIcon: closingCumulativeBalance >= 0 ? "bg-amber-100/80" : "bg-rose-100/80",
+      bgCard: closingCumulativeBalance >= 0 ? "bg-amber-50/60 border-amber-200/80" : "bg-rose-50/60 border-rose-200/80",
       icon: Wallet,
-      prefix: netBalance >= 0 ? "+" : "",
-      desc: "Thu - Chi",
+      prefix: closingCumulativeBalance >= 0 ? "+" : "-",
+      desc: `Đầu kỳ (hết ${prevShortLabel}): ${openingCumulativeBalance >= 0 ? "+" : "-"}${formatCurrencyCompact(Math.abs(openingCumulativeBalance))} · ${currShortLabel}: ${netBalance >= 0 ? "+" : "-"}${formatCurrencyCompact(Math.abs(netBalance))}`,
+      extraDesc: `Riêng ${prevShortLabel}: ${prevMonthNet >= 0 ? "+" : "-"}${formatCurrency(Math.abs(prevMonthNet))}`,
     },
     {
       label: "Lợi nhuận ĐT",
@@ -360,8 +435,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       bgIcon: investPnL >= 0 ? "bg-blue-100/80" : "bg-rose-100/80",
       bgCard: investPnL >= 0 ? "bg-blue-50/60 border-blue-200/80" : "bg-rose-50/60 border-rose-200/80",
       icon: ArrowUpRight,
-      prefix: investPnL >= 0 ? "+" : "",
+      prefix: investPnL >= 0 ? "+" : "-",
       desc: "Tổng danh mục",
+      extraDesc: null as string | null,
     },
   ];
 
@@ -437,9 +513,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 {card.prefix}{formatCurrencyCompact(Math.abs(card.value))}
               </p>
               <p className="text-xs text-slate-700 font-semibold">
-                {formatCurrency(Math.abs(card.value))}
+                {card.prefix}{formatCurrency(Math.abs(card.value))}
               </p>
               <p className="text-[11px] text-muted-foreground font-medium">{card.desc}</p>
+              {card.extraDesc && (
+                <p className="text-[10px] text-amber-800/90 font-semibold pt-0.5">{card.extraDesc}</p>
+              )}
             </div>
           </div>
         ))}
@@ -483,7 +562,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             income={income}
             expense={expense}
             totalDebt={totalOutstandingDebt}
-            totalWalletBalance={totalWalletBalance}
+            totalReceivable={totalReceivableDebt}
+            totalWalletBalance={closingCumulativeBalance}
             totalInvestmentValue={totalInvestmentValue}
             budgets={budgetHealth}
           />

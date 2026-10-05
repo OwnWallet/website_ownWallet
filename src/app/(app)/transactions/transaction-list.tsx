@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import {
  formatCurrency,
+ formatCurrencyCompact,
  formatDate,
  formatTime,
  formatDayHeader,
@@ -61,6 +62,7 @@ interface Wallet {
   name: string;
   bankName?: string | null;
   accountNumber?: string | null;
+  balance?: number | string | null;
   color?: string | null;
   icon?: string | null;
   txCount?: number;
@@ -236,7 +238,7 @@ export function TransactionList({
   };
 
 
- // Overall Financial Summary for current filter
+ // Overall Financial Summary for current filter (with automatic previous month carry-over)
  const summary = useMemo(() => {
  let income = 0;
  let expense = 0;
@@ -255,17 +257,128 @@ export function TransactionList({
  }
  });
 
+ const net = income - expense;
+
+ // Tính số dư kỳ trước (ví dụ Tháng 9/2026 khi đang xem Tháng 10/2026) và tổng lũy kế trước kỳ đang xem
+ let prevIncome = 0;
+ let prevExpense = 0;
+ let allPriorIncome = 0;
+ let allPriorExpense = 0;
+
+ const hasSpecificYear = typeof selectedYear === "number";
+ const hasSpecificMonth = typeof selectedMonth === "number";
+
+ const prevMonthNum = hasSpecificMonth
+   ? selectedMonth === 1
+     ? 12
+     : selectedMonth - 1
+   : null;
+ const prevYearNum = hasSpecificYear
+   ? hasSpecificMonth
+     ? selectedMonth === 1
+       ? selectedYear - 1
+       : selectedYear
+     : selectedYear - 1
+   : null;
+
+ const periodStartMs = hasSpecificYear
+   ? new Date(
+       selectedYear,
+       hasSpecificMonth ? selectedMonth - 1 : 0,
+       1,
+       0,
+       0,
+       0,
+       0
+     ).getTime()
+   : null;
+
+ initialTransactions.forEach((tx) => {
+   if (selectedWallet !== "ALL") {
+     if (selectedWallet === "UNASSIGNED") {
+       if (tx.walletId) return;
+     } else if (tx.walletId !== selectedWallet) {
+       return;
+     }
+   }
+   if (selectedType !== "ALL" && tx.type !== selectedType) return;
+   if (selectedCategory !== "ALL" && tx.categoryId !== selectedCategory) return;
+   if (search.trim() !== "") {
+     const q = search.toLowerCase();
+     const desc = (tx.note || tx.description || "").toLowerCase();
+     const cat = (tx.category?.name || "").toLowerCase();
+     const amtStr = String(Number(tx.amount));
+     if (!desc.includes(q) && !cat.includes(q) && !amtStr.includes(q)) return;
+   }
+
+   const d = toDate(tx.recordedAt);
+   const txY = d.getFullYear();
+   const txM = d.getMonth() + 1;
+   const amt = Number(tx.amount);
+
+   if (periodStartMs !== null && d.getTime() < periodStartMs) {
+     if (tx.type === "INCOME") allPriorIncome += amt;
+     else allPriorExpense += amt;
+   }
+
+   if (hasSpecificYear && prevYearNum !== null) {
+     const isInPrevPeriod = hasSpecificMonth
+       ? txY === prevYearNum && txM === prevMonthNum
+       : txY === prevYearNum;
+     if (isInPrevPeriod) {
+       if (tx.type === "INCOME") prevIncome += amt;
+       else prevExpense += amt;
+     }
+   }
+ });
+
+ const initialWalletBal = (_wallets || []).reduce((sum, w) => {
+   if (!selectedWallet || selectedWallet === "ALL") return sum + Number(w.balance ?? 0);
+   if (selectedWallet === "UNASSIGNED") return 0;
+   return w.id === selectedWallet ? sum + Number(w.balance ?? 0) : sum;
+ }, 0);
+
+ const prevNet = prevIncome - prevExpense;
+ const openingCumulativeBalance = initialWalletBal + (allPriorIncome - allPriorExpense);
+ const closingCumulativeBalance = openingCumulativeBalance + net;
+
+ const prevLabel = hasSpecificMonth
+   ? `T${prevMonthNum}`
+   : hasSpecificYear
+   ? `Năm ${prevYearNum}`
+   : "Kỳ trước";
+ const currLabel = hasSpecificMonth
+   ? `T${selectedMonth}`
+   : hasSpecificYear
+   ? `Năm ${selectedYear}`
+   : "Kỳ này";
+
  const activeDaysCount = daysWithExpense.size || 1;
  const dailyAvgExpense = Math.round(expense / activeDaysCount);
 
  return {
  income,
  expense,
- net: income - expense,
+ net,
+ prevNet,
+ openingCumulativeBalance,
+ closingCumulativeBalance,
+ prevLabel,
+ currLabel,
  activeDaysCount,
  dailyAvgExpense,
  };
- }, [filtered]);
+ }, [
+   filtered,
+   initialTransactions,
+   _wallets,
+   selectedWallet,
+   selectedType,
+   selectedCategory,
+   search,
+   selectedMonth,
+   selectedYear,
+ ]);
 
  // Group transactions by date
  interface DayGroup {
@@ -375,11 +488,11 @@ export function TransactionList({
  </div>
  </div>
 
- {/* Số dư ròng */}
+ {/* Số dư lũy kế (Đầu kỳ + Ròng kỳ này) */}
  <div className="card p-4 flex flex-col justify-between border-amber-500/20 bg-amber-500/5">
  <div className="flex items-center justify-between text-muted">
  <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 ">
- Dòng tiền ròng
+ Số dư lũy kế ({summary.currLabel})
  </span>
  <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-600">
  <CreditCard size={16} />
@@ -388,14 +501,17 @@ export function TransactionList({
  <div className="mt-2">
  <p
  className={`text-lg md:text-2xl font-extrabold truncate ${
- summary.net >= 0 ? "text-amber-600 " : "text-rose-600"
+ summary.closingCumulativeBalance >= 0 ? "text-amber-600 " : "text-rose-600"
  }`}
  >
- {summary.net > 0 ? "+" : ""}
- {formatCurrency(summary.net)}
+ {summary.closingCumulativeBalance > 0 ? "+" : ""}
+ {formatCurrency(summary.closingCumulativeBalance)}
  </p>
- <p className="text-[11px] text-muted-foreground mt-0.5">
- {summary.net >= 0 ? "Thặng dư tài chính" : "Thâm hụt tài chính"}
+ <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+ Đầu kỳ (hết {summary.prevLabel}): {summary.openingCumulativeBalance >= 0 ? "+" : "-"}{formatCurrencyCompact(Math.abs(summary.openingCumulativeBalance))} · {summary.currLabel}: {summary.net >= 0 ? "+" : "-"}{formatCurrencyCompact(Math.abs(summary.net))}
+ </p>
+ <p className="text-[10px] text-amber-800/90 font-semibold mt-0.5 truncate">
+ Riêng {summary.prevLabel}: {summary.prevNet >= 0 ? "+" : "-"}{formatCurrency(Math.abs(summary.prevNet))}
  </p>
  </div>
  </div>
