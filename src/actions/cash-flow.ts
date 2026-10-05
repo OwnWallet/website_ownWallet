@@ -289,12 +289,8 @@ export async function collectCashFlow(formData: FormData) {
   const newBalance = Number(wallet.balance ?? 0) + actualAmount;
 
   await db.transaction(async (tx: any) => {
-    // 1. Cộng số dư ví
-    await tx.orm.public.Wallet.where({ id: wallet.id, userId }).update({
-      balance: String(newBalance),
-    });
-
-    // 2. Tạo Transaction INCOME
+    // 1. Tạo Transaction INCOME (số dư thực tế currentBalance của ví tự động cộng qua bảng Transaction)
+    // Nếu chưa có bất kỳ danh mục INCOME nào thì mới cộng trực tiếp vào số dư khởi tạo của ví
     if (categoryId) {
       await tx.orm.public.Transaction.create({
         amount: String(actualAmount),
@@ -304,6 +300,10 @@ export async function collectCashFlow(formData: FormData) {
         walletId: wallet.id,
         categoryId,
         userId,
+      });
+    } else {
+      await tx.orm.public.Wallet.where({ id: wallet.id, userId }).update({
+        balance: String(newBalance),
       });
     }
 

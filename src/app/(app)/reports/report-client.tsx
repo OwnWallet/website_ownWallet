@@ -33,6 +33,8 @@ interface Props {
   currentMonthExpense: number;
   lastMonthIncome: number;
   lastMonthExpense: number;
+  openingCumulativeBalance: number;
+  closingCumulativeBalance: number;
   categorySpending: CategorySpend[];
   monthlyTrend: MonthItem[];
   currentMonth: number | "ALL";
@@ -46,6 +48,8 @@ export function ReportClient({
   currentMonthExpense,
   lastMonthIncome,
   lastMonthExpense,
+  openingCumulativeBalance,
+  closingCumulativeBalance,
   categorySpending,
   monthlyTrend,
   currentMonth: _currentMonth,
@@ -56,6 +60,15 @@ export function ReportClient({
 
   const netCurrent = currentMonthIncome - currentMonthExpense;
   const netLast = lastMonthIncome - lastMonthExpense;
+
+  const prevMonthNum =
+    !isYearly && typeof _currentMonth === "number"
+      ? _currentMonth === 1
+        ? 12
+        : _currentMonth - 1
+      : 12;
+  const prevShortLabel = isYearly ? `Năm ${currentYear - 1}` : `T${prevMonthNum}`;
+  const currShortLabel = isYearly ? `Năm ${currentYear}` : `T${_currentMonth}`;
 
   const incomeChange =
     lastMonthIncome > 0
@@ -177,25 +190,40 @@ export function ReportClient({
           </div>
         </div>
 
-        {/* Net Savings Card */}
+        {/* Cumulative Closing Balance Card */}
         <div className="card p-5 border-border-strong bg-elevated/40 space-y-2">
           <div className="flex justify-between items-center text-xs text-muted">
-            <span className="font-semibold text-foreground">Tiết kiệm ròng ({currentMonthName})</span>
+            <span className="font-semibold text-foreground">Số dư lũy kế ({currShortLabel})</span>
             <span className="p-1 rounded-md bg-elevated text-primary">
               <BarChart3 size={14} />
             </span>
           </div>
           <p
             className={`text-2xl font-bold ${
-              netCurrent >= 0 ? "text-emerald-600" : "text-rose-600"
+              closingCumulativeBalance >= 0 ? "text-emerald-600" : "text-rose-600"
             }`}
           >
-            {netCurrent > 0 ? "+" : ""}
-            {formatCurrency(netCurrent)}
+            {closingCumulativeBalance > 0 ? "+" : ""}
+            {formatCurrency(closingCumulativeBalance)}
           </p>
-          <div className="text-xs text-muted-foreground pt-1">
-            <span>{isYearly ? "Năm trước" : "Tháng trước"}: {formatCurrency(netLast)}</span>
+          <div className="text-xs text-muted-foreground pt-1 flex flex-wrap items-center gap-x-2">
+            <span>
+              Đầu kỳ (hết {prevShortLabel}):{" "}
+              <strong className={openingCumulativeBalance >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                {openingCumulativeBalance > 0 ? "+" : ""}{formatCurrency(openingCumulativeBalance)}
+              </strong>
+            </span>
+            <span>·</span>
+            <span>
+              {currShortLabel}:{" "}
+              <strong className={netCurrent >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                {netCurrent > 0 ? "+" : ""}{formatCurrency(netCurrent)}
+              </strong>
+            </span>
           </div>
+          <p className="text-[11px] text-amber-800/90 font-semibold">
+            Riêng biến động {prevShortLabel}: {netLast > 0 ? "+" : ""}{formatCurrency(netLast)}
+          </p>
         </div>
       </div>
 

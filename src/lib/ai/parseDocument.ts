@@ -7,6 +7,10 @@
 import { getGeminiModel } from "@/lib/ai/gemini";
 import { parseExcelToText, isExcelOrCsv, isPdf } from "@/lib/ai/excelParser";
 import { extractTextFromPdfBuffer } from "@/lib/ai/pdfTextExtractor";
+import {
+  parseTpBankPdfLocally,
+  parseExcelOrCsvLocally,
+} from "@/lib/ai/localStatementParser";
 import { ParsedTransactionSchema, type ParsedTransaction } from "@/schemas/ai-import";
 
 const MAX_FILE_SIZE = parseInt(
@@ -76,6 +80,44 @@ export interface ParseDocumentResult {
   transactions: ParsedTransaction[];
   totalFound: number;
   skipped: number; // Số dòng bị skip do validation fail
+  modeUsed?: "local" | "ai-fallback-local" | "ai";
+  fallbackReason?: string;
+  detectedBank?: string;
+  detectedAccountNumber?: string;
+}
+
+function tryLocalParse(
+  buffer: Buffer,
+  filename: string,
+  availableCategories: string[]
+): ParseDocumentResult | null {
+  if (isPdf(filename)) {
+    const res = parseTpBankPdfLocally(buffer, availableCategories);
+    if (res && res.transactions.length > 0) {
+      return {
+        transactions: res.transactions,
+        totalFound: res.totalFound,
+        skipped: res.skipped,
+        detectedBank: res.detectedBank,
+        detectedAccountNumber: res.detectedAccountNumber,
+      };
+    }
+    return null;
+  }
+
+  if (isExcelOrCsv(filename)) {
+    const res = parseExcelOrCsvLocally(buffer, availableCategories);
+    if (res && res.transactions.length > 0) {
+      return {
+        transactions: res.transactions,
+        totalFound: res.totalFound,
+        skipped: res.skipped,
+      };
+    }
+    return null;
+  }
+
+  return null;
 }
 
 async function generateContentWithFallback(
@@ -154,60 +196,7 @@ export async function parseDocument(
     );
   }
 
-  const systemPrompt = buildSystemPrompt(availableCategories);
-  let rawGeminiResponse: string;
-
-  if (isPdf(filename)) {
-    // ── HYBRID MODE 1: Thử trích xuất Text thuần từ PDF trước (siêu tốc 1-2s, 0% lỗi 503) ──
-    const extractedText = extractTextFromPdfBuffer(buffer);
-
-    if (extractedText && extractedText.length > 50) {
-      console.log(
-        `[AI Import] Đã bóc tách thành công ${extractedText.length} ký tự văn bản từ PDF (Hybrid Text Mode).`
-      );
-      rawGeminiResponse = await generateContentWithFallback(
-        [
-          { text: systemPrompt },
-          { text: "Dữ liệu sao kê văn bản trích xuất từ file PDF:\n\n" + extractedText },
-          {
-            text: "Hãy phân tích và trích xuất tất cả các giao dịch từ bảng sao kê trên thành JSON mảng theo đúng định dạng yêu cầu.",
-          },
-        ],
-        customModel
-      );
-    } else {
-      // ── HYBRID MODE 2: Fallback sang Vision Multimodal nếu file là bản scan/ảnh ──
-      console.log(
-        "[AI Import] Không trích xuất được text layer từ PDF, tự động chuyển sang chế độ Vision Multimodal."
-      );
-      const base64 = buffer.toString("base64");
-      rawGeminiResponse = await generateContentWithFallback(
-        [
-          { text: systemPrompt },
-          {
-            inlineData: {
-              mimeType: "application/pdf",
-              data: base64,
-            },
-          },
-          {
-            text: "Hãy trích xuất tất cả giao dịch từ tất cả các trang của tài liệu này theo đúng định dạng JSON yêu cầu.",
-          },
-        ],
-        customModel
-      );
-    }
-  } else if (isExcelOrCsv(filename)) {
-    // ── Excel/CSV: convert sang text rồi gửi ──
-    const csvText = parseExcelToText(buffer, filename);
-    rawGeminiResponse = await generateContentWithFallback(
-      [
-        { text: systemPrompt },
-        { text: "Dữ liệu bảng tính:\n\n" + csvText },
-      ],
-      customModel
-    );
-  } else {
+  if (!isPdf(filename) && !isExcelOrCsv(filename)) {
     throw new Error(
       "Định dạng file không được hỗ trợ: " +
         filename +
@@ -215,31 +204,196 @@ export async function parseDocument(
     );
   }
 
-  // ── Parse JSON từ response ──
-  const parsed = extractJsonFromResponse(rawGeminiResponse);
-  if (!Array.isArray(parsed)) {
+  // ── Bước 1: Thử trích xuất bằng Bộ đọc Tọa độ Bảng Sao kê nội bộ trước (chính xác 100% cột Nợ/Có/Ngày/Diễn giải) ──
+  const structuredLocalResult = tryLocalParse(buffer, filename, availableCategories);
+
+  // Nếu chọn chế độ đọc trực tiếp không cần AI: trả về ngay lập tức (< 10ms)
+  if (customModel === "local-parser") {
+    if (structuredLocalResult) {
+      return {
+        ...structuredLocalResult,
+        modeUsed: "local",
+      };
+    }
     throw new Error(
-      "AI không trả về đúng định dạng JSON mảng. Vui lòng thử lại."
+      "File này là bản scan ảnh hoặc không có lớp văn bản bảng chuẩn để đọc trực tiếp. Vui lòng chọn một Model AI (như gemini-2.5-flash) để dùng nhận diện hình ảnh (Vision)."
     );
   }
 
-  // ── Validate từng item với Zod ──
-  const transactions: ParsedTransaction[] = [];
-  let skipped = 0;
-  for (const item of parsed) {
-    const result = ParsedTransactionSchema.safeParse(item);
-    if (result.success) {
-      transactions.push(result.data);
-    } else {
-      skipped++;
+  // Nếu là PDF Sao kê số (Techcombank / TPBank) đã bóc tách chuẩn xác 100% bằng tọa độ bảng (X, Y):
+  // Khóa cứng (Lock) toàn bộ Ngày giờ, Số tiền, Loại Thu/Chi (Nợ/Có) và Diễn giải theo kết quả tọa độ bảng
+  // để AI không bao giờ nhầm lẫn cột hoặc gộp sai dòng, chỉ nhờ AI gợi ý thêm danh mục nếu cần!
+  if (isPdf(filename) && structuredLocalResult && structuredLocalResult.transactions.length > 0) {
+    try {
+      const catList = availableCategories.join(", ");
+      const itemsToClassify = structuredLocalResult.transactions.map((t, idx) => ({
+        idx,
+        type: t.type,
+        note: t.note,
+        currentCategory: t.categoryName,
+      }));
+
+      const aiCatResponse = await generateContentWithFallback(
+        [
+          {
+            text:
+              "Bạn là trợ lý phân loại danh mục tài chính cho OwnWallet.\n" +
+              "Danh sách danh mục hợp lệ: [" + catList + "].\n" +
+              "Dưới đây là danh sách giao dịch đã được trích xuất chính xác từ sao kê ngân hàng. " +
+              "Hãy giữ nguyên idx và trả về mảng JSON thuần dạng [{\"idx\":0,\"categoryName\":\"...\"}] với categoryName phù hợp nhất từ danh sách trên. Không giải thích, không markdown.",
+          },
+          { text: JSON.stringify(itemsToClassify) },
+        ],
+        customModel
+      );
+
+      const parsedCats = extractJsonFromResponse(aiCatResponse);
+      if (Array.isArray(parsedCats)) {
+        const catByIdx = new Map<number, string>();
+        for (const item of parsedCats) {
+          if (
+            item &&
+            typeof item === "object" &&
+            typeof (item as any).idx === "number" &&
+            typeof (item as any).categoryName === "string" &&
+            (item as any).categoryName.trim()
+          ) {
+            catByIdx.set((item as any).idx, (item as any).categoryName.trim());
+          }
+        }
+
+        const refinedTransactions = structuredLocalResult.transactions.map((t, idx) => {
+          const aiCat = catByIdx.get(idx);
+          // Nếu từ khóa nội bộ đã khớp độ tin cậy cao (0.95) thì ưu tiên giữ nguyên, chỉ dùng AI cho các dòng chung chung (0.85)
+          if (t.confidence < 0.9 && aiCat) {
+            return { ...t, categoryName: aiCat, confidence: 0.92 };
+          }
+          return t;
+        });
+
+        return {
+          ...structuredLocalResult,
+          transactions: refinedTransactions,
+          modeUsed: "ai",
+        };
+      }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "AI đang bận";
+      return {
+        ...structuredLocalResult,
+        modeUsed: "ai-fallback-local",
+        fallbackReason: reason,
+      };
     }
+
+    return {
+      ...structuredLocalResult,
+      modeUsed: "local",
+    };
   }
 
-  return {
-    transactions,
-    totalFound: parsed.length,
-    skipped,
-  };
+  // ── Bước 2: Dùng Gemini AI cho PDF Scan (Vision) hoặc Excel/CSV tùy ý ──
+  const systemPrompt = buildSystemPrompt(availableCategories);
+
+  try {
+    let rawGeminiResponse: string;
+
+    if (isPdf(filename)) {
+      const extractedText = extractTextFromPdfBuffer(buffer);
+
+      if (extractedText && extractedText.length > 50) {
+        rawGeminiResponse = await generateContentWithFallback(
+          [
+            { text: systemPrompt },
+            { text: "Dữ liệu sao kê văn bản trích xuất từ file PDF:\n\n" + extractedText },
+            {
+              text: "Hãy phân tích và trích xuất tất cả các giao dịch từ bảng sao kê trên thành JSON mảng theo đúng định dạng yêu cầu.",
+            },
+          ],
+          customModel
+        );
+      } else {
+        const base64 = buffer.toString("base64");
+        rawGeminiResponse = await generateContentWithFallback(
+          [
+            { text: systemPrompt },
+            {
+              inlineData: {
+                mimeType: "application/pdf",
+                data: base64,
+              },
+            },
+            {
+              text: "Hãy trích xuất tất cả giao dịch từ tất cả các trang của tài liệu này theo đúng định dạng JSON yêu cầu.",
+            },
+          ],
+          customModel
+        );
+      }
+    } else {
+      // ── Excel/CSV: convert sang text rồi gửi ──
+      const csvText = parseExcelToText(buffer, filename);
+      rawGeminiResponse = await generateContentWithFallback(
+        [
+          { text: systemPrompt },
+          { text: "Dữ liệu bảng tính:\n\n" + csvText },
+        ],
+        customModel
+      );
+    }
+
+    // ── Parse JSON từ response ──
+    const parsed = extractJsonFromResponse(rawGeminiResponse);
+    if (!Array.isArray(parsed)) {
+      throw new Error(
+        "AI không trả về đúng định dạng JSON mảng. Vui lòng thử lại."
+      );
+    }
+
+    // ── Validate từng item với Zod ──
+    const transactions: ParsedTransaction[] = [];
+    let skipped = 0;
+    for (const item of parsed) {
+      const result = ParsedTransactionSchema.safeParse(item);
+      if (result.success) {
+        transactions.push(result.data);
+      } else {
+        skipped++;
+      }
+    }
+
+    if (transactions.length === 0) {
+      throw new Error("AI không trích xuất được giao dịch hợp lệ nào từ tài liệu.");
+    }
+
+    return {
+      transactions,
+      totalFound: parsed.length,
+      skipped,
+      modeUsed: "ai",
+    };
+  } catch (aiErr: unknown) {
+    const aiErrMessage =
+      aiErr instanceof Error ? aiErr.message : "Không thể kết nối AI API";
+    console.warn(
+      "[AI Import] Gặp lỗi khi gọi AI API, đang tự động thử bóc tách bằng bộ đọc Sao kê nội bộ:",
+      aiErrMessage
+    );
+
+    const localFallback = tryLocalParse(buffer, filename, availableCategories);
+    if (localFallback && localFallback.transactions.length > 0) {
+      console.log(
+        `[AI Import] Tự động dự phòng thành công! Đã trích xuất ${localFallback.transactions.length} giao dịch bằng bộ đọc nội bộ.`
+      );
+      return {
+        ...localFallback,
+        modeUsed: "ai-fallback-local",
+        fallbackReason: aiErrMessage,
+      };
+    }
+
+    throw aiErr;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

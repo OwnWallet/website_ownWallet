@@ -127,6 +127,45 @@ export async function addInvestLog(investmentId: string, formData: FormData) {
         quantity: String(newQty),
         buyPrice: String(newAvgPrice),
       });
+
+    // Nếu có chọn tài khoản trích tiền mua đầu tư → tạo Transaction EXPENSE để trừ số dư ví
+    if (parsed.data.walletId) {
+      const wallet = await db.orm.public.Wallet
+        .where({ id: parsed.data.walletId, userId })
+        .first();
+
+      if (wallet) {
+        walletName = wallet.name;
+
+        let category = await db.orm.public.Category
+          .where({ userId, type: "INVEST" })
+          .first();
+
+        if (!category) {
+          category = await db.orm.public.Category
+            .where({ userId, type: "EXPENSE" })
+            .first();
+        }
+
+        if (!category) {
+          category = await db.orm.public.Category
+            .where({ userId })
+            .first();
+        }
+
+        if (category) {
+          await db.orm.public.Transaction.create({
+            amount: String(totalAmount),
+            type: "EXPENSE",
+            categoryId: category.id,
+            note: `Mua thêm ${tradeQty.toLocaleString("vi-VN")} ${investment.name}${investment.ticker ? ` (${investment.ticker})` : ""}`,
+            walletId: wallet.id,
+            userId,
+            recordedAt: toInstant(parsed.data.recordedAt),
+          });
+        }
+      }
+    }
   }
 
   // Ghi nhật ký giao dịch

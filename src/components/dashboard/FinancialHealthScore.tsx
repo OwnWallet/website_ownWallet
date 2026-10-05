@@ -7,7 +7,8 @@ import { TrendingUp, TrendingDown, Wallet, Shield } from "lucide-react";
 interface FinancialHealthProps {
   income: number;
   expense: number;
-  totalDebt: number; // total outstanding debt
+  totalDebt: number; // total payable debt (OWE)
+  totalReceivable?: number; // total receivable debt (OWED)
   totalWalletBalance: number;
   totalInvestmentValue: number;
   budgets: { spent: number; limitAmount: number }[];
@@ -97,6 +98,7 @@ export function FinancialHealthScore({
   income,
   expense,
   totalDebt,
+  totalReceivable = 0,
   totalWalletBalance,
   totalInvestmentValue,
   budgets,
@@ -140,7 +142,7 @@ export function FinancialHealthScore({
     };
   }, [income, expense, totalDebt, totalWalletBalance, totalInvestmentValue, budgets, monthlyExpenseAvg]);
 
-  const netWorth = totalWalletBalance + totalInvestmentValue - totalDebt;
+  const netWorth = totalWalletBalance + totalInvestmentValue + totalReceivable - totalDebt;
 
   return (
     <div className="space-y-5">
@@ -159,7 +161,8 @@ export function FinancialHealthScore({
               {netWorth >= 0 ? "+" : ""}{formatCurrencyCompact(netWorth)}
             </p>
             <p className="text-[10px] text-muted-foreground">
-              Ví: {formatCurrencyCompact(totalWalletBalance)} + ĐT: {formatCurrencyCompact(totalInvestmentValue)} − Nợ: {formatCurrencyCompact(totalDebt)}
+              Ví: {formatCurrencyCompact(totalWalletBalance)} + ĐT: {formatCurrencyCompact(totalInvestmentValue)}
+              {totalReceivable > 0 ? ` + Phải thu: ${formatCurrencyCompact(totalReceivable)}` : ""} − Nợ: {formatCurrencyCompact(totalDebt)}
             </p>
           </div>
 

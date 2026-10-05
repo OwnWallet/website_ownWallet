@@ -1,13 +1,10 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, calcPercent, formatMetric, getFilterDateRange, toInstant, toDate } from "@/lib/utils";
-import { upsertBudget } from "@/actions/budgets";
+import { formatCurrency, calcPercent, formatMetric, getFilterDateRange } from "@/lib/utils";
+import { upsertBudget, getAutoRolloverBudgets, EnrichedBudgetItem } from "@/actions/budgets";
 import { BudgetListClient } from "./budget-list-client";
-import { BudgetRolloverForm } from "./budget-rollover-form";
-import { PiggyBank, TrendingDown, AlertCircle, Wallet, Plus } from "lucide-react";
+import { PiggyBank, TrendingDown, AlertCircle, Wallet, Plus, Sparkles } from "lucide-react";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
-
-
 
 interface BudgetPageProps {
   searchParams: Promise<{
@@ -23,54 +20,29 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
 
   const resolvedSearchParams = (await searchParams) || {};
   const filterDate = getFilterDateRange(resolvedSearchParams.month, resolvedSearchParams.year);
-  const fromInstant = toInstant(filterDate.from);
-  const toInstantVal = toInstant(filterDate.to);
 
-  let budgets: any[] = [];
+  let budgets: EnrichedBudgetItem[] = [];
   let expenseCategories: any[] = [];
-  const spentMap = new Map<string, number>();
-  const monthSpentMap = new Map<string, number>();
+  let totalBaseLimit = 0;
+  let totalRolloverAmount = 0;
+  let totalLimit = 0;
+  let totalSpent = 0;
 
   try {
-    let budgetQuery = db.orm.public.Budget
-      .where((b) => b.userId.eq(userId))
-      .where((b) => b.year.eq(filterDate.year));
-
-    const targetMonth = filterDate.month;
-    if (targetMonth !== "ALL") {
-      budgetQuery = budgetQuery.where((b) => b.month.eq(targetMonth));
-    }
-
-    const [bList, cList, txList] = await Promise.all([
-      budgetQuery
-        .include("category", (cat) => cat)
-        .orderBy((b) => b.month.asc())
-        .all(),
+    const [autoBudgetData, cList] = await Promise.all([
+      getAutoRolloverBudgets(userId, filterDate.month, filterDate.year),
       db.orm.public.Category
         .where((c) => c.userId.eq(userId))
         .where((c) => c.type.eq("EXPENSE"))
         .all(),
-      db.orm.public.Transaction
-        .where((t) => t.userId.eq(userId))
-        .where((t) => t.type.eq("EXPENSE"))
-        .where((t) => t.recordedAt.gte(fromInstant))
-        .where((t) => t.recordedAt.lte(toInstantVal))
-        .all(),
     ]);
 
-    budgets = bList;
+    budgets = autoBudgetData.budgets;
+    totalBaseLimit = autoBudgetData.totalBaseLimit;
+    totalRolloverAmount = autoBudgetData.totalRolloverAmount;
+    totalLimit = autoBudgetData.totalEffectiveLimit;
+    totalSpent = autoBudgetData.totalSpent;
     expenseCategories = cList;
-
-    txList.forEach((tx: any) => {
-      const amt = Number(tx.amount);
-      const prev = spentMap.get(tx.categoryId) || 0;
-      spentMap.set(tx.categoryId, prev + amt);
-
-      const d = toDate(tx.recordedAt);
-      const m = d.getMonth() + 1;
-      const mKey = `${tx.categoryId}_${m}`;
-      monthSpentMap.set(mKey, (monthSpentMap.get(mKey) || 0) + amt);
-    });
   } catch (error) {
     console.error("Failed to fetch budget data:", error);
     return (
@@ -81,12 +53,15 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
     );
   }
 
-  const totalLimit = budgets.reduce((sum, b) => sum + Number(b.limitAmount), 0);
-  const totalSpent = filterDate.month === "ALL"
-    ? Array.from(spentMap.values()).reduce((sum, v) => sum + v, 0)
-    : budgets.reduce((sum, b) => sum + (spentMap.get(b.categoryId) || 0), 0);
   const overallPercent = calcPercent(totalSpent, totalLimit);
   const remaining = totalLimit - totalSpent;
+
+  const prevMonthLabel =
+    typeof filterDate.month === "number"
+      ? `Tháng ${filterDate.month === 1 ? 12 : filterDate.month - 1}/${
+          filterDate.month === 1 ? filterDate.year - 1 : filterDate.year
+        }`
+      : "tháng trước";
 
   return (
     <div className="space-y-6 animate-fade-in w-full">
@@ -99,7 +74,34 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
           <div>
             <h1 className="page-header-title">Quản lý Ngân sách</h1>
             <p className="page-header-subtitle">
-              Thiết lập hạn mức chi tiêu theo danh mục • {filterDate.label}
+              Thiết lập hạn mức chi tiêu theo danh mục • Tự động kết chuyển số dư theo thời gian thực ({filterDate.label})
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Automatic Real-time Rollover Banner */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 text-emerald-950 shadow-2xs">
+        <div className="flex items-center gap-2.5 text-xs">
+          <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+            <Sparkles size={15} />
+          </div>
+          <div>
+            <p className="font-bold text-emerald-900">
+              Cơ chế tự động cộng dồn số dư theo thời gian thực đang bật
+            </p>
+            <p className="text-emerald-800/90 mt-0.5">
+              {totalRolloverAmount > 0 ? (
+                <>
+                  Đã tự động cộng <strong>+{formatCurrency(totalRolloverAmount)}</strong> hạn mức chưa tiêu từ{" "}
+                  <strong>{prevMonthLabel}</strong> vào tổng ngân sách <strong>{filterDate.label.toLowerCase()}</strong>.
+                </>
+              ) : (
+                <>
+                  Hệ thống tự động kế thừa ngân sách định kỳ và cộng phần hạn mức chưa sử dụng từ {prevMonthLabel.toLowerCase()} sang{" "}
+                  {filterDate.label.toLowerCase()} mà không cần kích hoạt thủ công.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -112,10 +114,14 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
             <div className="kpi-card-icon bg-orange-100 text-orange-600">
               <PiggyBank size={18} />
             </div>
-            <span className="kpi-card-label text-orange-700">Tổng ngân sách</span>
+            <span className="kpi-card-label text-orange-700">Tổng ngân sách khả dụng</span>
           </div>
           <p className="kpi-card-value text-foreground">{formatCurrency(totalLimit)}</p>
-          <p className="kpi-card-sub">{filterDate.label}</p>
+          <p className="kpi-card-sub">
+            {totalRolloverAmount > 0
+              ? `Gốc: ${formatCurrency(totalBaseLimit)} + Dư T.trước: +${formatCurrency(totalRolloverAmount)}`
+              : `${filterDate.label} (Tự động kết chuyển)`}
+          </p>
         </div>
 
         <div className="kpi-card" style={{ "--kpi-accent": "#e11d48" } as React.CSSProperties}>
@@ -145,35 +151,24 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
 
       {/* Budget List with Bulk Delete */}
       <BudgetListClient
-        budgets={budgets.map((b) => {
-          const limit = Number(b.limitAmount);
-          const spent = filterDate.month === "ALL"
-            ? (monthSpentMap.get(`${b.categoryId}_${b.month}`) || 0)
-            : (spentMap.get(b.categoryId) || 0);
-          const percent = calcPercent(spent, limit);
-          return {
-            id: b.id,
-            month: b.month,
-            year: b.year,
-            categoryName: b.category?.name || "Chung",
-            categoryIcon: b.category?.icon || "📂",
-            categoryColor: b.category?.color || "#ea580c",
-            limit,
-            spent,
-            percent,
-          };
-        })}
+        budgets={budgets.map((b) => ({
+          id: b.id,
+          month: b.month,
+          year: b.year,
+          categoryName: b.category?.name || "Chung",
+          categoryIcon: b.category?.icon || "📂",
+          categoryColor: b.category?.color || "#ea580c",
+          baseLimit: b.baseLimit,
+          rolloverAmount: b.rolloverAmount,
+          prevMonth: b.prevMonth,
+          prevYear: b.prevYear,
+          limit: b.limitAmount,
+          spent: b.spent,
+          percent: b.percent,
+        }))}
         isMonthAll={filterDate.month === "ALL"}
         filterLabel={filterDate.label}
       />
-
-      {/* Budget Rollover */}
-      {filterDate.month !== "ALL" && (
-        <BudgetRolloverForm
-          currentMonth={typeof filterDate.month === "number" ? filterDate.month : new Date().getMonth() + 1}
-          currentYear={filterDate.year}
-        />
-      )}
 
       {/* Add / Upsert Budget Form */}
       <div className="card bg-gradient-to-br from-orange-50/40 to-white border-orange-200/60">

@@ -25,6 +25,10 @@ export interface BudgetItemData {
   categoryName: string;
   categoryIcon: string | null;
   categoryColor: string;
+  baseLimit?: number;
+  rolloverAmount?: number;
+  prevMonth?: number;
+  prevYear?: number;
   limit: number;
   spent: number;
   percent: number;
@@ -102,6 +106,7 @@ export function BudgetListClient({
             : null;
 
           const isSelected = selectedIds.has(b.id);
+          const hasRollover = (b.rolloverAmount ?? 0) > 0;
 
           return (
             <div
@@ -141,6 +146,11 @@ export function BudgetListClient({
                         Tháng {b.month}/{b.year}
                       </span>
                     )}
+                    {hasRollover && (
+                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded-md inline-block mt-0.5">
+                        +Dư T{b.prevMonth}/{b.prevYear}: +{formatCurrency(b.rolloverAmount!)}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -162,7 +172,7 @@ export function BudgetListClient({
               </div>
 
               <div>
-                <div className="flex justify-between text-sm mb-2">
+                <div className="flex justify-between text-sm mb-1.5">
                   <span className="text-muted-foreground">
                     Đã chi: <span className="text-foreground font-semibold">{formatCurrency(b.spent)}</span>
                   </span>
@@ -170,6 +180,13 @@ export function BudgetListClient({
                     Hạn mức: <span className="text-foreground font-semibold">{formatCurrency(b.limit)}</span>
                   </span>
                 </div>
+                {hasRollover && (
+                  <div className="text-[11px] text-muted-foreground mb-2 flex justify-end">
+                    <span>
+                      (Gốc: {formatCurrency(b.baseLimit ?? b.limit)} + Dư T{b.prevMonth}: {formatCurrency(b.rolloverAmount!)})
+                    </span>
+                  </div>
+                )}
 
                 <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
                   <div
@@ -180,8 +197,14 @@ export function BudgetListClient({
                     }}
                   />
                 </div>
-                <div className="mt-2 text-right">
-                  <span className="text-xs font-bold" style={{ color: progressColor }}>
+                <div className="mt-2 flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    Còn lại:{" "}
+                    <strong className={b.limit - b.spent >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                      {formatCurrency(b.limit - b.spent)}
+                    </strong>
+                  </span>
+                  <span className="font-bold" style={{ color: progressColor }}>
                     {formatMetric(b.percent)}%
                   </span>
                 </div>

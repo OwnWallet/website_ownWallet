@@ -142,13 +142,17 @@ export async function recordPayment(id: string, formData: FormData) {
       const isOwe = debt.direction === "OWE";
       const newBal = isOwe ? currentBal - cappedPayment : currentBal + cappedPayment;
 
-      await db.orm.public.Wallet.where({ id: walletId, userId }).update({
-        balance: String(newBal),
-      });
-
-      // Tìm danh mục nợ tương ứng
+      // Tìm danh mục nợ tương ứng (có fallback sang type DEBT hoặc EXPENSE/INCOME)
       const catName = isOwe ? "Nợ phải trả" : "Nợ phải thu";
-      const category = await db.orm.public.Category.where({ userId, name: catName }).first();
+      let category = await db.orm.public.Category.where({ userId, name: catName }).first();
+      if (!category) {
+        category = await db.orm.public.Category.where({ userId, type: "DEBT" }).first();
+      }
+      if (!category) {
+        category = await db.orm.public.Category
+          .where({ userId, type: isOwe ? "EXPENSE" : "INCOME" })
+          .first();
+      }
 
       if (category) {
         const tx = await db.orm.public.Transaction.create({
@@ -161,6 +165,11 @@ export async function recordPayment(id: string, formData: FormData) {
           userId,
         });
         linkedTxId = tx.id;
+      } else {
+        // Chỉ cập nhật trực tiếp balance nếu chưa tạo được bản ghi Transaction
+        await db.orm.public.Wallet.where({ id: walletId, userId }).update({
+          balance: String(newBal),
+        });
       }
     }
   }
