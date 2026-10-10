@@ -122,7 +122,7 @@ export async function deleteCategory(id: string) {
 export async function getAiConfig() {
   await getUserId();
   const apiKey = (await getSystemSetting("GEMINI_API_KEY", process.env.GEMINI_API_KEY || "")).trim();
-  const model = (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.7-flash")).trim();
+  const model = (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.8-flash")).trim();
   const isConfigured = Boolean(apiKey && apiKey.length > 10);
 
   let maskedKey = "";
@@ -144,7 +144,7 @@ export async function getAiConfig() {
 export async function updateAiApiKey(formData: FormData) {
   await getUserId();
   const rawApiKey = (formData.get("apiKey") as string)?.trim() || "";
-  const rawModel = ((formData.get("model") as string)?.trim()) || "gemini-3.7-flash";
+  const rawModel = ((formData.get("model") as string)?.trim()) || "gemini-3.8-flash";
 
   if (!rawApiKey) {
     return { error: "API Key không được để trống" };
@@ -226,7 +226,7 @@ export async function testAiApiKey(apiKeyToTest?: string, modelToTest?: string) 
 
   const modelName =
     modelToTest?.trim() ||
-    (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.7-flash")).trim();
+    (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.8-flash")).trim();
 
   try {
     const ai = new GoogleGenerativeAI(key);
@@ -247,7 +247,7 @@ export async function testAiApiKey(apiKeyToTest?: string, modelToTest?: string) 
       msg.toLowerCase().includes("high demand") ||
       msg.toLowerCase().includes("unavailable")
     ) {
-      msg = `Máy chủ Google cho model ${modelName} đang quá tải (Lỗi 503 Service Unavailable). Vui lòng thử lại sau giây lát hoặc chọn model khác (ví dụ: gemini-3.7-flash, gemini-2.5-flash hoặc gemini-1.5-flash).`;
+      msg = `Máy chủ Google cho model ${modelName} đang quá tải (Lỗi 503 Service Unavailable). Vui lòng thử lại sau giây lát hoặc chọn model khác (ví dụ: gemini-3.8-flash).`;
     } else if (
       msg.includes("429") ||
       msg.toLowerCase().includes("resource exhausted") ||

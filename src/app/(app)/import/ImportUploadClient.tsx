@@ -85,7 +85,7 @@ const FORMAT_CHIPS = [
 export default function ImportUploadClient({
   wallets = [],
   categories = [],
-  defaultModel = "gemini-3.7-flash",
+  defaultModel = "gemini-3.8-flash",
 }: ImportUploadClientProps) {
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [selectedModel, setSelectedModel] = useState<string>(defaultModel);
@@ -349,13 +349,7 @@ export default function ImportUploadClient({
                 className="bg-slate-50 border border-slate-300 hover:border-orange-400 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 cursor-pointer transition-colors shadow-2xs"
               >
                 <option value="local-parser">⚡ Đọc trực tiếp Sao kê (Không cần AI - Siêu tốc &lt; 1s)</option>
-                <option value="gemini-3.7-flash">🤖 gemini-3.7-flash (Mới nhất - Tự động dự phòng)</option>
-                <option value="gemini-3.6-flash">🤖 gemini-3.6-flash</option>
-                <option value="gemini-2.5-flash">🤖 gemini-2.5-flash (Nhanh &amp; Thông minh)</option>
-                <option value="gemini-2.5-pro">🤖 gemini-2.5-pro (Chuyên sâu)</option>
-                <option value="gemini-2.0-flash">🤖 gemini-2.0-flash (Tốc độ cao)</option>
-                <option value="gemini-1.5-flash">🤖 gemini-1.5-flash (Ổn định, ít nghẽn)</option>
-                <option value="gemini-1.5-pro">🤖 gemini-1.5-pro</option>
+                <option value="gemini-3.8-flash">🤖 gemini-3.8-flash (Mới nhất - Tự động dự phòng)</option>
               </select>
             </div>
           </div>

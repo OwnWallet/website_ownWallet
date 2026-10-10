@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
       message.toLowerCase().includes("service unavailable")
     ) {
       message =
-        "Máy chủ Google Gemini đang quá tải toàn cầu (Lỗi 503). Vui lòng thử lại sau giây lát hoặc đổi sang model khác (như gemini-3.7-flash, gemini-2.5-flash hoặc gemini-1.5-flash) trong Cài đặt.";
+        "Máy chủ Google Gemini đang quá tải toàn cầu (Lỗi 503). Vui lòng thử lại sau giây lát hoặc kiểm tra cấu hình model (gemini-3.8-flash) trong Cài đặt.";
     } else if (
       message.includes("429") ||
       message.toLowerCase().includes("resource exhausted") ||

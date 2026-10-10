@@ -126,10 +126,7 @@ async function generateContentWithFallback(
 ): Promise<string> {
   const primaryModel = await getGeminiModel(customModel);
   const candidateFallbacks = [
-    "gemini-3.7-flash",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
+    "gemini-3.8-flash",
   ].filter((m) => m !== customModel);
 
   try {
@@ -216,7 +213,7 @@ export async function parseDocument(
       };
     }
     throw new Error(
-      "File này là bản scan ảnh hoặc không có lớp văn bản bảng chuẩn để đọc trực tiếp. Vui lòng chọn một Model AI (như gemini-2.5-flash) để dùng nhận diện hình ảnh (Vision)."
+      "File này là bản scan ảnh hoặc không có lớp văn bản bảng chuẩn để đọc trực tiếp. Vui lòng chọn một Model AI (như gemini-3.8-flash) để dùng nhận diện hình ảnh (Vision)."
     );
   }
 
