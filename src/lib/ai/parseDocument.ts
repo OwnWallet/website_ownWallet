@@ -84,10 +84,7 @@ async function generateContentWithFallback(
 ): Promise<string> {
   const primaryModel = await getGeminiModel(customModel);
   const candidateFallbacks = [
-    "gemini-3.7-flash",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
+    "gemini-3.8-flash",
   ].filter((m) => m !== customModel);
 
   try {

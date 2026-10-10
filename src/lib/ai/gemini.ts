@@ -33,7 +33,7 @@ export async function getGeminiModel(customModel?: string) {
   }
 
   const modelName =
-    customModel ?? process.env.GEMINI_MODEL ?? (await getSystemSetting("GEMINI_MODEL", "gemini-3.7-flash"));
+    customModel ?? process.env.GEMINI_MODEL ?? (await getSystemSetting("GEMINI_MODEL", "gemini-3.8-flash"));
   return getGeminiClient().getGenerativeModel({
     model: modelName,
     generationConfig: {

@@ -15,7 +15,7 @@ export default async function ImportPage() {
   const session = await auth();
   let wallets: any[] = [];
   let categories: any[] = [];
-  let defaultModel = "gemini-3.7-flash";
+  let defaultModel = "gemini-3.8-flash";
 
   if (session?.user?.id) {
     try {
@@ -28,11 +28,11 @@ export default async function ImportPage() {
           .where((c) => c.userId.eq(session.user.id))
           .orderBy((c) => c.name.asc())
           .all(),
-        getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.7-flash"),
+        getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.8-flash"),
       ]);
       wallets = serializeData(rawWallets);
       categories = serializeData(rawCategories);
-      defaultModel = settingModel.trim() || "gemini-3.7-flash";
+      defaultModel = settingModel.trim() || "gemini-3.8-flash";
     } catch (err) {
       console.error("Failed to load wallets or categories for import:", err);
     }
