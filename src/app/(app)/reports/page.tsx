@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ReportClient } from "./report-client";
-import { toInstant, toDate, getFilterDateRange } from "@/lib/utils";
+import { getWallets } from "@/actions/wallets";
+import { toInstant, toDate, getFilterDateRange, getVNDateParts } from "@/lib/utils";
 
 interface ReportsPageProps {
   searchParams: Promise<{
@@ -25,36 +26,23 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const walletId = resolvedSearchParams.wallet || savedCookieWallet || "ALL";
   const isYearly = filterDate.month === "ALL";
 
-  let startCurrent: Date;
-  let endCurrent: Date;
-  let startPrevious: Date;
-  let endPrevious: Date;
-  let historyStart: Date;
+  const startCurrent = filterDate.from;
+  const endCurrent = filterDate.to;
 
-  if (isYearly) {
-    const yr = filterDate.year;
-    startCurrent = new Date(yr, 0, 1, 0, 0, 0, 0);
-    endCurrent = new Date(yr, 11, 31, 23, 59, 59, 999);
-    startPrevious = new Date(yr - 1, 0, 1, 0, 0, 0, 0);
-    endPrevious = new Date(yr - 1, 11, 31, 23, 59, 59, 999);
-    historyStart = startPrevious;
-  } else {
-    const yr = filterDate.year;
-    const m = filterDate.month as number; // 1-indexed
-    startCurrent = new Date(yr, m - 1, 1, 0, 0, 0, 0);
-    endCurrent = new Date(yr, m, 0, 23, 59, 59, 999);
-    startPrevious = new Date(yr, m - 2, 1, 0, 0, 0, 0);
-    endPrevious = new Date(yr, m - 1, 0, 23, 59, 59, 999);
-    historyStart = new Date(yr, m - 6, 1, 0, 0, 0, 0);
-  }
+  const prevRange = isYearly
+    ? getFilterDateRange("ALL", filterDate.year - 1)
+    : getFilterDateRange(
+        (filterDate.month as number) === 1 ? 12 : (filterDate.month as number) - 1,
+        (filterDate.month as number) === 1 ? filterDate.year - 1 : filterDate.year
+      );
+  const startPrevious = prevRange.from;
+  const endPrevious = prevRange.to;
 
-  const historyInstant = toInstant(historyStart);
   const endCurrentInstant = toInstant(endCurrent);
 
   try {
     let txQuery = db.orm.public.Transaction
       .where((t) => t.userId.eq(userId))
-      .where((t) => t.recordedAt.gte(historyInstant))
       .where((t) => t.recordedAt.lte(endCurrentInstant));
 
     if (walletId && walletId !== "ALL") {
@@ -65,17 +53,20 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       }
     }
 
-    const [categories, txs] = await Promise.all([
+    const [categories, txs, wallets] = await Promise.all([
       db.orm.public.Category
         .where((c) => c.userId.eq(userId))
         .all(),
       txQuery.all(),
+      getWallets(),
     ]);
 
     let currentIncome = 0;
     let currentExpense = 0;
     let lastIncome = 0;
     let lastExpense = 0;
+    let allPriorIncome = 0;
+    let allPriorExpense = 0;
 
     const categorySpentMap = new Map<string, number>();
 
@@ -90,19 +81,31 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       const m = filterDate.month as number;
       const yr = filterDate.year;
       for (let i = 5; i >= 0; i--) {
-        const d = new Date(yr, m - 1 - i, 1);
-        const label = `T${d.getMonth() + 1}/${d.getFullYear().toString().slice(-2)}`;
+        const d = new Date(Date.UTC(yr, m - 1 - i, 1));
+        const label = `T${d.getUTCMonth() + 1}/${d.getUTCFullYear().toString().slice(-2)}`;
         monthlyMap[label] = { month: label, income: 0, expense: 0 };
       }
     }
 
+    const startCurrentMs = startCurrent.getTime();
+    const endCurrentMs = endCurrent.getTime();
+    const startPrevMs = startPrevious.getTime();
+    const endPrevMs = endPrevious.getTime();
+
     txs.forEach((tx: any) => {
       const recDate = toDate(tx.recordedAt);
+      const recMs = recDate.getTime();
+      const { year: txY, month: txM } = getVNDateParts(tx.recordedAt);
       const amt = Number(tx.amount);
       const isIncome = tx.type === "INCOME";
 
+      if (recMs < startCurrentMs) {
+        if (isIncome) allPriorIncome += amt;
+        else allPriorExpense += amt;
+      }
+
       // Current Period
-      if (recDate >= startCurrent && recDate <= endCurrent) {
+      if (recMs >= startCurrentMs && recMs <= endCurrentMs) {
         if (isIncome) currentIncome += amt;
         else {
           currentExpense += amt;
@@ -110,7 +113,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         }
 
         if (isYearly) {
-          const mLabel = `T${recDate.getMonth() + 1}`;
+          const mLabel = `T${txM}`;
           if (monthlyMap[mLabel]) {
             if (isIncome) monthlyMap[mLabel].income += amt;
             else monthlyMap[mLabel].expense += amt;
@@ -119,20 +122,29 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       }
 
       // Previous Period
-      if (recDate >= startPrevious && recDate <= endPrevious) {
+      if (recMs >= startPrevMs && recMs <= endPrevMs) {
         if (isIncome) lastIncome += amt;
         else lastExpense += amt;
       }
 
       // Trend for monthly view
       if (!isYearly) {
-        const label = `T${recDate.getMonth() + 1}/${recDate.getFullYear().toString().slice(-2)}`;
+        const label = `T${txM}/${txY.toString().slice(-2)}`;
         if (monthlyMap[label]) {
           if (isIncome) monthlyMap[label].income += amt;
           else monthlyMap[label].expense += amt;
         }
       }
     });
+
+    const initialWalletBalance = (wallets as any[]).reduce((sum, w) => {
+      if (!walletId || walletId === "ALL") return sum + Number(w.balance ?? 0);
+      if (walletId === "UNASSIGNED") return 0;
+      return w.id === walletId ? sum + Number(w.balance ?? 0) : sum;
+    }, 0);
+
+    const openingCumulativeBalance = initialWalletBalance + (allPriorIncome - allPriorExpense);
+    const closingCumulativeBalance = openingCumulativeBalance + (currentIncome - currentExpense);
 
     const catMap = new Map(categories.map((c: any) => [c.id, c]));
     const categorySpending = Array.from(categorySpentMap.entries())
@@ -156,6 +168,8 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         currentMonthExpense={currentExpense}
         lastMonthIncome={lastIncome}
         lastMonthExpense={lastExpense}
+        openingCumulativeBalance={openingCumulativeBalance}
+        closingCumulativeBalance={closingCumulativeBalance}
         categorySpending={categorySpending}
         monthlyTrend={monthlyTrend}
         currentMonth={filterDate.month}

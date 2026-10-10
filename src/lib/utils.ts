@@ -304,40 +304,44 @@ export function calcPercent(current: number, total: number): number {
   return Math.min(100, Math.max(0, roundToHundredth((current / total) * 100)));
 }
 
-/** Lấy ngày đầu và cuối tháng hiện tại theo timezone người dùng */
+const VN_OFFSET_MINUTES = 420; // UTC+7 (Asia/Ho_Chi_Minh)
+
+/**
+ * Trả về { year, month (1-12), day (1-31) } theo đúng múi giờ Việt Nam (UTC+7),
+ * độc lập hoàn toàn với múi giờ hệ thống của Server/Client.
+ */
+export function getVNDateParts(date: any): { year: number; month: number; day: number } {
+  const d = toDate(date);
+  const vnTime = new Date(d.getTime() + VN_OFFSET_MINUTES * 60_000);
+  return {
+    year: vnTime.getUTCFullYear(),
+    month: vnTime.getUTCMonth() + 1,
+    day: vnTime.getUTCDate(),
+  };
+}
+
+/** Lấy ngày đầu và cuối tháng hiện tại theo timezone người dùng (mặc định UTC+7) */
 export function getCurrentMonthRange(
-  timezone = "Asia/Ho_Chi_Minh"
+  _timezone = "Asia/Ho_Chi_Minh"
 ): { from: Date; to: Date } {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const [year, month] = formatter.format(now).split("-").map(Number);
+  const { year, month } = getVNDateParts(new Date());
 
-  const tzOffset = -new Date(
-    `${year}-${String(month).padStart(2, "0")}-01T00:00:00`
-  ).getTimezoneOffset();
-
-  const from = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0) - tzOffset * 60_000);
-  const to = new Date(Date.UTC(year, month, 0, 23, 59, 59) - tzOffset * 60_000);
+  const from = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0) - VN_OFFSET_MINUTES * 60_000);
+  const to = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999) - VN_OFFSET_MINUTES * 60_000);
 
   return { from, to };
 }
 
 /**
  * Trả về khoảng thời gian bắt đầu và kết thúc lọc linh hoạt theo tháng (1-12 hoặc "ALL" cả năm) và năm
+ * chuẩn hóa theo múi giờ Việt Nam (UTC+7).
  */
 export function getFilterDateRange(
   monthParam?: number | string | null,
   yearParam?: number | string | null,
   _timezone = "Asia/Ho_Chi_Minh"
 ): { from: Date; to: Date; month: number | "ALL"; year: number; label: string } {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
+  const { year: currentYear, month: currentMonth } = getVNDateParts(new Date());
 
   let year = yearParam ? Number(yearParam) : currentYear;
   if (isNaN(year) || year < 2000 || year > 2100) year = currentYear;
@@ -352,17 +356,15 @@ export function getFilterDateRange(
     }
   }
 
-  const tzOffset = -new Date(`${year}-01-01T00:00:00`).getTimezoneOffset();
-
   if (month === "ALL") {
-    // Toàn bộ năm
-    const from = new Date(Date.UTC(year, 0, 1, 0, 0, 0) - tzOffset * 60_000);
-    const to = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999) - tzOffset * 60_000);
+    // Toàn bộ năm theo UTC+7
+    const from = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0) - VN_OFFSET_MINUTES * 60_000);
+    const to = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999) - VN_OFFSET_MINUTES * 60_000);
     return { from, to, month: "ALL", year, label: `Năm ${year}` };
   } else {
-    // Tháng cụ thể trong năm
-    const from = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0) - tzOffset * 60_000);
-    const to = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999) - tzOffset * 60_000);
+    // Tháng cụ thể trong năm theo UTC+7
+    const from = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0) - VN_OFFSET_MINUTES * 60_000);
+    const to = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999) - VN_OFFSET_MINUTES * 60_000);
     return { from, to, month, year, label: `Tháng ${month}/${year}` };
   }
 }

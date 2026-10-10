@@ -53,8 +53,29 @@ export async function upsertBudget(formData: FormData) {
 
 export async function deleteBudget(id: string) {
   const userId = await getUserId();
-  await db.orm.public.Budget.where({ id, userId }).delete();
+  if (id.startsWith("virtual_")) {
+    const parts = id.split("_");
+    const categoryId = parts[1];
+    if (categoryId) {
+      await db.orm.public.Budget.where({ userId, categoryId }).delete();
+    }
+  } else {
+    const target = await db.orm.public.Budget.where({ id, userId }).first();
+    if (target) {
+      // Xóa ngân sách của danh mục này ở kỳ hiện tại và các kỳ trước để không bị tự động kế thừa lại sau khi xóa
+      const allForCat = await db.orm.public.Budget
+        .where({ userId, categoryId: target.categoryId })
+        .all();
+      const targetYM = target.year * 12 + target.month;
+      for (const item of allForCat) {
+        if (item.year * 12 + item.month <= targetYM) {
+          await db.orm.public.Budget.where({ id: item.id, userId }).delete();
+        }
+      }
+    }
+  }
   revalidatePath("/budget");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
@@ -65,9 +86,26 @@ export async function deleteBudgets(ids: string[]) {
   let count = 0;
   await db.transaction(async (t: any) => {
     for (const id of ids) {
+      if (id.startsWith("virtual_")) {
+        const parts = id.split("_");
+        const categoryId = parts[1];
+        if (categoryId) {
+          await t.orm.public.Budget.where({ userId, categoryId }).delete();
+          count++;
+        }
+        continue;
+      }
       const b = await t.orm.public.Budget.where({ id, userId }).first();
       if (!b) continue;
-      await t.orm.public.Budget.where({ id, userId }).delete();
+      const allForCat = await t.orm.public.Budget
+        .where({ userId, categoryId: b.categoryId })
+        .all();
+      const targetYM = b.year * 12 + b.month;
+      for (const item of allForCat) {
+        if (item.year * 12 + item.month <= targetYM) {
+          await t.orm.public.Budget.where({ id: item.id, userId }).delete();
+        }
+      }
       count++;
     }
   });
@@ -77,88 +115,262 @@ export async function deleteBudgets(ids: string[]) {
   return { success: true, count };
 }
 
+export interface EnrichedBudgetItem {
+  id: string;
+  userId: string;
+  categoryId: string;
+  month: number;
+  year: number;
+  baseLimit: number;
+  rolloverAmount: number;
+  limitAmount: number; // effectiveLimit = baseLimit + rolloverAmount
+  spent: number;
+  remaining: number;
+  percent: number;
+  prevMonth: number;
+  prevYear: number;
+  category: {
+    id: string;
+    name: string;
+    color: string;
+    icon: string | null;
+    type: string;
+  } | null;
+}
+
 /**
- * Chuyển số dư ngân sách tháng trước sang tháng sau.
- * - mode = "rollover": cộng thêm phần chưa tiêu vào hạn mức tháng đích.
- * - mode = "copy": chỉ sao chép y chang limit.
+ * Tự động kế thừa ngân sách định kỳ sang tháng hiện tại (theo thời gian thực, in-memory)
+ * và tự động cộng số dư chưa tiêu (> 0) của tháng trước vào hạn mức tháng sau
+ * mà không cần kích hoạt bằng nút thủ công và không tự động ghi rác vào DB khi đọc.
  */
-export async function rolloverBudgets(formData: FormData) {
-  const userId = await getUserId();
-  const fromMonth = Number(formData.get("fromMonth"));
-  const fromYear = Number(formData.get("fromYear"));
-  const toMonth = Number(formData.get("toMonth"));
-  const toYear = Number(formData.get("toYear"));
-  const mode = formData.get("mode") === "rollover" ? "rollover" : "copy";
+export async function getAutoRolloverBudgets(
+  userId: string,
+  targetMonth: number | "ALL",
+  targetYear: number,
+  walletId?: string
+): Promise<{
+  budgets: EnrichedBudgetItem[];
+  totalBaseLimit: number;
+  totalRolloverAmount: number;
+  totalEffectiveLimit: number;
+  totalSpent: number;
+}> {
+  const { toInstant, getVNDateParts, calcPercent, serializeData } = await import("@/lib/utils");
 
-  if (
-    !fromMonth || !fromYear || !toMonth || !toYear ||
-    fromMonth < 1 || fromMonth > 12 || toMonth < 1 || toMonth > 12 ||
-    fromYear < 2000 || toYear < 2000
-  ) {
-    return { error: "Tháng/năm không hợp lệ" };
-  }
+  const { year: realYear, month: realMonth } = getVNDateParts(new Date());
 
-  const { toInstant } = await import("@/lib/utils");
-
-  const sourceBudgets = await db.orm.public.Budget
+  // Lấy toàn bộ ngân sách của user trong DB
+  const allBudgets = (await db.orm.public.Budget
     .where((b) => b.userId.eq(userId))
-    .where((b) => b.month.eq(fromMonth))
-    .where((b) => b.year.eq(fromYear))
-    .all();
+    .include("category", (cat) => cat)
+    .orderBy((b) => b.year.asc())
+    .orderBy((b) => b.month.asc())
+    .all()) as any[];
 
-  if ((sourceBudgets as any[]).length === 0) {
-    return { error: `Không có ngân sách nào trong tháng ${fromMonth}/${fromYear}` };
+  if (allBudgets.length === 0) {
+    return {
+      budgets: [],
+      totalBaseLimit: 0,
+      totalRolloverAmount: 0,
+      totalEffectiveLimit: 0,
+      totalSpent: 0,
+    };
   }
 
-  const spentMap = new Map<string, number>();
-  if (mode === "rollover") {
-    const from = new Date(Date.UTC(fromYear, fromMonth - 1, 1));
-    const to = new Date(Date.UTC(fromYear, fromMonth, 0, 23, 59, 59, 999));
-    const txs = await db.orm.public.Transaction
-      .where((t) => t.userId.eq(userId))
-      .where((t) => t.type.eq("EXPENSE"))
-      .where((t) => t.recordedAt.gte(toInstant(from)))
-      .where((t) => t.recordedAt.lte(toInstant(to)))
-      .all();
-    (txs as any[]).forEach((tx: any) => {
-      spentMap.set(tx.categoryId, (spentMap.get(tx.categoryId) ?? 0) + Number(tx.amount));
+  const checkYear = targetYear;
+  const checkMonth = targetMonth === "ALL" ? (targetYear === realYear ? realMonth : 12) : targetMonth;
+  const checkYM = checkYear * 12 + checkMonth;
+  const realYM = realYear * 12 + realMonth;
+  const autoInheritTargetYM = Math.min(checkYM, realYM);
+
+  // Tìm khoảng thời gian từ ngân sách sớm nhất đến kỳ đang xem để tính chi tiêu & kết chuyển lũy kế
+  let minYM = Infinity;
+  let maxYM = -Infinity;
+  for (const b of allBudgets) {
+    const ym = b.year * 12 + b.month;
+    if (ym < minYM) minYM = ym;
+    if (ym > maxYM) maxYM = ym;
+  }
+  const targetMaxYM = targetMonth === "ALL" ? targetYear * 12 + 12 : targetYear * 12 + targetMonth;
+  if (targetMaxYM > maxYM) maxYM = targetMaxYM;
+  if (autoInheritTargetYM > maxYM) maxYM = autoInheritTargetYM;
+
+  const minYear = Math.floor((minYM - 1) / 12);
+  const minMonth = ((minYM - 1) % 12) + 1;
+  const maxYear = Math.floor((maxYM - 1) / 12);
+  const maxMonth = ((maxYM - 1) % 12) + 1;
+
+  const VN_OFFSET_MINUTES = 420; // UTC+7
+  const rangeFrom = new Date(Date.UTC(minYear, minMonth - 1, 1, 0, 0, 0, 0) - VN_OFFSET_MINUTES * 60_000);
+  const rangeTo = new Date(Date.UTC(maxYear, maxMonth, 0, 23, 59, 59, 999) - VN_OFFSET_MINUTES * 60_000);
+
+  let expenseQuery = db.orm.public.Transaction
+    .where((t) => t.userId.eq(userId))
+    .where((t) => t.type.eq("EXPENSE"))
+    .where((t) => t.recordedAt.gte(toInstant(rangeFrom)))
+    .where((t) => t.recordedAt.lte(toInstant(rangeTo)));
+
+  if (walletId && walletId !== "ALL") {
+    if (walletId === "UNASSIGNED") {
+      expenseQuery = expenseQuery.where({ walletId: null });
+    } else {
+      expenseQuery = expenseQuery.where({ walletId });
+    }
+  }
+
+  const expenseTxs = (await expenseQuery.all()) as any[];
+
+  // Map chi tiêu theo `${categoryId}_${year}_${month}` theo đúng múi giờ Việt Nam (UTC+7)
+  const spentCatMonthMap = new Map<string, number>();
+
+  for (const tx of expenseTxs) {
+    const { year: y, month: m } = getVNDateParts(tx.recordedAt);
+    const amt = Number(tx.amount);
+    const key = `${tx.categoryId}_${y}_${m}`;
+    spentCatMonthMap.set(key, (spentCatMonthMap.get(key) ?? 0) + amt);
+  }
+
+  // Nhóm các bản ghi DB theo categoryId và xây dựng chuỗi thời gian in-memory (không ghi rác DB)
+  const byCategory = new Map<string, any[]>();
+  for (const b of allBudgets) {
+    const list = byCategory.get(b.categoryId) || [];
+    list.push(b);
+    byCategory.set(b.categoryId, list);
+  }
+
+  const enrichedAll: EnrichedBudgetItem[] = [];
+
+  for (const [catId, list] of byCategory.entries()) {
+    list.sort((a, b) => (a.year * 12 + a.month) - (b.year * 12 + b.month));
+    const existingYM = new Map<number, any>();
+    for (const item of list) {
+      existingYM.set(item.year * 12 + item.month, item);
+    }
+
+    const firstYM = list[0].year * 12 + list[0].month;
+    const lastConfiguredYM = list[list.length - 1].year * 12 + list[list.length - 1].month;
+    const endYM = Math.max(lastConfiguredYM, autoInheritTargetYM);
+    const catInfo = list[0].category ? serializeData(list[0].category) : null;
+
+    let lastBaseLimit = Number(list[0].limitAmount);
+    let prevEffectiveLimit = 0;
+    let prevSpent = 0;
+    let hasPrev = false;
+
+    for (let ym = firstYM; ym <= endYM; ym++) {
+      const y = Math.floor((ym - 1) / 12);
+      const m = ((ym - 1) % 12) + 1;
+      const dbRecord = existingYM.get(ym);
+
+      if (dbRecord) {
+        lastBaseLimit = Number(dbRecord.limitAmount);
+      }
+
+      const baseLimit = lastBaseLimit;
+      const rolloverAmount = hasPrev ? Math.max(0, prevEffectiveLimit - prevSpent) : 0;
+      const effectiveLimit = baseLimit + rolloverAmount;
+      const spent = spentCatMonthMap.get(`${catId}_${y}_${m}`) ?? 0;
+      const remaining = effectiveLimit - spent;
+      const percent = calcPercent(spent, effectiveLimit);
+
+      const prevMonth = m === 1 ? 12 : m - 1;
+      const prevYear = m === 1 ? y - 1 : y;
+
+      enrichedAll.push({
+        id: dbRecord ? dbRecord.id : `virtual_${catId}_${y}_${m}`,
+        userId,
+        categoryId: catId,
+        month: m,
+        year: y,
+        baseLimit,
+        rolloverAmount,
+        limitAmount: effectiveLimit,
+        spent,
+        remaining,
+        percent,
+        prevMonth,
+        prevYear,
+        category: catInfo,
+      });
+
+      hasPrev = true;
+      prevEffectiveLimit = effectiveLimit;
+      prevSpent = spent;
+    }
+  }
+
+  // Nếu xem theo tháng cụ thể
+  if (targetMonth !== "ALL") {
+    const filteredBudgets = enrichedAll.filter(
+      (b) => b.year === targetYear && b.month === targetMonth
+    );
+
+    const totalBaseLimit = filteredBudgets.reduce((s, b) => s + b.baseLimit, 0);
+    const totalRolloverAmount = filteredBudgets.reduce((s, b) => s + b.rolloverAmount, 0);
+    const totalEffectiveLimit = filteredBudgets.reduce((s, b) => s + b.limitAmount, 0);
+    const totalSpent = filteredBudgets.reduce((s, b) => s + b.spent, 0);
+
+    return {
+      budgets: serializeData(filteredBudgets),
+      totalBaseLimit,
+      totalRolloverAmount,
+      totalEffectiveLimit,
+      totalSpent,
+    };
+  }
+
+  // Chế độ "Cả năm" (targetMonth === "ALL"):
+  // Gộp theo từng danh mục trong năm targetYear, không cộng trùng rollover nội bộ giữa các tháng trong cùng năm
+  const yearItems = enrichedAll.filter((b) => b.year === targetYear);
+  const byCatYear = new Map<string, EnrichedBudgetItem[]>();
+  for (const item of yearItems) {
+    const arr = byCatYear.get(item.categoryId) || [];
+    arr.push(item);
+    byCatYear.set(item.categoryId, arr);
+  }
+
+  const aggregatedYearBudgets: EnrichedBudgetItem[] = [];
+  for (const [catId, items] of byCatYear.entries()) {
+    items.sort((a, b) => a.month - b.month);
+    const firstItem = items[0];
+    const lastItem = items[items.length - 1];
+    const yearBaseLimit = items.reduce((s, x) => s + x.baseLimit, 0);
+    // Chỉ lấy số dư kết chuyển từ cuối năm trước (nếu firstItem là tháng 1)
+    const yearRolloverAmount = firstItem.month === 1 ? firstItem.rolloverAmount : 0;
+    const yearEffectiveLimit = yearBaseLimit + yearRolloverAmount;
+    const yearSpent = items.reduce((s, x) => s + x.spent, 0);
+    const remaining = yearEffectiveLimit - yearSpent;
+    const percent = calcPercent(yearSpent, yearEffectiveLimit);
+
+    aggregatedYearBudgets.push({
+      id: lastItem.id,
+      userId,
+      categoryId: catId,
+      month: lastItem.month,
+      year: targetYear,
+      baseLimit: yearBaseLimit,
+      rolloverAmount: yearRolloverAmount,
+      limitAmount: yearEffectiveLimit,
+      spent: yearSpent,
+      remaining,
+      percent,
+      prevMonth: 12,
+      prevYear: targetYear - 1,
+      category: firstItem.category,
     });
   }
 
-  let created = 0;
-  let updated = 0;
+  const totalBaseLimit = aggregatedYearBudgets.reduce((s, b) => s + b.baseLimit, 0);
+  const totalRolloverAmount = aggregatedYearBudgets.reduce((s, b) => s + b.rolloverAmount, 0);
+  const totalEffectiveLimit = aggregatedYearBudgets.reduce((s, b) => s + b.limitAmount, 0);
+  const totalSpent = aggregatedYearBudgets.reduce((s, b) => s + b.spent, 0);
 
-  await db.transaction(async (t: any) => {
-    for (const src of sourceBudgets as any[]) {
-      const srcLimit = Number(src.limitAmount);
-      const spent = spentMap.get(src.categoryId) ?? 0;
-      const rolloverAmount = mode === "rollover" ? Math.max(0, srcLimit - spent) : 0;
-      const newLimit = srcLimit + rolloverAmount;
-
-      const existing = await t.orm.public.Budget
-        .where({ userId, categoryId: src.categoryId, month: toMonth, year: toYear })
-        .first();
-
-      if (existing) {
-        const mergedLimit = Number(existing.limitAmount) + rolloverAmount;
-        await t.orm.public.Budget
-          .where({ id: existing.id, userId })
-          .update({ limitAmount: String(mode === "rollover" ? mergedLimit : Number(existing.limitAmount)) });
-        updated++;
-      } else {
-        await t.orm.public.Budget.create({
-          userId,
-          categoryId: src.categoryId,
-          limitAmount: String(newLimit),
-          month: toMonth,
-          year: toYear,
-        });
-        created++;
-      }
-    }
-  });
-
-  revalidatePath("/budget");
-  revalidatePath("/dashboard");
-  return { success: true, created, updated, total: created + updated };
+  return {
+    budgets: serializeData(aggregatedYearBudgets),
+    totalBaseLimit,
+    totalRolloverAmount,
+    totalEffectiveLimit,
+    totalSpent,
+  };
 }
+

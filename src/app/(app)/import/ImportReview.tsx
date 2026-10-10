@@ -21,6 +21,10 @@ interface ImportReviewProps {
   totalFound: number;
   skipped: number;
   duplicateCount?: number;
+  modeUsed?: "local" | "ai-fallback-local" | "ai";
+  fallbackReason?: string;
+  detectedBank?: string;
+  detectedAccountNumber?: string;
   wallets?: { id: string; name: string; bankName?: string | null; accountNumber?: string | null }[];
   categories?: { id: string; name: string; type: string; color?: string; icon?: string | null }[];
   onReset: () => void;
@@ -62,6 +66,10 @@ export default function ImportReview({
   totalFound,
   skipped,
   duplicateCount: _duplicateCount,
+  modeUsed,
+  fallbackReason,
+  detectedBank,
+  detectedAccountNumber,
   wallets = [],
   categories = [],
   onReset,
@@ -70,7 +78,25 @@ export default function ImportReview({
   const [isPending, startTransition] = useTransition();
 
   const [selectedWalletId, setSelectedWalletId] = useState<string>(() => {
-    return wallets.length > 0 ? wallets[0].id : "";
+    if (wallets.length === 0) return "";
+    // 1. Ưu tiên khớp theo Số tài khoản trong sao kê
+    if (detectedAccountNumber) {
+      const byAcc = wallets.find(
+        (w) => w.accountNumber && w.accountNumber.replace(/\s+/g, "") === detectedAccountNumber.replace(/\s+/g, "")
+      );
+      if (byAcc) return byAcc.id;
+    }
+    // 2. Ưu tiên khớp theo Tên ngân hàng phát hiện từ sao kê (Techcombank / TPBank)
+    if (detectedBank) {
+      const bankLower = detectedBank.toLowerCase();
+      const byBank = wallets.find(
+        (w) =>
+          (w.bankName && w.bankName.toLowerCase().includes(bankLower)) ||
+          w.name.toLowerCase().includes(bankLower)
+      );
+      if (byBank) return byBank.id;
+    }
+    return wallets[0].id;
   });
 
   // Tự động bỏ chọn các giao dịch bị phát hiện trùng lặp với Database
@@ -164,7 +190,15 @@ export default function ImportReview({
 
       setImportResult(result);
       if (result.success) {
-        setTimeout(() => router.push("/transactions"), 1800);
+        try {
+          sessionStorage.removeItem("ownwallet_ai_import_review_v1");
+        } catch {
+          // Ignore storage error
+        }
+        setTimeout(() => {
+          onReset();
+          router.push("/transactions");
+        }, 1800);
       }
     });
   };
@@ -185,7 +219,28 @@ export default function ImportReview({
 
   return (
     <div className="review-wrapper space-y-4">
+      {modeUsed === "ai-fallback-local" && (
+        <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed">
+          <span className="text-base leading-none shrink-0">⚡</span>
+          <div>
+            <strong>Tự động dự phòng không cần AI:</strong> Máy chủ AI hiện đang bận hoặc hết hạn ngạch, hệ thống đã tự động chuyển sang <strong>Bộ đọc Sao kê PDF/Bảng nội bộ</strong> và bóc tách thành công {totalFound} giao dịch cho bạn.
+            {fallbackReason && (
+              <span className="block text-[11px] text-amber-700 mt-0.5">
+                (Chi tiết AI: {fallbackReason})
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
+      {modeUsed === "local" && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium">
+          <span>⚡</span>
+          <span>
+            Đã bóc tách siêu tốc bằng <strong>Bộ đọc Sao kê Nội bộ (Không dùng AI)</strong> — Độ chính xác số liệu 100%, tự động gợi ý danh mục theo từ khóa.
+          </span>
+        </div>
+      )}
 
       {/* ── Header stats & Duplicate Alert Banner ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
