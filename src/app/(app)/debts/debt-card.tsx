@@ -7,6 +7,7 @@ import { formatCurrency, formatDate, calcPercent, toDate } from "@/lib/utils";
 import { deleteDebt } from "@/actions/debts";
 import { DebtActions } from "./debt-actions";
 import { DebtLogModal } from "./debt-log-modal";
+import { DebtSplitModal } from "./debt-split-modal";
 import { DebtCalculatorModal } from "./debt-calculator-modal";
 import { DebtEditModal } from "./debt-edit-modal";
 import { parseDebtMetadata } from "@/lib/debt-schedule";
@@ -94,6 +95,7 @@ export function DebtCard({
               {statusText}
             </span>
             <DebtEditModal debt={debt} />
+            <DebtSplitModal debt={debt} />
             <DebtLogModal debtId={debt.id} debtPerson={debt.person} debtAmount={amount} debtPaidAmount={paid} />
             <button
               type="button"

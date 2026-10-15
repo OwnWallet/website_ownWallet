@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { TransactionSchema } from "@/schemas/transaction";
 import { toInstant, formatDate, formatCurrency } from "@/lib/utils";
-import { isDebtCategory, getDebtDirection, formatDebtNote, buildSyncTag } from "@/lib/debt-sync";
+import { isDebtCategory, formatDebtNote, buildSyncTag, analyzeDebtTransaction } from "@/lib/debt-sync";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -81,7 +81,8 @@ export async function createTransaction(formData: FormData) {
 
     // Tự động đồng bộ sang Sổ nợ nếu được bật
     if (isDebtCategory(category) && syncToDebt && debtPerson) {
-      const direction = getDebtDirection(category, data.type);
+      const analysis = analyzeDebtTransaction(category, data.type, note);
+      const direction = analysis.direction;
       const person = debtPerson;
       const allDebts = await tx.orm.public.Debt
         .where((d: any) => d.userId.eq(userId))
@@ -94,39 +95,104 @@ export async function createTransaction(formData: FormData) {
       );
 
       const txDateStr = formatDate(data.recordedAt);
-      // BUG-1: Dùng tag chuẩn, ghi vào Debt.note (KHÔNG ghi vào Transaction.note)
       const syncTag = buildSyncTag(createdTx.id);
 
-      if (matchedDebt) {
-        const oldAmount = Number(matchedDebt.amount);
-        const newAmount = oldAmount + Number(data.amount);
-        const paid = Number(matchedDebt.paidAmount || 0);
-        const newStatus = paid >= newAmount ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
-        const logNote = `Gộp thêm từ GD ngày ${txDateStr}: +${formatCurrency(data.amount)} ${syncTag}`;
-        const updatedNote = matchedDebt.note ? `${matchedDebt.note} | ${logNote}` : logNote;
+      if (analysis.isRepayment) {
+        // Giao dịch thanh toán / trả nợ: ghi nhận vào paidAmount
+        if (matchedDebt) {
+          const oldPaid = Number(matchedDebt.paidAmount || 0);
+          const totalAmount = Number(matchedDebt.amount);
+          const newPaid = oldPaid + Number(data.amount);
+          const newStatus = newPaid >= totalAmount ? "PAID" : "PARTIAL";
+          const logNote = `Thanh toán từ GD ngày ${txDateStr}: ${formatCurrency(data.amount)} ${syncTag}`;
+          const updatedNote = matchedDebt.note ? `${matchedDebt.note} | ${logNote}` : logNote;
 
-        await tx.orm.public.Debt
-          .where({ id: matchedDebt.id, userId })
-          .update({
-            amount: String(newAmount),
-            status: newStatus,
-            note: updatedNote,
+          await tx.orm.public.Debt
+            .where({ id: matchedDebt.id, userId })
+            .update({
+              paidAmount: String(newPaid),
+              status: newStatus,
+              note: updatedNote,
+            });
+
+          await tx.orm.public.DebtLog.create({
+            type: "PAYMENT",
+            amount: String(data.amount),
+            note: `Ghi nhận trả nợ từ GD ngày ${txDateStr}`,
+            txId: createdTx.id,
+            debtId: matchedDebt.id,
           });
+        } else {
+          // Chưa có khoản nợ cũ: Tạo khoản nợ đã hoàn tất (PAID)
+          const initNote = `Ghi nhận trả nợ từ GD ngày ${txDateStr} ${syncTag}`;
+          const newDebt = await tx.orm.public.Debt.create({
+            person,
+            amount: String(data.amount),
+            paidAmount: String(data.amount),
+            direction,
+            status: "PAID",
+            priority: "NORMAL",
+            note: initNote,
+            userId,
+          });
+
+          await tx.orm.public.DebtLog.create({
+            type: "PAYMENT",
+            amount: String(data.amount),
+            note: initNote,
+            txId: createdTx.id,
+            debtId: newDebt.id,
+          });
+        }
       } else {
-        const initNote = `Tạo từ GD ngày ${txDateStr} ${syncTag}`;
-        await tx.orm.public.Debt.create({
-          person,
-          amount: String(data.amount),
-          paidAmount: "0",
-          direction,
-          status: "PENDING",
-          priority: "NORMAL",
-          note: initNote,
-          userId,
-        });
+        // Giao dịch vay thêm / cho vay thêm (TOPUP hoặc INIT)
+        if (matchedDebt) {
+          const oldAmount = Number(matchedDebt.amount);
+          const newAmount = oldAmount + Number(data.amount);
+          const paid = Number(matchedDebt.paidAmount || 0);
+          const newStatus = paid >= newAmount ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
+          const logNote = `Gộp thêm từ GD ngày ${txDateStr}: +${formatCurrency(data.amount)} ${syncTag}`;
+          const updatedNote = matchedDebt.note ? `${matchedDebt.note} | ${logNote}` : logNote;
+
+          await tx.orm.public.Debt
+            .where({ id: matchedDebt.id, userId })
+            .update({
+              amount: String(newAmount),
+              status: newStatus,
+              note: updatedNote,
+            });
+
+          await tx.orm.public.DebtLog.create({
+            type: "TOPUP",
+            amount: String(data.amount),
+            note: `Gộp thêm từ GD ngày ${txDateStr}`,
+            txId: createdTx.id,
+            debtId: matchedDebt.id,
+          });
+        } else {
+          const initNote = `Tạo từ GD ngày ${txDateStr} ${syncTag}`;
+          const newDebt = await tx.orm.public.Debt.create({
+            person,
+            amount: String(data.amount),
+            paidAmount: "0",
+            direction,
+            status: "PENDING",
+            priority: "NORMAL",
+            note: initNote,
+            userId,
+          });
+
+          await tx.orm.public.DebtLog.create({
+            type: "INIT",
+            amount: String(data.amount),
+            note: `Tạo từ GD ngày ${txDateStr}`,
+            txId: createdTx.id,
+            debtId: newDebt.id,
+          });
+        }
       }
+
       // Ghi display hint vào Transaction.note để transaction-list hiển thị badge "Đã vào sổ nợ"
-      // (Chỉ dùng cho UI display — nguồn sự thật cho duplicate check là Debt.note chứa tag chuẩn)
       const markedNote = note ? `${note} [Đã vào sổ nợ]` : `[Đã vào sổ nợ]`;
       await tx.orm.public.Transaction
         .where({ id: createdTx.id, userId })

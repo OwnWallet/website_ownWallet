@@ -73,14 +73,15 @@ export async function confirmAiImport(
       const firstUse = transactions.find(
         (t) => t.categoryName.toLowerCase() === name
       );
-      const catType = firstUse?.type === "INCOME" ? "INCOME" : "EXPENSE";
+      const isDebt = name.includes("nợ") || name.includes("vay") || name.includes("mượn");
+      const catType = isDebt ? "DEBT" : firstUse?.type === "INCOME" ? "INCOME" : "EXPENSE";
 
       try {
         const newCat = await db.orm.public.Category.create({
           name: name.charAt(0).toUpperCase() + name.slice(1),
           type: catType,
-          color: "#94a3b8",
-          icon: "📦",
+          color: isDebt ? "#f59e0b" : "#94a3b8",
+          icon: isDebt ? "🤝" : "📦",
           isDefault: false,
           userId,
         });

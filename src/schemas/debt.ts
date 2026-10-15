@@ -26,6 +26,15 @@ export const DebtPaymentSchema = z.object({
   note: z.string().max(1000).optional(),
 });
 
+export const DebtSplitSchema = z.object({
+  splitAmount: z.coerce.number().positive("Số tiền tách phải lớn hơn 0"),
+  person: z.string().max(100).optional(),
+  dueDate: z
+    .preprocess((val) => (val === "" || val === null || val === undefined ? undefined : val), z.coerce.date().optional()),
+  note: z.string().max(1000).optional(),
+});
+
 export type DebtInput = z.infer<typeof DebtSchema>;
 export type DebtUpdateInput = z.infer<typeof DebtUpdateSchema>;
 export type DebtPaymentInput = z.infer<typeof DebtPaymentSchema>;
+export type DebtSplitInput = z.infer<typeof DebtSplitSchema>;

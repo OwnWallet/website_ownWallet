@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { History, X, Link2, Loader2, ExternalLink, AlertCircle } from "lucide-react";
+import { History, X, Link2, Loader2, ExternalLink, AlertCircle, Scissors } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
-import { getDebtLogs } from "@/actions/debts";
+import { getDebtLogs, splitDebtByLog } from "@/actions/debts";
+import { toast } from "sonner";
 
 type DebtLogWithTx = {
   id: string;
@@ -92,6 +93,7 @@ export function DebtLogModal({
   const [logs, setLogs] = useState<DebtLogWithTx[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [splittingLogId, setSplittingLogId] = useState<string | null>(null);
   const mounted = useMounted();
 
   const loadLogs = useCallback(async () => {
@@ -112,6 +114,29 @@ export function DebtLogModal({
   };
 
   const handleClose = () => setOpen(false);
+
+  const handleSplitLog = async (logId: string) => {
+    const newPerson = window.prompt(
+      `Nhập tên đối tác cho khoản nợ mới tách (mặc định: ${debtPerson}):`,
+      debtPerson
+    );
+    if (newPerson === null) return;
+    setSplittingLogId(logId);
+    try {
+      const res = await splitDebtByLog(debtId, logId, newPerson);
+      if (res?.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(`Đã tách khoản nợ thành công!`);
+        await loadLogs();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Đã xảy ra lỗi khi tách nợ");
+    } finally {
+      setSplittingLogId(null);
+    }
+  };
 
   // Lock body scroll when open
   useEffect(() => {
@@ -363,6 +388,29 @@ export function DebtLogModal({
                                   📅 {formatDate(log.tx.recordedAt)}
                                 </div>
                               )}
+                            </div>
+                          )}
+
+                          {/* TOPUP Split button */}
+                          {log.type === "TOPUP" && (
+                            <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                              <span className="text-[10px] text-muted-foreground italic">
+                                Khoản tiền đã gộp thêm
+                              </span>
+                              <button
+                                type="button"
+                                disabled={splittingLogId === log.id}
+                                onClick={() => handleSplitLog(log.id)}
+                                className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 px-2 py-1 rounded-md border border-rose-200 dark:border-rose-800 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                title="Tách đợt gộp này thành một khoản nợ riêng biệt"
+                              >
+                                {splittingLogId === log.id ? (
+                                  <Loader2 size={10} className="animate-spin" />
+                                ) : (
+                                  <Scissors size={10} />
+                                )}
+                                <span>Tách nợ riêng</span>
+                              </button>
                             </div>
                           )}
 

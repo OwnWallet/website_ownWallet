@@ -36,6 +36,9 @@ export function isTxAlreadySynced(
   txNote: string | null | undefined,
   existingDebts: Array<{ id: string; note?: string | null }> = []
 ): boolean {
+  // Bỏ qua nếu giao dịch đã được đánh dấu không đồng bộ sổ nợ
+  if (txNote && txNote.includes(DEBT_SKIP_SYNC_TAG)) return true;
+
   // Backward compat: tag cũ trên Transaction.note
   if (txNote && txNote.includes("[Đã vào sổ nợ]")) return true;
 
@@ -64,45 +67,136 @@ export function isDebtCategory(category?: { name: string; type: string } | null)
   );
 }
 
+export const DEBT_SKIP_SYNC_TAG = "[skip_debt_sync]";
+
 /**
- * Xác định chiều khoản nợ:
- * - OWE: Tôi nợ người khác (Đi vay / Nợ phải trả)
- * - OWED: Người khác nợ tôi (Cho vay / Nợ phải thu)
+ * Xác định chiều khoản nợ dựa trên Danh mục, Loại giao dịch (INCOME/EXPENSE) và Ghi chú:
+ * - OWE: Tôi nợ người khác (Đi vay / Nợ phải trả / Tôi trả nợ)
+ * - OWED: Người khác nợ tôi (Cho vay / Nợ phải thu / Người khác trả nợ tôi)
  */
 export function getDebtDirection(
   category?: { name: string; type: string } | null,
-  txType?: TxType
+  txType?: TxType,
+  note?: string | null
 ): DebtDir {
-  const name = (category?.name || "").toLowerCase();
+  const catName = (category?.name || "").toLowerCase();
+  const text = `${catName} ${(note || "").toLowerCase()}`;
 
-  // Cho vay / Nợ phải thu -> OWED (Người nợ tôi)
+  // 1. Phân biệt theo Loại dòng tiền (TxType)
+  if (txType === "INCOME") {
+    // Tiền vào ví:
+    // - Nếu có từ khóa "thu nợ", "người khác trả", "được trả nợ", "trả nợ", "đòi nợ", "hoàn nợ", hoặc danh mục "Nợ phải thu":
+    //   -> Đối tác đang trả nợ cho mình -> Khoản nợ gốc thuộc "Người khác nợ tôi" (OWED)
+    if (
+      text.includes("thu nợ") ||
+      text.includes("người khác trả") ||
+      text.includes("được trả") ||
+      text.includes("đòi nợ") ||
+      text.includes("hoàn nợ") ||
+      text.includes("trả nợ") ||
+      catName.includes("nợ phải thu")
+    ) {
+      return "OWED";
+    }
+
+    // - Nếu có từ khóa "đi vay", "vay tiền", "mượn tiền", "giải ngân", hoặc danh mục "Nợ phải trả":
+    //   -> Mình đi vay thêm tiền vào ví -> "Tôi nợ người khác" (OWE)
+    if (
+      text.includes("đi vay") ||
+      text.includes("vay tiền") ||
+      text.includes("mượn tiền") ||
+      text.includes("giải ngân") ||
+      catName.includes("nợ phải trả")
+    ) {
+      return "OWE";
+    }
+
+    return "OWED"; // Mặc định dòng tiền vào sổ nợ là thu nợ về (OWED)
+  }
+
+  // 2. Tiền ra khỏi ví (EXPENSE):
+  // - Nếu có từ khóa "cho vay", "cho mượn", hoặc danh mục "Nợ phải thu":
+  //   -> Xuất tiền cho người khác vay -> "Người khác nợ tôi" (OWED)
   if (
-    name.includes("cho vay") ||
-    name.includes("cho mượn") ||
-    name.includes("nợ phải thu") ||
-    name.includes("thu nợ") ||
-    name.includes("đòi nợ")
+    text.includes("cho vay") ||
+    text.includes("cho mượn") ||
+    catName.includes("nợ phải thu")
   ) {
     return "OWED";
   }
 
-  // Đi vay / Vay mượn / Nợ phải trả -> OWE (Tôi nợ người khác)
+  // - Nếu có từ khóa "trả nợ", "thanh toán nợ", "tất toán", "nợ phải trả", hoặc danh mục "Nợ phải trả":
+  //   -> Xuất tiền trả nợ cho chủ nợ -> "Tôi nợ người khác" (OWE)
   if (
-    name.includes("đi vay") ||
-    name.includes("vay tiền") ||
-    name.includes("nợ phải trả") ||
-    name.includes("trả nợ") ||
-    name.includes("mượn tiền") ||
-    (name.includes("vay") && !name.includes("cho vay")) ||
-    (name.includes("mượn") && !name.includes("cho mượn"))
+    text.includes("trả nợ") ||
+    text.includes("thanh toán nợ") ||
+    text.includes("tất toán") ||
+    catName.includes("nợ phải trả")
   ) {
     return "OWE";
   }
 
-  // Fallback theo bản chất dòng tiền giao dịch:
-  // EXPENSE: Tiền xuất ra khỏi ví -> Cho vay (Người nợ mình = OWED)
-  // INCOME: Tiền nhập vào ví -> Đi vay (Mình nợ người ta = OWE)
+  // Fallback mặc định theo bản chất dòng tiền
   return txType === "EXPENSE" ? "OWED" : "OWE";
+}
+
+export interface DebtTxAnalysis {
+  direction: DebtDir;
+  action: "PAYMENT" | "TOPUP" | "CREATE";
+  isRepayment: boolean;
+  person: string | null;
+  cleanNote: string;
+  personIsFallback: boolean;
+}
+
+/**
+ * Phân tích toàn diện giao dịch: Chiều nợ (OWE/OWED) và Bản chất hành vi (PAYMENT vs TOPUP/CREATE)
+ */
+export function analyzeDebtTransaction(
+  category?: { name: string; type: string } | null,
+  txType?: TxType,
+  note?: string | null
+): DebtTxAnalysis {
+  const direction = getDebtDirection(category, txType, note);
+  const { person, cleanNote, hasFallback } = extractDebtPerson(note);
+  const catName = (category?.name || "").toLowerCase();
+  const text = `${catName} ${(note || "").toLowerCase()}`;
+
+  let isRepayment = false;
+  if (direction === "OWED") {
+    // Người khác nợ tôi:
+    // Tiền vào ví (INCOME) hoặc có từ khóa trả nợ/thu nợ -> Là đối tác trả nợ (PAYMENT)
+    if (
+      txType === "INCOME" ||
+      text.includes("thu nợ") ||
+      text.includes("trả nợ") ||
+      text.includes("được trả")
+    ) {
+      isRepayment = true;
+    }
+  } else {
+    // Tôi nợ người khác (OWE):
+    // Tiền ra ví (EXPENSE) hoặc có từ khóa trả nợ/thanh toán -> Là tôi trả nợ (PAYMENT)
+    if (
+      txType === "EXPENSE" ||
+      text.includes("trả nợ") ||
+      text.includes("thanh toán nợ") ||
+      text.includes("tất toán")
+    ) {
+      isRepayment = true;
+    }
+  }
+
+  const action = isRepayment ? "PAYMENT" : "TOPUP";
+
+  return {
+    direction,
+    action,
+    isRepayment,
+    person,
+    cleanNote,
+    personIsFallback: hasFallback,
+  };
 }
 
 /** Danh sách từ phổ thông KHÔNG phải tên người */

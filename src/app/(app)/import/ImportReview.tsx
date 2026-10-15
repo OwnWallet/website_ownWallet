@@ -452,13 +452,26 @@ export default function ImportReview({
                       className="cat-input"
                     >
                       <option value="">-- Chọn danh mục --</option>
-                      {categories
-                        .filter((c) => c.type === row.type)
-                        .map((c) => (
-                          <option key={c.id} value={c.name}>
-                            {c.icon ? `${c.icon} ` : ""}{c.name}
-                          </option>
-                        ))}
+                      <optgroup label={row.type === "INCOME" ? "Thu nhập" : "Chi tiêu"}>
+                        {categories
+                          .filter((c) => c.type === row.type)
+                          .map((c) => (
+                            <option key={c.id} value={c.name}>
+                              {c.icon ? `${c.icon} ` : ""}{c.name}
+                            </option>
+                          ))}
+                      </optgroup>
+                      {categories.some((c) => c.type === "DEBT") && (
+                        <optgroup label="Nợ & Vay">
+                          {categories
+                            .filter((c) => c.type === "DEBT")
+                            .map((c) => (
+                              <option key={c.id} value={c.name}>
+                                {c.icon ? `${c.icon} ` : ""}{c.name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
                     </select>
                   </td>
 
