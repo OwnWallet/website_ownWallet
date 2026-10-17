@@ -153,26 +153,7 @@ export function EvidenceUpload({ value, onChange, disabled }: EvidenceUploadProp
 
   function handleViewOriginal() {
     if (!value) return;
-    const newWin = window.open();
-    if (newWin) {
-      newWin.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Xem ảnh bằng chứng giao dịch</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-              body { margin: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-              img { max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-            </style>
-          </head>
-          <body>
-            <img src="${value}" alt="Ảnh bằng chứng" />
-          </body>
-        </html>
-      `);
-      newWin.document.close();
-    }
+    window.open(value, "_blank", "noopener,noreferrer");
   }
 
   return (

@@ -182,6 +182,20 @@ export async function createCashFlowSource(formData: FormData) {
   const parsed = CashFlowSourceSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
+  // Xác thực quyền sở hữu các tài nguyên liên kết để chống IDOR
+  if (parsed.data.walletId) {
+    const w = await db.orm.public.Wallet.where({ id: parsed.data.walletId, userId }).first();
+    if (!w) return { error: { walletId: ["Tài khoản ví không hợp lệ hoặc không thuộc quyền sở hữu"] } };
+  }
+  if (parsed.data.categoryId) {
+    const c = await db.orm.public.Category.where({ id: parsed.data.categoryId, userId }).first();
+    if (!c) return { error: { categoryId: ["Danh mục không hợp lệ hoặc không thuộc quyền sở hữu"] } };
+  }
+  if (parsed.data.investmentId) {
+    const inv = await db.orm.public.Investment.where({ id: parsed.data.investmentId, userId }).first();
+    if (!inv) return { error: { investmentId: ["Khoản đầu tư không hợp lệ hoặc không thuộc quyền sở hữu"] } };
+  }
+
   await db.orm.public.CashFlowSource.create({
     name: parsed.data.name,
     amount: String(parsed.data.amount),
@@ -202,6 +216,7 @@ export async function createCashFlowSource(formData: FormData) {
   return { success: true };
 }
 
+
 export async function updateCashFlowSource(id: string, formData: FormData) {
   const userId = await getUserId();
   const raw = Object.fromEntries(formData);
@@ -210,6 +225,20 @@ export async function updateCashFlowSource(id: string, formData: FormData) {
 
   const existing = await db.orm.public.CashFlowSource.where({ id, userId }).first();
   if (!existing) return { error: "Không tìm thấy nguồn dòng tiền" };
+
+  // Xác thực quyền sở hữu các tài nguyên liên kết để chống IDOR
+  if (parsed.data.walletId) {
+    const w = await db.orm.public.Wallet.where({ id: parsed.data.walletId, userId }).first();
+    if (!w) return { error: { walletId: ["Tài khoản ví không hợp lệ hoặc không thuộc quyền sở hữu"] } };
+  }
+  if (parsed.data.categoryId) {
+    const c = await db.orm.public.Category.where({ id: parsed.data.categoryId, userId }).first();
+    if (!c) return { error: { categoryId: ["Danh mục không hợp lệ hoặc không thuộc quyền sở hữu"] } };
+  }
+  if (parsed.data.investmentId) {
+    const inv = await db.orm.public.Investment.where({ id: parsed.data.investmentId, userId }).first();
+    if (!inv) return { error: { investmentId: ["Khoản đầu tư không hợp lệ hoặc không thuộc quyền sở hữu"] } };
+  }
 
   await db.orm.public.CashFlowSource.where({ id, userId }).update({
     name: parsed.data.name,
@@ -229,6 +258,7 @@ export async function updateCashFlowSource(id: string, formData: FormData) {
   revalidatePath("/dashboard");
   return { success: true };
 }
+
 
 export async function toggleCashFlowSource(id: string) {
   const userId = await getUserId();

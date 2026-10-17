@@ -64,117 +64,122 @@ export async function addInvestLog(investmentId: string, formData: FormData) {
   let walletName: string | null = null;
   const totalAmount = tradeQty * parsed.data.price;
 
-  if (parsed.data.action === "SELL") {
-    if (tradeQty > currentQty) {
-      return { error: `Số lượng bán (${tradeQty}) vượt quá số lượng đang có (${currentQty})` };
-    }
-    newQty = Math.max(0, currentQty - tradeQty);
-
-    // Cập nhật số lượng còn lại của khoản đầu tư
-    await db.orm.public.Investment
-      .where({ id: investmentId, userId })
-      .update({ quantity: String(newQty) });
-
-    // Nếu có chọn tài khoản nhận tiền
-    if (parsed.data.walletId) {
-      const wallet = await db.orm.public.Wallet
-        .where({ id: parsed.data.walletId, userId })
-        .first();
-
-      if (wallet) {
-        walletName = wallet.name;
-
-        // Tìm danh mục phù hợp (ưu tiên INVEST, sau đó INCOME)
-        let category = await db.orm.public.Category
-          .where({ userId, type: "INVEST" })
-          .first();
-
-        if (!category) {
-          category = await db.orm.public.Category
-            .where({ userId, type: "INCOME" })
-            .first();
-        }
-
-        if (!category) {
-          category = await db.orm.public.Category
-            .where({ userId })
-            .first();
-        }
-
-        if (category) {
-          await db.orm.public.Transaction.create({
-            amount: String(totalAmount),
-            type: "INCOME",
-            categoryId: category.id,
-            note: `Bán ${tradeQty.toLocaleString("vi-VN")} ${investment.name}${investment.ticker ? ` (${investment.ticker})` : ""}`,
-            walletId: wallet.id,
-            userId,
-            recordedAt: toInstant(parsed.data.recordedAt),
-          });
-        }
-      }
-    }
-  } else {
-    // BUY: Tăng số lượng và tính lại giá vốn trung bình
-    const currentBuyPrice = Number(investment.buyPrice);
-    const totalCost = currentQty * currentBuyPrice + tradeQty * parsed.data.price;
-    newQty = currentQty + tradeQty;
-    const newAvgPrice = newQty > 0 ? totalCost / newQty : parsed.data.price;
-
-    await db.orm.public.Investment
-      .where({ id: investmentId, userId })
-      .update({
-        quantity: String(newQty),
-        buyPrice: String(newAvgPrice),
-      });
-
-    // Nếu có chọn tài khoản trích tiền mua đầu tư → tạo Transaction EXPENSE để trừ số dư ví
-    if (parsed.data.walletId) {
-      const wallet = await db.orm.public.Wallet
-        .where({ id: parsed.data.walletId, userId })
-        .first();
-
-      if (wallet) {
-        walletName = wallet.name;
-
-        let category = await db.orm.public.Category
-          .where({ userId, type: "INVEST" })
-          .first();
-
-        if (!category) {
-          category = await db.orm.public.Category
-            .where({ userId, type: "EXPENSE" })
-            .first();
-        }
-
-        if (!category) {
-          category = await db.orm.public.Category
-            .where({ userId })
-            .first();
-        }
-
-        if (category) {
-          await db.orm.public.Transaction.create({
-            amount: String(totalAmount),
-            type: "EXPENSE",
-            categoryId: category.id,
-            note: `Mua thêm ${tradeQty.toLocaleString("vi-VN")} ${investment.name}${investment.ticker ? ` (${investment.ticker})` : ""}`,
-            walletId: wallet.id,
-            userId,
-            recordedAt: toInstant(parsed.data.recordedAt),
-          });
-        }
-      }
-    }
+  if (parsed.data.action === "SELL" && tradeQty > currentQty) {
+    return { error: `Số lượng bán (${tradeQty}) vượt quá số lượng đang có (${currentQty})` };
   }
 
-  // Ghi nhật ký giao dịch
-  await db.orm.public.InvestLog.create({
-    action: parsed.data.action,
-    quantity: String(parsed.data.quantity),
-    price: String(parsed.data.price),
-    recordedAt: toInstant(parsed.data.recordedAt),
-    investmentId,
+  // Đóng gói toàn bộ trong db.transaction để đảm bảo ACID:
+  // Investment update + Transaction create + InvestLog create là một đơn vị nguyên tử.
+  await db.transaction(async (tx: any) => {
+    if (parsed.data.action === "SELL") {
+      newQty = Math.max(0, currentQty - tradeQty);
+
+      // Cập nhật số lượng còn lại của khoản đầu tư
+      await tx.orm.public.Investment
+        .where({ id: investmentId, userId })
+        .update({ quantity: String(newQty) });
+
+      // Nếu có chọn tài khoản nhận tiền
+      if (parsed.data.walletId) {
+        const wallet = await tx.orm.public.Wallet
+          .where({ id: parsed.data.walletId, userId })
+          .first();
+
+        if (wallet) {
+          walletName = wallet.name;
+
+          // Tìm danh mục phù hợp (ưu tiên INVEST, sau đó INCOME)
+          let category = await tx.orm.public.Category
+            .where({ userId, type: "INVEST" })
+            .first();
+
+          if (!category) {
+            category = await tx.orm.public.Category
+              .where({ userId, type: "INCOME" })
+              .first();
+          }
+
+          if (!category) {
+            category = await tx.orm.public.Category
+              .where({ userId })
+              .first();
+          }
+
+          if (category) {
+            await tx.orm.public.Transaction.create({
+              amount: String(totalAmount),
+              type: "INCOME",
+              categoryId: category.id,
+              note: `Bán ${tradeQty.toLocaleString("vi-VN")} ${investment.name}${investment.ticker ? ` (${investment.ticker})` : ""}`,
+              walletId: wallet.id,
+              userId,
+              recordedAt: toInstant(parsed.data.recordedAt),
+            });
+          }
+        }
+      }
+    } else {
+      // BUY: Tăng số lượng và tính lại giá vốn trung bình
+      const currentBuyPrice = Number(investment.buyPrice);
+      const totalCost = currentQty * currentBuyPrice + tradeQty * parsed.data.price;
+      newQty = currentQty + tradeQty;
+      const newAvgPrice = newQty > 0 ? totalCost / newQty : parsed.data.price;
+
+      await tx.orm.public.Investment
+        .where({ id: investmentId, userId })
+        .update({
+          quantity: String(newQty),
+          buyPrice: String(newAvgPrice),
+        });
+
+      // Nếu có chọn tài khoản trích tiền mua đầu tư → tạo Transaction EXPENSE để trừ số dư ví
+      if (parsed.data.walletId) {
+        const wallet = await tx.orm.public.Wallet
+          .where({ id: parsed.data.walletId, userId })
+          .first();
+
+        if (wallet) {
+          walletName = wallet.name;
+
+          let category = await tx.orm.public.Category
+            .where({ userId, type: "INVEST" })
+            .first();
+
+          if (!category) {
+            category = await tx.orm.public.Category
+              .where({ userId, type: "EXPENSE" })
+              .first();
+          }
+
+          if (!category) {
+            category = await tx.orm.public.Category
+              .where({ userId })
+              .first();
+          }
+
+          if (category) {
+            await tx.orm.public.Transaction.create({
+              amount: String(totalAmount),
+              type: "EXPENSE",
+              categoryId: category.id,
+              note: `Mua thêm ${tradeQty.toLocaleString("vi-VN")} ${investment.name}${investment.ticker ? ` (${investment.ticker})` : ""}`,
+              walletId: wallet.id,
+              userId,
+              recordedAt: toInstant(parsed.data.recordedAt),
+            });
+          }
+        }
+      }
+    }
+
+    // Ghi nhật ký giao dịch
+    await tx.orm.public.InvestLog.create({
+      action: parsed.data.action,
+      quantity: String(parsed.data.quantity),
+      price: String(parsed.data.price),
+      recordedAt: toInstant(parsed.data.recordedAt),
+      investmentId,
+    });
   });
 
   revalidatePath("/investments");
@@ -193,6 +198,7 @@ export async function addInvestLog(investmentId: string, formData: FormData) {
     newQuantity: newQty,
   };
 }
+
 
 export async function deleteInvestment(id: string) {
   const userId = await getUserId();

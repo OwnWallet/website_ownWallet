@@ -7,6 +7,7 @@
     "build": "prisma contract emit && next build && node scripts/copy-standalone.mjs",
     "start": "next start",
     "lint": "eslint",
+    "test": "tsx --test src/lib/__tests__/*.test.ts",
     "postinstall": "node scripts/shim-prisma.mjs && prisma contract emit",
     "db:emit": "prisma contract emit",
     "db:migrate": "prisma migration plan && prisma db migrate",

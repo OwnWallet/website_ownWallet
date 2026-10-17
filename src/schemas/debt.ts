@@ -38,3 +38,16 @@ export type DebtInput = z.infer<typeof DebtSchema>;
 export type DebtUpdateInput = z.infer<typeof DebtUpdateSchema>;
 export type DebtPaymentInput = z.infer<typeof DebtPaymentSchema>;
 export type DebtSplitInput = z.infer<typeof DebtSplitSchema>;
+
+export const SyncItemConfigSchema = z.object({
+  txId: z.string().min(1, "Mã giao dịch không hợp lệ"),
+  actionType: z.enum(["CREATE", "MERGE", "PAYMENT"] as const),
+  person: z.string().max(100).default(""),
+  direction: z.enum(["OWE", "OWED"] as const),
+  targetDebtId: z.string().optional(),
+});
+
+export const SyncTransactionsAdvancedSchema = z
+  .array(SyncItemConfigSchema)
+  .min(1, "Vui lòng chọn ít nhất một giao dịch để đồng bộ");
+

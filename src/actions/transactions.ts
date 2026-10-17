@@ -309,20 +309,44 @@ export async function updateTransaction(id: string, formData: FormData) {
 
 async function reverseDebtLogsForTx(t: any, txId: string, userId: string) {
   const linkedLogs = await t.orm.public.DebtLog.where({ txId }).all();
+  const escapedId = txId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
   for (const log of linkedLogs) {
     const debt = await t.orm.public.Debt.where({ id: log.debtId, userId }).first();
-    if (debt && log.type === "PAYMENT") {
-      const logAmt = Number(log.amount);
-      const updatedPaid = Math.max(0, Number(debt.paidAmount) - logAmt);
-      const totalAmt = Number(debt.amount);
+    if (debt) {
+      const logAmt = Number(log.amount || 0);
+      let updatedAmount = Number(debt.amount);
+      let updatedPaid = Number(debt.paidAmount || 0);
+
+      if (log.type === "PAYMENT") {
+        updatedPaid = Math.max(0, updatedPaid - logAmt);
+      } else if (log.type === "TOPUP") {
+        updatedAmount = Math.max(0, updatedAmount - logAmt);
+      }
+
       const updatedStatus: "PAID" | "PARTIAL" | "PENDING" =
-        updatedPaid >= totalAmt ? "PAID" : updatedPaid > 0 ? "PARTIAL" : "PENDING";
+        updatedPaid >= updatedAmount ? "PAID" : updatedPaid > 0 ? "PARTIAL" : "PENDING";
+
+      // Dọn dẹp thẻ [tx_id:xxx] và các mệnh đề liên quan khỏi note của Debt
+      let updatedNote = debt.note;
+      if (updatedNote) {
+        updatedNote = updatedNote
+          .replace(new RegExp(`\\s*\\|\\s*Gộp thêm từ GD ngày [^|]+\\[tx_id:${escapedId}\\]`, "g"), "")
+          .replace(new RegExp(`\\s*\\|\\s*Thanh toán từ GD ngày [^|]+\\[tx_id:${escapedId}\\]`, "g"), "")
+          .replace(new RegExp(`^Tạo từ GD ngày [^|[]+\\[tx_id:${escapedId}\\]\\s*`, "g"), "")
+          .replace(new RegExp(`\\[tx_id:${escapedId}\\]`, "g"), "")
+          .replace(/^\s*\|\s*/, "")
+          .replace(/\s*\|\s*$/, "")
+          .trim();
+      }
 
       await t.orm.public.Debt
         .where({ id: debt.id, userId })
         .update({
+          amount: String(updatedAmount),
           paidAmount: String(updatedPaid),
           status: updatedStatus,
+          note: updatedNote || null,
         });
     }
     await t.orm.public.DebtLog.where({ id: log.id }).delete();

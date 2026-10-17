@@ -101,7 +101,21 @@ export async function contributeToGoal(goalId: string, formData: FormData) {
 
 export async function deleteGoal(id: string) {
   const userId = await getUserId();
-  await db.orm.public.Goal.where({ id, userId }).delete();
+  const goal = await db.orm.public.Goal.where({ id, userId }).first();
+  if (!goal) return { error: "Không tìm thấy mục tiêu" };
+
+  await db.transaction(async (tx: any) => {
+    // Gỡ liên kết goalId khỏi các giao dịch liên quan để tránh vi phạm Foreign Key constraint
+    await tx.orm.public.Transaction
+      .where({ goalId: id, userId })
+      .update({ goalId: null });
+
+    await tx.orm.public.Goal.where({ id, userId }).delete();
+  });
+
   revalidatePath("/goals");
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
   return { success: true };
 }
+

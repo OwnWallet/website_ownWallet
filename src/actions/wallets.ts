@@ -98,6 +98,7 @@ export async function getWallets() {
       .orderBy((w) => w.createdAt.asc())
       .all(),
     db.orm.public.Transaction
+      .select("amount", "type", "walletId")
       .where((t) => t.userId.eq(userId))
       .all(),
   ]);

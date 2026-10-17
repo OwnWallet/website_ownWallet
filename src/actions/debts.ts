@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { DebtSchema, DebtUpdateSchema, DebtPaymentSchema, DebtSplitSchema } from "@/schemas/debt";
+import {
+  DebtSchema,
+  DebtUpdateSchema,
+  DebtPaymentSchema,
+  DebtSplitSchema,
+  SyncTransactionsAdvancedSchema,
+} from "@/schemas/debt";
 import { toInstant, formatDate, formatCurrency, serializeData } from "@/lib/utils";
 import {
   isDebtCategory,
@@ -386,8 +392,16 @@ export async function getDebtSyncCandidates() {
     (t: any) => isDebtCategory(t.category) && !t.note?.includes(DEBT_SKIP_SYNC_TAG)
   );
 
+  // Sắp xếp các giao dịch theo thứ tự thời gian tăng dần (ASC) để xử lý nhân quả:
+  // Khoản tạo nợ hoặc gộp nợ phát sinh trước phải được đối soát trước các khoản trả nợ phát sinh sau
+  debtTxs.sort(
+    (a: any, b: any) =>
+      new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
+  );
+
   // BUG-1: Dùng helper thống nhất để build Set từ tag chuẩn [tx_id:{id}]
   const syncedTxIds = buildSyncedTxIdSet(debts);
+
 
   const activeDebts = debts.filter((d: any) => d.status !== "PAID");
 
@@ -548,6 +562,9 @@ export async function getDebtSyncCandidates() {
 
   // BUG-5: Thông báo nếu kết quả bị giới hạn
   const isLimited = transactions.length >= 2000;
+
+  // Đảo ngược lại để UI hiển thị các giao dịch mới nhất ở trên đầu
+  candidates.reverse();
 
   return {
     candidates,
@@ -883,9 +900,11 @@ export interface SyncItemConfig {
 }
 
 export async function syncTransactionsToDebtsAdvanced(items: SyncItemConfig[]) {
-  if (!items || items.length === 0) {
-    return { error: "Vui lòng chọn ít nhất một giao dịch để đồng bộ" };
+  const parsed = SyncTransactionsAdvancedSchema.safeParse(items);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message || "Dữ liệu đồng bộ không hợp lệ" };
   }
+  const validItems = parsed.data;
   const userId = await getUserId();
 
   const rawTxs = await db.orm.public.Transaction
@@ -895,15 +914,23 @@ export async function syncTransactionsToDebtsAdvanced(items: SyncItemConfig[]) {
   const allTxs = serializeData(rawTxs);
   const txMap = new Map<string, any>(allTxs.map((t: any) => [t.id, t]));
 
+  // Sắp xếp các mục đồng bộ theo thứ tự thời gian giao dịch ASC để đảm bảo quan hệ nhân quả
+  validItems.sort((a, b) => {
+    const tA = txMap.get(a.txId)?.recordedAt ? new Date(txMap.get(a.txId).recordedAt).getTime() : 0;
+    const tB = txMap.get(b.txId)?.recordedAt ? new Date(txMap.get(b.txId).recordedAt).getTime() : 0;
+    return tA - tB;
+  });
+
   let createdCount = 0;
   let mergedCount = 0;
   let paymentCount = 0;
   let totalAmount = 0;
 
   await db.transaction(async (tx: any) => {
-    for (const item of items) {
+    for (const item of validItems) {
       const t = txMap.get(item.txId);
       if (!t) continue;
+
 
       const amount = Number(t.amount);
       const syncTag = buildSyncTag(t.id);

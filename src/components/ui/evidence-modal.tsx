@@ -42,26 +42,7 @@ export function EvidenceModal({
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => {
-                const newWin = window.open();
-                if (newWin) {
-                  newWin.document.write(`
-                    <!DOCTYPE html>
-                    <html>
-                      <head>
-                        <title>${title}</title>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <style>
-                          body { margin: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-                          img { max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-                        </style>
-                      </head>
-                      <body><img src="${imageUrl}" alt="${title}" /></body>
-                    </html>
-                  `);
-                  newWin.document.close();
-                }
-              }}
+              onClick={() => window.open(imageUrl, "_blank", "noopener,noreferrer")}
               className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors cursor-pointer"
               title="Mở ảnh phóng to ở tab mới"
             >
