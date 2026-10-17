@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { DebtSchema, DebtUpdateSchema, DebtPaymentSchema } from "@/schemas/debt";
+import { DebtSchema, DebtUpdateSchema, DebtPaymentSchema, DebtSplitSchema } from "@/schemas/debt";
 import { toInstant, formatDate, formatCurrency, serializeData } from "@/lib/utils";
 import {
   isDebtCategory,
@@ -11,6 +11,8 @@ import {
   extractDebtPerson,
   buildSyncTag,
   extractSyncedTxIds,
+  DEBT_SKIP_SYNC_TAG,
+  analyzeDebtTransaction,
 } from "@/lib/debt-sync";
 
 async function getUserId() {
@@ -114,9 +116,18 @@ export async function recordPayment(id: string, formData: FormData) {
   const debt = await db.orm.public.Debt.where({ id, userId }).first();
   if (!debt) return { error: "Không tìm thấy khoản nợ" };
 
+  // Guard: khoản nợ đã thanh toán đầy đủ
+  if (debt.status === "PAID") {
+    return { error: "Khoản nợ này đã được thanh toán đầy đủ, không thể ghi nhận thêm." };
+  }
+
   const debtRemain = Math.max(0, Number(debt.amount) - Number(debt.paidAmount));
-  // Cap số tiền trả tối đa bằng số còn lại (không thể trả nhiều hơn nợ)
-  const cappedPayment = Math.min(parsed.data.paidAmount, debtRemain > 0 ? debtRemain : parsed.data.paidAmount);
+  if (debtRemain <= 0) {
+    return { error: "Khoản nợ này đã được thanh toán đầy đủ, không thể ghi nhận thêm." };
+  }
+
+  // Cap số tiền trả tối đa bằng số còn lại
+  const cappedPayment = Math.min(parsed.data.paidAmount, debtRemain);
 
   const newPaid = Number(debt.paidAmount) + cappedPayment;
   const newStatus: "PAID" | "PARTIAL" | "PENDING" =
@@ -126,67 +137,79 @@ export async function recordPayment(id: string, formData: FormData) {
       ? "PARTIAL"
       : "PENDING";
 
-  await db.orm.public.Debt
-    .where({ id, userId })
-    .update({ paidAmount: String(newPaid), status: newStatus });
-
   const walletId = formData.get("walletId")?.toString();
   let walletName = "";
   let linkedTxId: string | null = null;
 
-  if (walletId) {
-    const wallet = await db.orm.public.Wallet.where({ id: walletId, userId }).first();
-    if (wallet) {
-      walletName = wallet.name;
-      const currentBal = Number(wallet.balance ?? 0);
-      const isOwe = debt.direction === "OWE";
-      const newBal = isOwe ? currentBal - cappedPayment : currentBal + cappedPayment;
+  await db.transaction(async (tx: any) => {
+    // 1. Cập nhật trạng thái nợ
+    await tx.orm.public.Debt
+      .where({ id, userId })
+      .update({ paidAmount: String(newPaid), status: newStatus });
 
-      // Tìm danh mục nợ tương ứng (có fallback sang type DEBT hoặc EXPENSE/INCOME)
-      const catName = isOwe ? "Nợ phải trả" : "Nợ phải thu";
-      let category = await db.orm.public.Category.where({ userId, name: catName }).first();
-      if (!category) {
-        category = await db.orm.public.Category.where({ userId, type: "DEBT" }).first();
-      }
-      if (!category) {
-        category = await db.orm.public.Category
-          .where({ userId, type: isOwe ? "EXPENSE" : "INCOME" })
-          .first();
-      }
+    if (walletId) {
+      const wallet = await tx.orm.public.Wallet.where({ id: walletId, userId }).first();
+      if (wallet) {
+        walletName = wallet.name;
+        const currentBal = Number(wallet.balance ?? 0);
+        const isOwe = debt.direction === "OWE";
+        const newBal = isOwe ? currentBal - cappedPayment : currentBal + cappedPayment;
 
-      if (category) {
-        const tx = await db.orm.public.Transaction.create({
-          amount: String(cappedPayment),
-          type: isOwe ? "EXPENSE" : "INCOME",
-          note: parsed.data.note?.trim() || `${isOwe ? "Trả nợ cho" : "Thu nợ từ"} ${debt.person}`,
-          recordedAt: toInstant(new Date()),
-          categoryId: category.id,
-          walletId,
-          userId,
-        });
-        linkedTxId = tx.id;
-      } else {
-        // Chỉ cập nhật trực tiếp balance nếu chưa tạo được bản ghi Transaction
-        await db.orm.public.Wallet.where({ id: walletId, userId }).update({
-          balance: String(newBal),
-        });
+        // Tìm danh mục nợ tương ứng (có fallback sang type DEBT hoặc EXPENSE/INCOME)
+        const catName = isOwe ? "Nợ phải trả" : "Nợ phải thu";
+        let category = await tx.orm.public.Category.where({ userId, name: catName }).first();
+        if (!category) {
+          category = await tx.orm.public.Category.where({ userId, type: "DEBT" }).first();
+        }
+        if (!category) {
+          category = await tx.orm.public.Category
+            .where({ userId, type: isOwe ? "EXPENSE" : "INCOME" })
+            .first();
+        }
+
+        if (category) {
+          const createdTx = await tx.orm.public.Transaction.create({
+            amount: String(cappedPayment),
+            type: isOwe ? "EXPENSE" : "INCOME",
+            note: parsed.data.note?.trim() || `${isOwe ? "Trả nợ cho" : "Thu nợ từ"} ${debt.person}`,
+            recordedAt: toInstant(new Date()),
+            categoryId: category.id,
+            walletId,
+            userId,
+          });
+          linkedTxId = createdTx.id;
+        } else {
+          // Chỉ cập nhật trực tiếp balance nếu chưa tạo được bản ghi Transaction
+          await tx.orm.public.Wallet.where({ id: walletId, userId }).update({
+            balance: String(newBal),
+          });
+        }
       }
     }
-  }
 
-  const paymentNote =
-    parsed.data.note?.trim() ||
-    (debt.direction === "OWE"
-      ? `Thanh toán ${formatCurrency(cappedPayment)} cho ${debt.person}${walletName ? ` qua ví ${walletName}` : ""}`
-      : `Thu nợ ${formatCurrency(cappedPayment)} từ ${debt.person}${walletName ? ` vào ví ${walletName}` : ""}`);
+    const paymentNote =
+      parsed.data.note?.trim() ||
+      (debt.direction === "OWE"
+        ? `Thanh toán ${formatCurrency(cappedPayment)} cho ${debt.person}${walletName ? ` qua ví ${walletName}` : ""}`
+        : `Thu nợ ${formatCurrency(cappedPayment)} từ ${debt.person}${walletName ? ` vào ví ${walletName}` : ""}`);
 
-  // Ghi lịch sử: ghi nhận thanh toán kèm description đầy đủ và txId nếu có
-  await db.orm.public.DebtLog.create({
-    type: "PAYMENT",
-    amount: String(cappedPayment),
-    note: paymentNote,
-    txId: linkedTxId,
-    debtId: id,
+    // 2. Ghi lịch sử thanh toán kèm txId nếu có
+    await tx.orm.public.DebtLog.create({
+      type: "PAYMENT",
+      amount: String(cappedPayment),
+      note: paymentNote,
+      txId: linkedTxId,
+      debtId: id,
+    });
+
+    // 3. Ghi sync tag vào note của Debt nếu có giao dịch liên kết
+    if (linkedTxId) {
+      const syncTag = buildSyncTag(linkedTxId);
+      const updatedDebtNote = debt.note ? `${debt.note} | ${syncTag}` : syncTag;
+      await tx.orm.public.Debt
+        .where({ id, userId })
+        .update({ note: updatedDebtNote });
+    }
   });
 
   revalidatePath("/debts");
@@ -234,7 +257,12 @@ export async function deleteDebts(ids: string[]) {
   return { success: true, count };
 }
 
-export async function mergeDebt(debtId: string, additionalAmount: number, additionalNote?: string) {
+export async function mergeDebt(
+  debtId: string,
+  additionalAmount: number,
+  additionalNote?: string,
+  walletId?: string
+) {
   const userId = await getUserId();
   if (additionalAmount <= 0) return { error: "Số tiền gộp phải lớn hơn 0" };
 
@@ -250,10 +278,47 @@ export async function mergeDebt(debtId: string, additionalAmount: number, additi
       ? "PARTIAL"
       : "PENDING";
 
-  let updatedNote = debt.note || "";
-  if (additionalNote) {
-    updatedNote = updatedNote ? `${updatedNote} | Gộp thêm: ${additionalNote}` : `Gộp thêm: ${additionalNote}`;
+  let linkedTxId: string | null = null;
+  let syncTag = "";
+
+  if (walletId) {
+    const wallet = await db.orm.public.Wallet.where({ id: walletId, userId }).first();
+    if (wallet) {
+      const isOwe = debt.direction === "OWE";
+      // OWE (vay thêm): Tiền vào ví -> INCOME
+      // OWED (cho vay thêm): Tiền ra khỏi ví -> EXPENSE
+      const catName = isOwe ? "Nợ phải trả" : "Nợ phải thu";
+      let category = await db.orm.public.Category.where({ userId, name: catName }).first();
+      if (!category) {
+        category = await db.orm.public.Category.where({ userId, type: "DEBT" }).first();
+      }
+      if (!category) {
+        category = await db.orm.public.Category
+          .where({ userId, type: isOwe ? "INCOME" : "EXPENSE" })
+          .first();
+      }
+
+      if (category) {
+        const tx = await db.orm.public.Transaction.create({
+          amount: String(additionalAmount),
+          type: isOwe ? "INCOME" : "EXPENSE",
+          note: additionalNote?.trim() || `${isOwe ? "Vay thêm từ" : "Cho vay thêm"} ${debt.person}`,
+          recordedAt: toInstant(new Date()),
+          categoryId: category.id,
+          walletId,
+          userId,
+        });
+        linkedTxId = tx.id;
+        syncTag = ` ${buildSyncTag(tx.id)}`;
+      }
+    }
   }
+
+  let updatedNote = debt.note || "";
+  const mergeNoteText = additionalNote
+    ? `Gộp thêm: ${additionalNote}${syncTag}`
+    : `Gộp thêm +${formatCurrency(additionalAmount)}${syncTag}`;
+  updatedNote = updatedNote ? `${updatedNote} | ${mergeNoteText}` : mergeNoteText;
 
   await db.orm.public.Debt
     .where({ id: debtId, userId })
@@ -268,11 +333,14 @@ export async function mergeDebt(debtId: string, additionalAmount: number, additi
     type: "TOPUP",
     amount: String(additionalAmount),
     note: additionalNote || null,
+    txId: linkedTxId,
     debtId,
   });
 
   revalidatePath("/debts");
   revalidatePath("/dashboard");
+  revalidatePath("/wallets");
+  revalidatePath("/transactions");
   return {
     success: true,
     newAmount,
@@ -313,8 +381,10 @@ export async function getDebtSyncCandidates() {
   const transactions = serializeData(rawTxs);
   const debts = serializeData(rawDebts);
 
-  // Lọc các giao dịch thuộc danh mục Vay / Cho vay / Nợ
-  const debtTxs = transactions.filter((t: any) => isDebtCategory(t.category));
+  // Lọc các giao dịch thuộc danh mục Vay / Cho vay / Nợ, loại trừ giao dịch đã skip sync
+  const debtTxs = transactions.filter(
+    (t: any) => isDebtCategory(t.category) && !t.note?.includes(DEBT_SKIP_SYNC_TAG)
+  );
 
   // BUG-1: Dùng helper thống nhất để build Set từ tag chuẩn [tx_id:{id}]
   const syncedTxIds = buildSyncedTxIdSet(debts);
@@ -332,35 +402,38 @@ export async function getDebtSyncCandidates() {
     person: string;
     direction: "OWE" | "OWED";
     isDuplicate: boolean;
-    actionType: "MERGE" | "CREATE" | "DUPLICATE";
+    isRepayment: boolean;
+    actionType: "MERGE" | "CREATE" | "PAYMENT" | "DUPLICATE";
     targetDebtId?: string;
     targetDebtPerson?: string;
     targetDebtCurrentAmount?: number;
     targetDebtNewAmount?: number;
-    // BUG-3: Thông báo khi tên người là fallback (không chắc chắn)
+    targetDebtPaidAmount?: number;
+    targetDebtNewPaidAmount?: number;
     personIsFallback: boolean;
   }> = [];
 
   let toCreateCount = 0;
   let toMergeCount = 0;
+  let toPaymentCount = 0;
   let duplicateCount = 0;
   let toCreateAmount = 0;
   let toMergeAmount = 0;
+  let toPaymentAmount = 0;
 
-  // BUG-2: Map để tích lũy số tiền sẽ gộp vào mỗi debt trong batch preview
-  // key = debtId, value = accumulated merge amount từ các Tx trong lần quét này
+  // Map tích lũy số tiền gộp preview
   const batchMergeAccumulator = new Map<string, number>();
+  // Map tích lũy số tiền trả preview
+  const batchPaymentAccumulator = new Map<string, number>();
 
   for (const t of debtTxs) {
     const amount = Number(t.amount);
-    const direction = getDebtDirection(t.category, t.type);
-    const {
-      person: extractedPerson,
-      cleanNote,
-      hasFallback,
-    } = extractDebtPerson(t.note);
-    const person = extractedPerson || `Đối tác (${formatDate(t.recordedAt)})`;
-    const personIsFallback = hasFallback || !extractedPerson;
+    const analysis = analyzeDebtTransaction(t.category, t.type, t.note);
+    const direction = analysis.direction;
+    const isRepayment = analysis.isRepayment;
+    const person = (analysis.person || `Đối tác (${formatDate(t.recordedAt)})`).trim();
+    const personIsFallback = analysis.personIsFallback;
+    const cleanNote = analysis.cleanNote;
 
     // BUG-1: Dùng syncedTxIds (tag chuẩn) + backward compat với tag cũ trên Transaction.note
     const isDup =
@@ -380,6 +453,7 @@ export async function getDebtSyncCandidates() {
         person,
         direction,
         isDuplicate: true,
+        isRepayment,
         actionType: "DUPLICATE",
         personIsFallback,
       });
@@ -390,14 +464,43 @@ export async function getDebtSyncCandidates() {
     const matchedDebt = activeDebts.find(
       (d: any) =>
         d.direction === direction &&
-        d.person?.trim().toLowerCase() === person.trim().toLowerCase()
+        d.person?.trim().toLowerCase() === person.toLowerCase()
     );
 
-    if (matchedDebt) {
+    if (isRepayment && matchedDebt) {
+      toPaymentCount++;
+      toPaymentAmount += amount;
+
+      const alreadyPaidAccumulated = batchPaymentAccumulator.get(matchedDebt.id) ?? 0;
+      const previewPaidBase = Number(matchedDebt.paidAmount || 0) + alreadyPaidAccumulated;
+      const previewNewPaid = Math.min(Number(matchedDebt.amount), previewPaidBase + amount);
+      batchPaymentAccumulator.set(matchedDebt.id, alreadyPaidAccumulated + amount);
+
+      candidates.push({
+        txId: t.id,
+        amount,
+        recordedAt: new Date(t.recordedAt).toISOString(),
+        type: t.type,
+        categoryName: t.category?.name || "Nợ",
+        categoryType: t.category?.type || "DEBT",
+        note: cleanNote || t.note || "",
+        person: matchedDebt.person,
+        direction,
+        isDuplicate: false,
+        isRepayment: true,
+        actionType: "PAYMENT",
+        targetDebtId: matchedDebt.id,
+        targetDebtPerson: matchedDebt.person,
+        targetDebtCurrentAmount: Number(matchedDebt.amount),
+        targetDebtPaidAmount: previewPaidBase,
+        targetDebtNewPaidAmount: previewNewPaid,
+        personIsFallback,
+      });
+    } else if (!isRepayment && matchedDebt) {
       toMergeCount++;
       toMergeAmount += amount;
 
-      // BUG-2: Tính targetDebtNewAmount dựa trên base amount + tất cả Tx đã gộp trước trong batch
+      // Tính targetDebtNewAmount dựa trên base amount + tất cả Tx đã gộp trước trong batch
       const alreadyAccumulated = batchMergeAccumulator.get(matchedDebt.id) ?? 0;
       const previewBase = Number(matchedDebt.amount) + alreadyAccumulated;
       const previewNew = previewBase + amount;
@@ -414,10 +517,10 @@ export async function getDebtSyncCandidates() {
         person: matchedDebt.person,
         direction,
         isDuplicate: false,
+        isRepayment: false,
         actionType: "MERGE",
         targetDebtId: matchedDebt.id,
         targetDebtPerson: matchedDebt.person,
-        // BUG-2: Hiển thị số tiền tích lũy đúng (base + all prior batch txs)
         targetDebtCurrentAmount: previewBase,
         targetDebtNewAmount: previewNew,
         personIsFallback,
@@ -436,6 +539,7 @@ export async function getDebtSyncCandidates() {
         person,
         direction,
         isDuplicate: false,
+        isRepayment,
         actionType: "CREATE",
         personIsFallback,
       });
@@ -451,12 +555,23 @@ export async function getDebtSyncCandidates() {
       totalFound: debtTxs.length,
       toCreateCount,
       toMergeCount,
+      toPaymentCount,
       duplicateCount,
       toCreateAmount,
       toMergeAmount,
-      totalActionableAmount: toCreateAmount + toMergeAmount,
+      toPaymentAmount,
+      totalActionableAmount: toCreateAmount + toMergeAmount + toPaymentAmount,
       isLimited,
     },
+    activeDebts: activeDebts.map((d: any) => ({
+      id: d.id,
+      person: d.person,
+      amount: Number(d.amount),
+      paidAmount: Number(d.paidAmount || 0),
+      direction: d.direction as "OWE" | "OWED",
+      status: d.status,
+      note: d.note,
+    })),
   };
 }
 
@@ -681,24 +796,24 @@ export async function getDebtLogs(debtId: string) {
   const txMap: Record<string, any> = {};
   if (txIds.length > 0) {
     try {
+      // Performance: filter bằng id.in(txIds) thay vì full-table scan toàn bộ Transaction của user
       const rawTxs = await db.orm.public.Transaction
         .where((t) => t.userId.eq(userId))
+        .where((t) => t.id.in(txIds))
         .include("category", (cat) => cat)
         .all();
       const allTxs = serializeData(rawTxs);
       for (const tx of allTxs) {
-        if (txIds.includes(tx.id)) {
-          txMap[tx.id] = {
-            id: tx.id,
-            amount: Number(tx.amount),
-            note: tx.note ?? null,
-            type: tx.type,
-            recordedAt: tx.recordedAt,
-            category: tx.category
-              ? { name: tx.category.name, icon: tx.category.icon ?? null, color: tx.category.color }
-              : null,
-          };
-        }
+        txMap[tx.id] = {
+          id: tx.id,
+          amount: Number(tx.amount),
+          note: tx.note ?? null,
+          type: tx.type,
+          recordedAt: tx.recordedAt,
+          category: tx.category
+            ? { name: tx.category.name, icon: tx.category.icon ?? null, color: tx.category.color }
+            : null,
+        };
       }
     } catch (err) {
       console.error("[getDebtLogs] Failed to enrich with tx data:", err);
@@ -719,4 +834,353 @@ export async function getDebtLogs(debtId: string) {
     debtPaidAmount: Number(debt.paidAmount),
     logs: enrichedLogs,
   };
+}
+
+export async function dismissDebtSyncCandidate(txId: string) {
+  const userId = await getUserId();
+  const tx = await db.orm.public.Transaction.where({ id: txId, userId }).first();
+  if (!tx) return { error: "Không tìm thấy giao dịch" };
+
+  // Guard: tránh append tag trùng lặp nếu đã bị bỏ qua trước đó
+  if (tx.note?.includes(DEBT_SKIP_SYNC_TAG)) {
+    return { success: true };
+  }
+
+  const updatedNote = tx.note ? `${tx.note} ${DEBT_SKIP_SYNC_TAG}` : DEBT_SKIP_SYNC_TAG;
+  await db.orm.public.Transaction
+    .where({ id: txId, userId })
+    .update({ note: updatedNote });
+
+  revalidatePath("/debts");
+  return { success: true };
+}
+
+export async function dismissDebtSyncCandidates(txIds: string[]) {
+  if (!txIds || txIds.length === 0) return { success: true, count: 0 };
+  const userId = await getUserId();
+  let count = 0;
+  await db.transaction(async (t: any) => {
+    for (const id of txIds) {
+      const tx = await t.orm.public.Transaction.where({ id, userId }).first();
+      if (!tx) continue;
+      // Guard: tránh append tag trùng lặp
+      if (tx.note?.includes(DEBT_SKIP_SYNC_TAG)) continue;
+      const updatedNote = tx.note ? `${tx.note} ${DEBT_SKIP_SYNC_TAG}` : DEBT_SKIP_SYNC_TAG;
+      await t.orm.public.Transaction.where({ id, userId }).update({ note: updatedNote });
+      count++;
+    }
+  });
+  revalidatePath("/debts");
+  return { success: true, count };
+}
+
+export interface SyncItemConfig {
+  txId: string;
+  actionType: "CREATE" | "MERGE" | "PAYMENT";
+  person: string;
+  direction: "OWE" | "OWED";
+  targetDebtId?: string;
+}
+
+export async function syncTransactionsToDebtsAdvanced(items: SyncItemConfig[]) {
+  if (!items || items.length === 0) {
+    return { error: "Vui lòng chọn ít nhất một giao dịch để đồng bộ" };
+  }
+  const userId = await getUserId();
+
+  const rawTxs = await db.orm.public.Transaction
+    .where((t) => t.userId.eq(userId))
+    .include("category", (cat) => cat)
+    .all();
+  const allTxs = serializeData(rawTxs);
+  const txMap = new Map<string, any>(allTxs.map((t: any) => [t.id, t]));
+
+  let createdCount = 0;
+  let mergedCount = 0;
+  let paymentCount = 0;
+  let totalAmount = 0;
+
+  await db.transaction(async (tx: any) => {
+    for (const item of items) {
+      const t = txMap.get(item.txId);
+      if (!t) continue;
+
+      const amount = Number(t.amount);
+      const syncTag = buildSyncTag(t.id);
+      const txDateStr = formatDate(t.recordedAt);
+      const person = (item.person || "").trim() || `Đối tác (${txDateStr})`;
+      const direction = item.direction;
+
+      if (item.actionType === "CREATE") {
+        const initNote = `Tạo từ GD ngày ${txDateStr} ${syncTag}`;
+        const newDebt = await tx.orm.public.Debt.create({
+          person,
+          amount: String(amount),
+          paidAmount: "0",
+          direction,
+          status: "PENDING",
+          priority: "NORMAL",
+          note: initNote,
+          userId,
+        });
+
+        await tx.orm.public.DebtLog.create({
+          type: "INIT",
+          amount: String(amount),
+          note: `Tạo từ GD ngày ${txDateStr}`,
+          txId: t.id,
+          debtId: newDebt.id,
+        });
+        createdCount++;
+        totalAmount += amount;
+      } else if (item.actionType === "MERGE" && item.targetDebtId) {
+        const debt = await tx.orm.public.Debt.where({ id: item.targetDebtId, userId }).first();
+        if (debt) {
+          const oldAmount = Number(debt.amount);
+          const newAmount = oldAmount + amount;
+          const paidAmount = Number(debt.paidAmount || 0);
+          const newStatus = paidAmount >= newAmount ? "PAID" : paidAmount > 0 ? "PARTIAL" : "PENDING";
+          const logNote = `Gộp thêm từ GD ngày ${txDateStr}: +${formatCurrency(amount)} ${syncTag}`;
+          const updatedNote = debt.note ? `${debt.note} | ${logNote}` : logNote;
+
+          await tx.orm.public.Debt
+            .where({ id: debt.id, userId })
+            .update({
+              amount: String(newAmount),
+              status: newStatus,
+              note: updatedNote,
+            });
+
+          await tx.orm.public.DebtLog.create({
+            type: "TOPUP",
+            amount: String(amount),
+            note: `Đồng bộ gộp từ GD ngày ${txDateStr}`,
+            txId: t.id,
+            debtId: debt.id,
+          });
+          mergedCount++;
+          totalAmount += amount;
+        }
+      } else if (item.actionType === "PAYMENT" && item.targetDebtId) {
+        const debt = await tx.orm.public.Debt.where({ id: item.targetDebtId, userId }).first();
+        if (debt) {
+          const debtRemain = Math.max(0, Number(debt.amount) - Number(debt.paidAmount || 0));
+          const paymentAmt = Math.min(amount, debtRemain > 0 ? debtRemain : amount);
+          const newPaid = Number(debt.paidAmount || 0) + paymentAmt;
+          const newStatus = newPaid >= Number(debt.amount) ? "PAID" : newPaid > 0 ? "PARTIAL" : "PENDING";
+          const logNote = `Thanh toán từ GD ngày ${txDateStr}: +${formatCurrency(paymentAmt)} ${syncTag}`;
+          const updatedNote = debt.note ? `${debt.note} | ${logNote}` : logNote;
+
+          await tx.orm.public.Debt
+            .where({ id: debt.id, userId })
+            .update({
+              paidAmount: String(newPaid),
+              status: newStatus,
+              note: updatedNote,
+            });
+
+          await tx.orm.public.DebtLog.create({
+            type: "PAYMENT",
+            amount: String(paymentAmt),
+            note: `Ghi nhận trả nợ từ GD ngày ${txDateStr}`,
+            txId: t.id,
+            debtId: debt.id,
+          });
+          paymentCount++;
+          totalAmount += paymentAmt;
+        }
+      }
+    }
+  });
+
+  revalidatePath("/debts");
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  return {
+    success: true,
+    createdCount,
+    mergedCount,
+    paymentCount,
+    totalAmount,
+  };
+}
+
+export async function splitDebtByLog(debtId: string, logId: string, newPerson?: string) {
+  const userId = await getUserId();
+
+  const debt = await db.orm.public.Debt.where({ id: debtId, userId }).first();
+  if (!debt) return { error: "Không tìm thấy khoản nợ gốc" };
+
+  // Guard: không cho phép tách khoản nợ đã tất toán
+  if (debt.status === "PAID") {
+    return { error: "Không thể tách khoản nợ đã được thanh toán đầy đủ." };
+  }
+
+  const log = await db.orm.public.DebtLog.where({ id: logId, debtId }).first();
+  if (!log) return { error: "Không tìm thấy lịch sử gộp nợ" };
+  if (log.type !== "TOPUP") return { error: "Chỉ có thể tách khoản đã được gộp thêm (TOPUP)" };
+
+  const splitAmount = Number(log.amount);
+  const oldParentAmount = Number(debt.amount);
+  const oldParentPaid = Number(debt.paidAmount || 0);
+  const oldParentRemain = Math.max(0, oldParentAmount - oldParentPaid);
+
+  // Bất biến: số tiền tách không được vượt quá số nợ chưa trả để tránh sai lệch toán học
+  if (splitAmount > oldParentRemain) {
+    return { error: `Số tiền tách (${formatCurrency(splitAmount)}) vượt quá số nợ còn lại chưa trả (${formatCurrency(oldParentRemain)}). Vui lòng trả bớt nợ trước.` };
+  }
+
+  if (oldParentAmount - splitAmount <= 0) {
+    return { error: "Không thể tách khoản nợ khiến nợ ban đầu về 0 hoặc âm" };
+  }
+
+  const newParentAmount = oldParentAmount - splitAmount;
+  const newParentPaid = Math.min(oldParentPaid, newParentAmount);
+  const newParentStatus: "PAID" | "PARTIAL" | "PENDING" =
+    newParentPaid >= newParentAmount ? "PAID" : newParentPaid > 0 ? "PARTIAL" : "PENDING";
+
+  const targetPerson = (newPerson || "").trim() || debt.person;
+
+  let childDebtId = "";
+  await db.transaction(async (tx: any) => {
+    // 1. Tạo khoản nợ mới từ khoản tách
+    const childNote = log.note ? `Tách từ khoản nợ của ${debt.person} (${log.note})` : `Tách từ khoản nợ của ${debt.person}`;
+    const childDebt = await tx.orm.public.Debt.create({
+      person: targetPerson,
+      amount: String(splitAmount),
+      paidAmount: "0",
+      direction: debt.direction,
+      status: "PENDING",
+      priority: debt.priority,
+      note: childNote,
+      userId,
+    });
+    childDebtId = childDebt.id;
+
+    // 2. Ghi log khởi tạo cho khoản nợ mới
+    await tx.orm.public.DebtLog.create({
+      type: "INIT",
+      amount: String(splitAmount),
+      note: `Khởi tạo do tách từ khoản nợ của ${debt.person}${log.note ? `: ${log.note}` : ""}`,
+      txId: log.txId || null,
+      debtId: childDebt.id,
+    });
+
+    // 3. Xóa log TOPUP khỏi khoản nợ gốc
+    await tx.orm.public.DebtLog.where({ id: logId }).delete();
+
+    // 4. Ghi log NOTE trên khoản nợ gốc
+    await tx.orm.public.DebtLog.create({
+      type: "NOTE",
+      amount: String(splitAmount),
+      note: `Đã tách khoản gộp ${formatCurrency(splitAmount)} sang khoản nợ riêng của ${targetPerson}`,
+      debtId: debt.id,
+    });
+
+    // 5. Cập nhật khoản nợ gốc
+    await tx.orm.public.Debt.where({ id: debtId, userId }).update({
+      amount: String(newParentAmount),
+      paidAmount: String(newParentPaid),
+      status: newParentStatus,
+    });
+  });
+
+  revalidatePath("/debts");
+  revalidatePath("/dashboard");
+  return { success: true, childDebtId, newParentAmount };
+}
+
+export async function splitDebtByAmount(
+  debtId: string,
+  splitAmount: number,
+  newPerson?: string,
+  note?: string,
+  dueDate?: string
+) {
+  const parsed = DebtSplitSchema.safeParse({
+    splitAmount,
+    person: newPerson,
+    note,
+    dueDate,
+  });
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    const firstErr = Object.values(fieldErrors).flat()[0] || "Dữ liệu không hợp lệ";
+    return { error: firstErr };
+  }
+
+  const userId = await getUserId();
+  if (splitAmount <= 0) return { error: "Số tiền tách phải lớn hơn 0" };
+
+  const debt = await db.orm.public.Debt.where({ id: debtId, userId }).first();
+  if (!debt) return { error: "Không tìm thấy khoản nợ gốc" };
+
+  // Guard: không cho phép tách khoản nợ đã tất toán
+  if (debt.status === "PAID") {
+    return { error: "Không thể tách khoản nợ đã được thanh toán đầy đủ." };
+  }
+
+  const oldParentAmount = Number(debt.amount);
+  const oldParentPaid = Number(debt.paidAmount || 0);
+  const oldParentRemain = Math.max(0, oldParentAmount - oldParentPaid);
+
+  if (splitAmount >= oldParentAmount) {
+    return { error: `Số tiền tách (${formatCurrency(splitAmount)}) phải nhỏ hơn tổng nợ hiện tại (${formatCurrency(oldParentAmount)})` };
+  }
+
+  // Bất biến: số tiền tách không được vượt quá số nợ còn lại chưa trả
+  if (splitAmount > oldParentRemain) {
+    return { error: `Số tiền tách (${formatCurrency(splitAmount)}) vượt quá số nợ còn lại chưa trả (${formatCurrency(oldParentRemain)}). Vui lòng trả bớt nợ trước.` };
+  }
+
+  const newParentAmount = oldParentAmount - splitAmount;
+  const newParentPaid = Math.min(oldParentPaid, newParentAmount);
+  const newParentStatus: "PAID" | "PARTIAL" | "PENDING" =
+    newParentPaid >= newParentAmount ? "PAID" : newParentPaid > 0 ? "PARTIAL" : "PENDING";
+
+  const targetPerson = (newPerson || "").trim() || debt.person;
+
+  let childDebtId = "";
+  await db.transaction(async (tx: any) => {
+    // 1. Tạo khoản nợ mới
+    const childDebt = await tx.orm.public.Debt.create({
+      person: targetPerson,
+      amount: String(splitAmount),
+      paidAmount: "0",
+      direction: debt.direction,
+      status: "PENDING",
+      priority: debt.priority,
+      dueDate: dueDate ? toInstant(dueDate) : null,
+      note: note?.trim() || `Tách số tiền từ khoản nợ của ${debt.person}`,
+      userId,
+    });
+    childDebtId = childDebt.id;
+
+    // 2. Ghi log khởi tạo cho khoản nợ con
+    await tx.orm.public.DebtLog.create({
+      type: "INIT",
+      amount: String(splitAmount),
+      note: note?.trim() || `Tạo do tách từ khoản nợ của ${debt.person}`,
+      debtId: childDebt.id,
+    });
+
+    // 3. Ghi log NOTE trên khoản nợ gốc
+    await tx.orm.public.DebtLog.create({
+      type: "NOTE",
+      amount: String(splitAmount),
+      note: `Đã tách số tiền ${formatCurrency(splitAmount)} sang khoản nợ riêng của ${targetPerson}`,
+      debtId: debt.id,
+    });
+
+    // 4. Cập nhật khoản nợ gốc
+    await tx.orm.public.Debt.where({ id: debtId, userId }).update({
+      amount: String(newParentAmount),
+      paidAmount: String(newParentPaid),
+      status: newParentStatus,
+    });
+  });
+
+  revalidatePath("/debts");
+  revalidatePath("/dashboard");
+  return { success: true, childDebtId, newParentAmount };
 }

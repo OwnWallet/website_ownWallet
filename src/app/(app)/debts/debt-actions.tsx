@@ -55,8 +55,11 @@ export function DebtActions({
     );
 
   const mounted = useMounted();
+  const [mergeTargetDebtId, setMergeTargetDebtId] = useState<string>("");
+  const [mergeWalletId, setMergeWalletId] = useState<string>("");
   const [duplicatePrompt, setDuplicatePrompt] = useState<{
     match: any;
+    matches?: any[];
     fd: FormData;
     newAmount: number;
     person: string;
@@ -173,12 +176,16 @@ export function DebtActions({
                 } else {
                   if (res.isCompleted) {
                     toast.success(
-                      `🎉 Hoàn tất khoản nợ! Bạn đã thanh toán đủ ${formatCurrency(amount)} cho ${res.person || debt?.person}.`,
+                      isOwe
+                        ? `🎉 Hoàn tất khoản nợ! Bạn đã thanh toán đủ ${formatCurrency(amount)} cho ${res.person || debt?.person}.`
+                        : `🎉 Hoàn tất thu nợ! ${res.person || debt?.person} đã thanh toán đủ ${formatCurrency(amount)} cho bạn.`,
                       { duration: 4500 }
                     );
                   } else {
                     toast.success(
-                      `Đã ghi nhận trả ${formatCurrency(amount)} cho ${res.person || debt?.person}. Còn lại: ${formatCurrency(res.remainAmount)}`,
+                      isOwe
+                        ? `Đã ghi nhận trả ${formatCurrency(amount)} cho ${res.person || debt?.person}. Còn lại: ${formatCurrency(res.remainAmount)}`
+                        : `Đã ghi nhận thu nợ ${formatCurrency(amount)} từ ${res.person || debt?.person}. Còn lại: ${formatCurrency(res.remainAmount)}`,
                       { duration: 3500 }
                     );
                   }
@@ -282,7 +289,7 @@ export function DebtActions({
                   pointerEvents: isBusy ? "none" : "auto",
                 }}
               >
-                {isBusy ? "Đang lưu..." : "Xác nhận trả nợ"}
+                {isBusy ? "Đang lưu..." : isOwe ? "Xác nhận trả nợ" : "Xác nhận thu nợ"}
               </button>
             </div>
           </form>
@@ -360,17 +367,20 @@ export function DebtActions({
               fd.set("note", encodedNote);
 
               // Kiểm tra xem đã có khoản nợ/vay cùng tên và cùng chiều chưa
-              const match = existingDebts.find(
+              const matches = existingDebts.filter(
                 (d) =>
                   d.person?.trim().toLowerCase() === person.toLowerCase() &&
                   d.direction === direction &&
                   d.status !== "PAID"
               );
 
-              if (match) {
+              if (matches.length > 0) {
                 // Hiển thị modal hỏi người dùng có muốn gộp nợ không
+                setMergeTargetDebtId(matches[0].id);
+                setMergeWalletId("");
                 setDuplicatePrompt({
-                  match,
+                  match: matches[0],
+                  matches,
                   fd,
                   newAmount: amount,
                   person,
@@ -675,34 +685,87 @@ export function DebtActions({
               </div>
             </div>
 
-            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-border text-xs space-y-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Khoản nợ hiện có:</span>
-                <span className="font-bold text-foreground">{formatCurrency(Number(duplicatePrompt.match.amount))}</span>
+            {/* Lựa chọn khoản nợ đích nếu có nhiều hơn 1 khoản nợ */}
+            {duplicatePrompt.matches && duplicatePrompt.matches.length > 1 && (
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                  Chọn khoản nợ đích để gộp vào
+                </label>
+                <select
+                  value={mergeTargetDebtId}
+                  onChange={(e) => setMergeTargetDebtId(e.target.value)}
+                  className="w-full bg-background rounded-xl px-3 py-2 text-foreground font-medium text-xs border border-border focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  {duplicatePrompt.matches.map((m: any, idx: number) => (
+                    <option key={m.id} value={m.id}>
+                      Khoản #{idx + 1}: {formatCurrency(Number(m.amount))} (Còn {formatCurrency(Number(m.amount) - Number(m.paidAmount))}) {m.note ? `- ${m.note.slice(0, 25)}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Đã thanh toán:</span>
-                <span className="text-emerald-600">{formatCurrency(Number(duplicatePrompt.match.paidAmount))}</span>
-              </div>
-              <div className="flex justify-between border-t border-border pt-1 font-semibold">
-                <span className="text-muted-foreground">Còn lại chưa thanh toán:</span>
-                <span className="text-rose-600 font-bold">
-                  {formatCurrency(Number(duplicatePrompt.match.amount) - Number(duplicatePrompt.match.paidAmount))}
-                </span>
-              </div>
-              <div className="flex justify-between border-t border-dashed border-border pt-1">
-                <span className="text-muted-foreground">Khoản mới muốn thêm:</span>
-                <span className="font-bold text-primary">+{formatCurrency(duplicatePrompt.newAmount)}</span>
-              </div>
-            </div>
+            )}
 
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Bạn có muốn <strong>gộp số tiền này vào khoản nợ cũ</strong> (tổng nợ sau gộp sẽ là{" "}
-              <strong className="text-foreground">
-                {formatCurrency(Number(duplicatePrompt.match.amount) + duplicatePrompt.newAmount)}
-              </strong>
-              ) hay muốn tạo thành một <strong>khoản nợ riêng biệt</strong>?
-            </p>
+            {/* Thông tin số dư khoản nợ đang chọn */}
+            {(() => {
+              const currentMatch =
+                (duplicatePrompt.matches || []).find((d: any) => d.id === mergeTargetDebtId) ||
+                duplicatePrompt.match;
+              const curAmt = Number(currentMatch.amount);
+              const curPaid = Number(currentMatch.paidAmount);
+              const curRemain = Math.max(0, curAmt - curPaid);
+              const afterAmt = curAmt + duplicatePrompt.newAmount;
+
+              return (
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-border text-xs space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Khoản nợ hiện có:</span>
+                    <span className="font-bold text-foreground">{formatCurrency(curAmt)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Đã thanh toán:</span>
+                    <span className="text-emerald-600">{formatCurrency(curPaid)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-border pt-1 font-semibold">
+                    <span className="text-muted-foreground">Còn lại chưa thanh toán:</span>
+                    <span className="text-rose-600 font-bold">{formatCurrency(curRemain)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-dashed border-border pt-1">
+                    <span className="text-muted-foreground">Khoản mới muốn gộp thêm:</span>
+                    <span className="font-bold text-primary">+{formatCurrency(duplicatePrompt.newAmount)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-border pt-1.5 font-bold">
+                    <span className="text-foreground">Tổng nợ sau gộp:</span>
+                    <span className="text-primary text-sm">{formatCurrency(afterAmt)}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Lựa chọn Tài khoản / Ví nguồn tiền hạch toán */}
+            {wallets.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                  Tài khoản / Ví thanh toán hạch toán
+                </label>
+                <select
+                  value={mergeWalletId}
+                  onChange={(e) => setMergeWalletId(e.target.value)}
+                  className="w-full bg-background rounded-xl px-3 py-2 text-foreground font-medium text-xs border border-border focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">-- Không hạch toán qua ví --</option>
+                  {wallets.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({formatCurrency(Number(w.balance))})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {duplicatePrompt.direction === "OWE"
+                    ? "💡 Đi vay thêm: Tiền sẽ được cộng vào ví bạn chọn."
+                    : "💡 Cho vay thêm: Tiền sẽ được trừ khỏi ví bạn chọn."}
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-2 pt-2">
               <button
@@ -712,7 +775,13 @@ export function DebtActions({
                   setLoading(true);
                   try {
                     const note = duplicatePrompt.fd.get("note")?.toString();
-                    const res: any = await mergeDebt(duplicatePrompt.match.id, duplicatePrompt.newAmount, note);
+                    const targetId = mergeTargetDebtId || duplicatePrompt.match.id;
+                    const res: any = await mergeDebt(
+                      targetId,
+                      duplicatePrompt.newAmount,
+                      note,
+                      mergeWalletId || undefined
+                    );
                     if (res?.error) {
                       toast.error(res.error);
                     } else {

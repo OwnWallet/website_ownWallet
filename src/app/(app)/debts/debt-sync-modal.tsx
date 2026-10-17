@@ -13,8 +13,18 @@ import {
   X,
   AlertTriangle,
   Unlink,
+  Trash2,
+  EyeOff,
+  Check,
 } from "lucide-react";
-import { getDebtSyncCandidates, syncTransactionsToDebts, unlinkTxFromDebts } from "@/actions/debts";
+import {
+  getDebtSyncCandidates,
+  dismissDebtSyncCandidate,
+  dismissDebtSyncCandidates,
+  syncTransactionsToDebtsAdvanced,
+  unlinkTxFromDebts,
+} from "@/actions/debts";
+import { deleteTransaction } from "@/actions/transactions";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -38,25 +48,45 @@ interface Candidate {
   person: string;
   direction: "OWE" | "OWED";
   isDuplicate: boolean;
-  actionType: "MERGE" | "CREATE" | "DUPLICATE";
+  isRepayment: boolean;
+  actionType: "MERGE" | "CREATE" | "PAYMENT" | "DUPLICATE";
   targetDebtId?: string;
   targetDebtPerson?: string;
   targetDebtCurrentAmount?: number;
   targetDebtNewAmount?: number;
-  // BUG-3: Flag cảnh báo khi tên người là fallback heuristic
+  targetDebtPaidAmount?: number;
+  targetDebtNewPaidAmount?: number;
   personIsFallback: boolean;
+}
+
+interface ActiveDebt {
+  id: string;
+  person: string;
+  amount: number;
+  paidAmount: number;
+  direction: "OWE" | "OWED";
+  status: string;
+  note?: string | null;
 }
 
 interface Summary {
   totalFound: number;
   toCreateCount: number;
   toMergeCount: number;
+  toPaymentCount?: number;
   duplicateCount: number;
   toCreateAmount: number;
   toMergeAmount: number;
+  toPaymentAmount?: number;
   totalActionableAmount: number;
-  // BUG-5: Cờ báo hiệu kết quả bị giới hạn
   isLimited?: boolean;
+}
+
+interface CandidateConfig {
+  actionType: "CREATE" | "MERGE" | "PAYMENT";
+  person: string;
+  direction: "OWE" | "OWED";
+  targetDebtId: string;
 }
 
 export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNode }) {
@@ -64,10 +94,16 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkDismissing, setBulkDismissing] = useState(false);
+
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [activeDebts, setActiveDebts] = useState<ActiveDebt[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<"actionable" | "create" | "merge" | "duplicate" | "all">("actionable");
+  const [configs, setConfigs] = useState<Record<string, CandidateConfig>>({});
+  const [activeTab, setActiveTab] = useState<"actionable" | "create" | "merge" | "payment" | "duplicate" | "all">("actionable");
   const mounted = useMounted();
 
   const loadCandidates = async () => {
@@ -76,8 +112,21 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
       const res = await getDebtSyncCandidates();
       setCandidates(res.candidates);
       setSummary(res.summary);
+      setActiveDebts((res.activeDebts as ActiveDebt[]) || []);
 
-      // Mặc định chọn tất cả các giao dịch hợp lệ (không trùng lặp, không phải fallback tên)
+      // Khởi tạo configs cho mỗi candidate
+      const initialConfigs: Record<string, CandidateConfig> = {};
+      for (const c of res.candidates) {
+        initialConfigs[c.txId] = {
+          actionType: c.actionType === "DUPLICATE" ? "CREATE" : c.actionType,
+          person: c.person,
+          direction: c.direction,
+          targetDebtId: c.targetDebtId || "",
+        };
+      }
+      setConfigs(initialConfigs);
+
+      // Mặc định chọn các giao dịch hợp lệ
       const actionableIds = new Set(
         res.candidates
           .filter((c) => c.actionType !== "DUPLICATE" && !c.personIsFallback)
@@ -125,6 +174,93 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
     }
   };
 
+  const updateConfig = (txId: string, partial: Partial<CandidateConfig>) => {
+    setConfigs((prev) => ({
+      ...prev,
+      [txId]: {
+        ...(prev[txId] || {
+          actionType: "CREATE",
+          person: "",
+          direction: "OWE",
+          targetDebtId: "",
+        }),
+        ...partial,
+      },
+    }));
+  };
+
+  const handleDismiss = async (txId: string) => {
+    setDismissingId(txId);
+    try {
+      const res = await dismissDebtSyncCandidate(txId);
+      if (res?.success) {
+        toast.success("Đã bỏ qua giao dịch. Giao dịch này sẽ không xuất hiện trong lần đồng bộ sau.", {
+          duration: 3500,
+        });
+        setCandidates((prev) => prev.filter((c) => c.txId !== txId));
+        setSelectedTxIds((prev) => {
+          const next = new Set(prev);
+          next.delete(txId);
+          return next;
+        });
+      } else {
+        toast.error("Không thể bỏ qua giao dịch");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Đã xảy ra lỗi khi bỏ qua giao dịch");
+    } finally {
+      setDismissingId(null);
+    }
+  };
+
+  const handleBulkDismiss = async () => {
+    const ids = Array.from(selectedTxIds);
+    if (ids.length === 0) return;
+    setBulkDismissing(true);
+    try {
+      const res = await dismissDebtSyncCandidates(ids);
+      if (res?.success) {
+        toast.success(`Đã bỏ qua ${res.count} giao dịch khỏi danh sách đồng bộ.`);
+        setCandidates((prev) => prev.filter((c) => !selectedTxIds.has(c.txId)));
+        setSelectedTxIds(new Set());
+      } else {
+        toast.error("Không thể bỏ qua các giao dịch");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Đã xảy ra lỗi khi bỏ qua hàng loạt");
+    } finally {
+      setBulkDismissing(false);
+    }
+  };
+
+  const handleDeleteTx = async (txId: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn XÓA vĩnh viễn giao dịch này? Dữ liệu ví và thống kê sẽ được cập nhật lại.")) {
+      return;
+    }
+    setDeletingId(txId);
+    try {
+      const res = await deleteTransaction(txId);
+      if (res?.success) {
+        toast.success("Đã xóa giao dịch thành công.");
+        setCandidates((prev) => prev.filter((c) => c.txId !== txId));
+        setSelectedTxIds((prev) => {
+          const next = new Set(prev);
+          next.delete(txId);
+          return next;
+        });
+      } else {
+        toast.error(typeof res?.error === "string" ? res.error : "Không thể xóa giao dịch");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Đã xảy ra lỗi khi xóa giao dịch");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleConfirmSync = async () => {
     const idsToSync = Array.from(selectedTxIds);
     if (idsToSync.length === 0) {
@@ -132,16 +268,44 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
       return;
     }
 
+    // Build payload
+    const items = idsToSync.map((id) => {
+      const cand = candidates.find((c) => c.txId === id);
+      const cfg = configs[id];
+      const actionType = cfg?.actionType || (cand?.actionType === "DUPLICATE" ? "CREATE" : cand?.actionType) || "CREATE";
+      const person = cfg?.person || cand?.person || "";
+      const direction = cfg?.direction || cand?.direction || "OWE";
+      const targetDebtId = cfg?.targetDebtId || cand?.targetDebtId || undefined;
+
+      return {
+        txId: id,
+        actionType,
+        person,
+        direction,
+        targetDebtId,
+      };
+    });
+
+    // Validate if MERGE or PAYMENT has targetDebtId
+    for (const item of items) {
+      if ((item.actionType === "MERGE" || item.actionType === "PAYMENT") && !item.targetDebtId) {
+        toast.error(`Vui lòng chọn khoản nợ đích cho giao dịch của "${item.person}" hoặc chuyển sang "Tạo khoản nợ mới".`);
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
-      const res = await syncTransactionsToDebts(idsToSync);
+      const res = await syncTransactionsToDebtsAdvanced(items);
       if (res?.error) {
         toast.error(res.error);
       } else {
-        toast.success(
-          `Đã đồng bộ thành công! Tạo mới ${res.createdCount} khoản nợ, gộp vào ${res.mergedCount} nợ cũ.`,
-          { duration: 4500 }
-        );
+        const parts = [];
+        if (res.createdCount) parts.push(`tạo mới ${res.createdCount}`);
+        if (res.mergedCount) parts.push(`gộp ${res.mergedCount}`);
+        if (res.paymentCount) parts.push(`ghi nhận trả nợ ${res.paymentCount}`);
+        const detailStr = parts.length > 0 ? parts.join(", ") : "thành công";
+        toast.success(`Đã đồng bộ ${detailStr} khoản nợ vào sổ nợ!`, { duration: 4500 });
         setIsOpen(false);
       }
     } catch (err) {
@@ -152,7 +316,6 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
     }
   };
 
-  // BUG-6: Hủy liên kết đồng bộ cho một giao dịch đã sync
   const handleUnlink = async (txId: string) => {
     setUnlinkingId(txId);
     try {
@@ -172,9 +335,11 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
   };
 
   const filteredCandidates = candidates.filter((c) => {
+    const currentAction = configs[c.txId]?.actionType || c.actionType;
     if (activeTab === "actionable") return c.actionType !== "DUPLICATE";
-    if (activeTab === "create") return c.actionType === "CREATE";
-    if (activeTab === "merge") return c.actionType === "MERGE";
+    if (activeTab === "create") return currentAction === "CREATE" && c.actionType !== "DUPLICATE";
+    if (activeTab === "merge") return currentAction === "MERGE" && c.actionType !== "DUPLICATE";
+    if (activeTab === "payment") return currentAction === "PAYMENT" && c.actionType !== "DUPLICATE";
     if (activeTab === "duplicate") return c.actionType === "DUPLICATE";
     return true;
   });
@@ -184,7 +349,6 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
     actionableList.some((c) => c.txId === id)
   ).length;
 
-  // BUG-3: Đếm số giao dịch có tên person là fallback
   const fallbackCount = actionableList.filter((c) => c.personIsFallback).length;
 
   return (
@@ -208,7 +372,7 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
       {mounted && isOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/65 backdrop-blur-xs animate-fade-in">
           <div
-            className="bg-card border border-border shadow-2xl rounded-2xl max-w-2xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-scale-in text-foreground"
+            className="bg-card border border-border shadow-2xl rounded-2xl max-w-3xl w-full flex flex-col max-h-[92vh] overflow-hidden animate-scale-in text-foreground"
             role="dialog"
             aria-modal="true"
           >
@@ -223,7 +387,7 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                     <span>Đồng bộ giao dịch Vay & Cho vay</span>
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Tự động đối chiếu với Sổ nợ: loại bỏ trùng lặp, thêm mới hoặc cộng dồn vào nợ cũ
+                    Tùy chỉnh hành động cho từng giao dịch: tạo mới, gộp nợ cũ hoặc ghi nhận trả nợ
                   </p>
                 </div>
               </div>
@@ -261,7 +425,6 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                 </div>
               ) : (
                 <>
-                  {/* BUG-5: Cảnh báo nếu kết quả bị giới hạn */}
                   {summary?.isLimited && (
                     <div className="p-3 rounded-xl border border-orange-400/30 bg-orange-500/8 flex items-start gap-2 text-xs text-orange-700 dark:text-orange-400">
                       <AlertCircle size={14} className="shrink-0 mt-0.5" />
@@ -271,62 +434,74 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                     </div>
                   )}
 
-                  {/* BUG-3: Cảnh báo khi có giao dịch không rõ tên người */}
                   {fallbackCount > 0 && (
                     <div className="p-3 rounded-xl border border-yellow-400/30 bg-yellow-500/8 flex items-start gap-2 text-xs text-yellow-700 dark:text-yellow-400">
                       <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-semibold">Cảnh báo:</span>{" "}
+                        <span className="font-semibold">Lưu ý:</span>{" "}
                         <span>
-                          {fallbackCount} giao dịch không có tên người rõ ràng — tên được đoán từ nội dung ghi chú và có thể không chính xác. Những giao dịch này <strong>không được chọn mặc định</strong>. Hãy kiểm tra kỹ trước khi đồng bộ, hoặc thêm ghi chú dạng <code className="bg-yellow-500/15 px-1 rounded">[Người: Tên]</code> vào giao dịch để tăng độ chính xác.
+                          Có {fallbackCount} giao dịch chưa có tên người rõ ràng trong ghi chú. Bạn có thể <strong>nhập trực tiếp tên đối tác</strong> ở từng dòng bên dưới trước khi đồng bộ.
                         </span>
                       </div>
                     </div>
                   )}
 
                   {/* Summary Metric Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {/* Thêm mới */}
-                    <div className="p-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 space-y-1">
+                    <div className="p-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/5 space-y-0.5">
                       <div className="flex items-center justify-between text-xs font-semibold text-emerald-600">
-                        <span className="flex items-center gap-1.5">
-                          <UserPlus size={14} /> Thêm mới
+                        <span className="flex items-center gap-1">
+                          <UserPlus size={13} /> Tạo mới
                         </span>
                         <span className="text-sm font-bold">{summary?.toCreateCount ?? 0}</span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Chưa trùng người sở hữu ({formatCurrency(summary?.toCreateAmount ?? 0)})
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {formatCurrency(summary?.toCreateAmount ?? 0)}
                       </p>
                     </div>
 
                     {/* Gộp nợ cũ */}
-                    <div className="p-3 rounded-xl border border-amber-500/25 bg-amber-500/5 space-y-1">
+                    <div className="p-2.5 rounded-xl border border-amber-500/25 bg-amber-500/5 space-y-0.5">
                       <div className="flex items-center justify-between text-xs font-semibold text-amber-600">
-                        <span className="flex items-center gap-1.5">
-                          <Layers size={14} /> Gộp nợ cũ
+                        <span className="flex items-center gap-1">
+                          <Layers size={13} /> Gộp nợ cũ
                         </span>
                         <span className="text-sm font-bold">{summary?.toMergeCount ?? 0}</span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Cộng thêm vào người đã có ({formatCurrency(summary?.toMergeAmount ?? 0)})
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {formatCurrency(summary?.toMergeAmount ?? 0)}
+                      </p>
+                    </div>
+
+                    {/* Trả nợ */}
+                    <div className="p-2.5 rounded-xl border border-blue-500/25 bg-blue-500/5 space-y-0.5">
+                      <div className="flex items-center justify-between text-xs font-semibold text-blue-600">
+                        <span className="flex items-center gap-1">
+                          <Check size={13} /> Trả nợ
+                        </span>
+                        <span className="text-sm font-bold">{summary?.toPaymentCount ?? 0}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {formatCurrency(summary?.toPaymentAmount ?? 0)}
                       </p>
                     </div>
 
                     {/* Trùng lặp */}
-                    <div className="p-3 rounded-xl border border-border bg-slate-50 dark:bg-slate-800/40 space-y-1">
+                    <div className="p-2.5 rounded-xl border border-border bg-slate-50 dark:bg-slate-800/40 space-y-0.5">
                       <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
-                        <span className="flex items-center gap-1.5">
-                          <ShieldCheck size={14} /> Trùng lặp
+                        <span className="flex items-center gap-1">
+                          <ShieldCheck size={13} /> Đã vào sổ
                         </span>
                         <span className="text-sm font-bold">{summary?.duplicateCount ?? 0}</span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Đã có trong sổ nợ (tự động loại bỏ)
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        Tự động bỏ qua
                       </p>
                     </div>
                   </div>
 
-                  {/* Filter tabs */}
+                  {/* Filter tabs & Bulk Actions */}
                   <div className="flex items-center justify-between gap-2 border-b border-border pb-2 flex-wrap text-xs">
                     <div className="flex items-center gap-1 overflow-x-auto py-1">
                       <button
@@ -338,7 +513,7 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                             : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800"
                         }`}
                       >
-                        Cần đồng bộ ({actionableList.length})
+                        Cần xử lý ({actionableList.length})
                       </button>
                       <button
                         type="button"
@@ -364,6 +539,17 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                       </button>
                       <button
                         type="button"
+                        onClick={() => setActiveTab("payment")}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                          activeTab === "payment"
+                            ? "bg-blue-600 text-white font-bold"
+                            : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        Trả nợ ({summary?.toPaymentCount ?? 0})
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setActiveTab("duplicate")}
                         className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
                           activeTab === "duplicate"
@@ -371,25 +557,40 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                             : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800"
                         }`}
                       >
-                        Trùng lặp ({summary?.duplicateCount})
+                        Đã vào sổ ({summary?.duplicateCount})
                       </button>
                     </div>
 
-                    {actionableList.length > 0 && activeTab !== "duplicate" && (
-                      <button
-                        type="button"
-                        onClick={toggleSelectAllActionable}
-                        className="text-[11px] font-semibold text-primary hover:underline cursor-pointer transition-colors"
-                      >
-                        {actionableList.every((c) => selectedTxIds.has(c.txId))
-                          ? "Bỏ chọn tất cả"
-                          : "Chọn tất cả"}
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {actionableList.length > 0 && activeTab !== "duplicate" && (
+                        <button
+                          type="button"
+                          onClick={toggleSelectAllActionable}
+                          className="text-[11px] font-semibold text-primary hover:underline cursor-pointer transition-colors"
+                        >
+                          {actionableList.every((c) => selectedTxIds.has(c.txId))
+                            ? "Bỏ chọn tất cả"
+                            : "Chọn tất cả"}
+                        </button>
+                      )}
+
+                      {selectedCount > 0 && (
+                        <button
+                          type="button"
+                          disabled={bulkDismissing}
+                          onClick={handleBulkDismiss}
+                          className="text-[11px] text-muted-foreground hover:text-rose-600 flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded-lg border border-border"
+                          title="Bỏ qua các giao dịch đã chọn để không hiển thị trong lần đồng bộ sau"
+                        >
+                          <EyeOff size={11} />
+                          <span>Bỏ qua ({selectedCount})</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Candidate List */}
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {filteredCandidates.length === 0 ? (
                       <div className="py-8 text-center text-xs text-muted-foreground">
                         Không có giao dịch nào trong mục này.
@@ -398,132 +599,240 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                       filteredCandidates.map((c) => {
                         const isSelected = selectedTxIds.has(c.txId);
                         const isDup = c.actionType === "DUPLICATE";
-                        const isMerge = c.actionType === "MERGE";
                         const isUnlinking = unlinkingId === c.txId;
+                        const isDismissing = dismissingId === c.txId;
+                        const isDeleting = deletingId === c.txId;
+
+                        const cfg = configs[c.txId] || {
+                          actionType: c.actionType === "DUPLICATE" ? "CREATE" : c.actionType,
+                          person: c.person,
+                          direction: c.direction,
+                          targetDebtId: c.targetDebtId || "",
+                        };
+
+                        // Danh sách nợ khả dụng để gộp hoặc trả nợ (cùng chiều nợ)
+                        const matchingDebts = activeDebts.filter(
+                          (d) => d.direction === cfg.direction
+                        );
 
                         return (
                           <div
                             key={c.txId}
-                            onClick={() => !isDup && toggleSelectOne(c.txId)}
-                            className={`p-3 rounded-xl border transition-all flex items-start gap-3 text-xs ${
+                            className={`p-3.5 rounded-xl border transition-all flex flex-col gap-2.5 text-xs ${
                               isDup
-                                ? "opacity-70 bg-slate-50 dark:bg-slate-900/40 border-border cursor-default"
-                                : c.personIsFallback
-                                ? isSelected
-                                  ? "border-yellow-400/60 bg-yellow-400/8 cursor-pointer"
-                                  : "border-yellow-400/30 bg-yellow-400/5 hover:border-yellow-400/50 cursor-pointer"
+                                ? "opacity-75 bg-slate-50 dark:bg-slate-900/40 border-border"
                                 : isSelected
-                                ? "border-primary/50 bg-primary/5 cursor-pointer shadow-2xs"
-                                : "border-border hover:border-border-strong cursor-pointer bg-card"
+                                ? "border-primary/50 bg-primary/5 shadow-2xs"
+                                : "border-border bg-card"
                             }`}
                           >
-                            {!isDup && (
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => {}}
-                                className="mt-1 w-4 h-4 rounded text-primary focus:ring-primary/20 accent-primary cursor-pointer shrink-0"
-                              />
-                            )}
-                            {isDup && (
-                              <div className="mt-1 w-4 h-4 shrink-0" />
-                            )}
+                            {/* Top row: Checkbox, Person, Direction, Amount */}
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div className="flex items-center gap-2.5 flex-1 min-w-[240px]">
+                                {!isDup ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleSelectOne(c.txId)}
+                                    className="w-4 h-4 rounded text-primary focus:ring-primary/20 accent-primary cursor-pointer shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-4 h-4 shrink-0" />
+                                )}
 
-                            <div className="flex-1 min-w-0 space-y-1">
-                              {/* Top row: Person & Amount */}
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-bold text-sm text-foreground">
-                                    {c.person}
-                                  </span>
+                                {/* Editable Person Name Input */}
+                                <div className="flex-1 max-w-xs">
+                                  <input
+                                    type="text"
+                                    disabled={isDup}
+                                    value={cfg.person}
+                                    onChange={(e) => updateConfig(c.txId, { person: e.target.value })}
+                                    placeholder="Tên đối tác / người vay"
+                                    className="w-full font-bold text-sm bg-transparent border-b border-border/80 focus:border-primary focus:outline-hidden px-1 py-0.5 text-foreground placeholder:text-muted-foreground/60 transition-colors"
+                                  />
+                                </div>
+
+                                {/* Direction toggle */}
+                                {!isDup ? (
+                                  <div className="flex items-center rounded-lg border border-border p-0.5 bg-background shrink-0 text-[10px] font-bold">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateConfig(c.txId, { direction: "OWE" })}
+                                      className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                                        cfg.direction === "OWE"
+                                          ? "bg-rose-500 text-white shadow-2xs"
+                                          : "text-muted-foreground hover:text-foreground"
+                                      }`}
+                                    >
+                                      Tôi nợ
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateConfig(c.txId, { direction: "OWED" })}
+                                      className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                                        cfg.direction === "OWED"
+                                          ? "bg-emerald-500 text-white shadow-2xs"
+                                          : "text-muted-foreground hover:text-foreground"
+                                      }`}
+                                    >
+                                      Cho vay
+                                    </button>
+                                  </div>
+                                ) : (
                                   <span
                                     className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                                       c.direction === "OWE"
-                                        ? "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800"
-                                        : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                                        ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400"
+                                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
                                     }`}
                                   >
                                     {c.direction === "OWE" ? "Tôi đi vay" : "Cho vay"}
                                   </span>
-                                  {/* BUG-3: Badge cảnh báo tên fallback */}
-                                  {c.personIsFallback && (
-                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/60 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-800 flex items-center gap-1">
-                                      <AlertTriangle size={10} />
-                                      Tên chưa chắc chắn
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="font-bold text-sm text-foreground">
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="font-extrabold text-sm text-foreground">
                                   {formatCurrency(c.amount)}
                                 </span>
                               </div>
+                            </div>
 
-                              {/* BUG-3: Gợi ý khi tên là fallback */}
-                              {c.personIsFallback && !isDup && (
-                                <div className="p-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-[11px] text-yellow-700 dark:text-yellow-400 flex items-center gap-1">
-                                  <AlertTriangle size={11} />
-                                  <span>
-                                    Tên được đoán từ ghi chú. Thêm{" "}
-                                    <code className="bg-yellow-500/15 px-0.5 rounded">[Người: Tên]</code>{" "}
-                                    vào ghi chú giao dịch để chính xác hơn.
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* Details: Action description */}
-                              {isMerge ? (
-                                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400 flex items-center justify-between flex-wrap gap-1">
-                                  <span className="flex items-center gap-1 font-semibold">
-                                    <Layers size={13} /> Trùng người sở hữu → Cộng thêm vào nợ cũ
-                                  </span>
-                                  <span className="font-medium">
-                                    {formatCurrency(c.targetDebtCurrentAmount || 0)} <ArrowRight size={11} className="inline mx-0.5" /> <strong>{formatCurrency(c.targetDebtNewAmount || 0)}</strong>
-                                  </span>
-                                </div>
-                              ) : isDup ? (
-                                <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] text-muted-foreground flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-1">
-                                    <ShieldCheck size={12} className="text-emerald-600 shrink-0" />
-                                    <span>Đã được đồng bộ trước đó. Tự động loại bỏ để tránh trùng lặp.</span>
-                                  </div>
-                                  {/* BUG-6: Nút hủy liên kết để có thể re-sync */}
-                                  <button
-                                    type="button"
-                                    disabled={isUnlinking}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleUnlink(c.txId);
-                                    }}
-                                    className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 border border-rose-300/40 dark:border-rose-700/40 transition-colors cursor-pointer"
-                                    title="Hủy liên kết để đồng bộ lại"
+                            {/* Middle section: Action Configuration (if not dup) */}
+                            {!isDup && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-border/60">
+                                {/* Action selection */}
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-muted-foreground">
+                                    Hành động đồng bộ:
+                                  </label>
+                                  <select
+                                    value={cfg.actionType}
+                                    onChange={(e) =>
+                                      updateConfig(c.txId, {
+                                        actionType: e.target.value as "CREATE" | "MERGE" | "PAYMENT",
+                                      })
+                                    }
+                                    className="w-full text-xs font-semibold rounded-lg border border-border bg-background px-2.5 py-1.5 focus:border-primary focus:outline-hidden cursor-pointer"
                                   >
-                                    {isUnlinking ? (
-                                      <RefreshCw size={10} className="animate-spin" />
-                                    ) : (
-                                      <Unlink size={10} />
-                                    )}
-                                    Hủy liên kết
-                                  </button>
+                                    <option value="CREATE">🆕 Tạo khoản nợ mới</option>
+                                    <option value="MERGE">➕ Gộp vào nợ cũ</option>
+                                    <option value="PAYMENT">✅ Ghi nhận trả nợ</option>
+                                  </select>
                                 </div>
-                              ) : (
-                                <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-semibold">
-                                  <UserPlus size={12} />
-                                  <span>Chưa có người này trong sổ nợ → Sẽ tạo mới khoản nợ</span>
-                                </div>
-                              )}
 
-                              {/* Meta: Category, Date, Note */}
-                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap pt-0.5">
+                                {/* Target debt selector if MERGE or PAYMENT */}
+                                {(cfg.actionType === "MERGE" || cfg.actionType === "PAYMENT") && (
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] font-semibold text-muted-foreground">
+                                      Khoản nợ đích:
+                                    </label>
+                                    <select
+                                      value={cfg.targetDebtId}
+                                      onChange={(e) => updateConfig(c.txId, { targetDebtId: e.target.value })}
+                                      className="w-full text-xs rounded-lg border border-border bg-background px-2 py-1.5 focus:border-primary focus:outline-hidden cursor-pointer"
+                                    >
+                                      <option value="">-- Chọn khoản nợ cần liên kết --</option>
+                                      {matchingDebts.map((d) => (
+                                        <option key={d.id} value={d.id}>
+                                          {d.person} - Nợ: {formatCurrency(d.amount)} (Còn lại: {formatCurrency(d.amount - d.paidAmount)})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Status and Action description banner */}
+                            {isDup ? (
+                              <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] text-muted-foreground flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <ShieldCheck size={13} className="text-emerald-600 shrink-0" />
+                                  <span>Đã được đồng bộ trước đó. Tự động loại trừ để chống trùng lặp.</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={isUnlinking}
+                                  onClick={() => handleUnlink(c.txId)}
+                                  className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 border border-rose-300/40 dark:border-rose-700/40 transition-colors cursor-pointer"
+                                  title="Hủy liên kết để đồng bộ lại"
+                                >
+                                  {isUnlinking ? (
+                                    <RefreshCw size={10} className="animate-spin" />
+                                  ) : (
+                                    <Unlink size={10} />
+                                  )}
+                                  Hủy liên kết
+                                </button>
+                              </div>
+                            ) : cfg.actionType === "MERGE" ? (
+                              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400 flex items-center justify-between flex-wrap gap-1">
+                                <span className="flex items-center gap-1 font-semibold">
+                                  <Layers size={13} /> Sẽ cộng thêm +{formatCurrency(c.amount)} vào khoản nợ cũ
+                                </span>
+                                {c.targetDebtCurrentAmount !== undefined && c.targetDebtNewAmount !== undefined && (
+                                  <span className="font-medium text-[10px]">
+                                    {formatCurrency(c.targetDebtCurrentAmount)} <ArrowRight size={10} className="inline mx-0.5" /> <strong>{formatCurrency(c.targetDebtNewAmount)}</strong>
+                                  </span>
+                                )}
+                              </div>
+                            ) : cfg.actionType === "PAYMENT" ? (
+                              <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-700 dark:text-blue-400 flex items-center justify-between flex-wrap gap-1">
+                                <span className="flex items-center gap-1 font-semibold">
+                                  <Check size={13} /> Sẽ ghi nhận thanh toán {formatCurrency(c.amount)} vào khoản nợ
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-semibold">
+                                <UserPlus size={12} />
+                                <span>Sẽ tạo một khoản nợ mới với số tiền {formatCurrency(c.amount)}</span>
+                              </div>
+                            )}
+
+                            {/* Bottom row: Category, Date, Note + Action buttons (Dismiss, Delete) */}
+                            <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground flex-wrap pt-0.5">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span>📁 {c.categoryName}</span>
                                 <span>•</span>
                                 <span>📅 {formatDate(c.recordedAt)}</span>
                                 {c.note && (
                                   <>
                                     <span>•</span>
-                                    <span className="italic truncate max-w-xs">{c.note}</span>
+                                    <span className="italic truncate max-w-[200px]" title={c.note}>
+                                      {c.note}
+                                    </span>
                                   </>
                                 )}
                               </div>
+
+                              {!isDup && (
+                                <div className="flex items-center gap-1.5">
+                                  {/* Nút Bỏ qua */}
+                                  <button
+                                    type="button"
+                                    disabled={isDismissing || submitting}
+                                    onClick={() => handleDismiss(c.txId)}
+                                    className="px-2 py-1 rounded-md text-[10px] font-semibold text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 transition-colors flex items-center gap-1 cursor-pointer border border-border/70"
+                                    title="Bỏ qua giao dịch này, không đồng bộ và không nhắc lại"
+                                  >
+                                    {isDismissing ? <RefreshCw size={10} className="animate-spin" /> : <EyeOff size={10} />}
+                                    <span>Bỏ qua</span>
+                                  </button>
+
+                                  {/* Nút Xóa giao dịch */}
+                                  <button
+                                    type="button"
+                                    disabled={isDeleting || submitting}
+                                    onClick={() => handleDeleteTx(c.txId)}
+                                    className="px-2 py-1 rounded-md text-[10px] font-semibold text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 transition-colors flex items-center gap-1 cursor-pointer border border-border/70"
+                                    title="Xóa giao dịch này khỏi hệ thống"
+                                  >
+                                    {isDeleting ? <RefreshCw size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                                    <span>Xóa GD</span>
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -542,10 +851,9 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                     <span>
                       Đã chọn <strong className="text-foreground">{selectedCount}</strong> / {actionableList.length} giao dịch
                     </span>
-                    {/* BUG-3: Nhắc nếu có giao dịch fallback chưa chọn */}
                     {fallbackCount > 0 && (
-                      <span className="text-yellow-600 dark:text-yellow-500">
-                        ⚠️ {fallbackCount} giao dịch chưa rõ tên người (chưa chọn mặc định)
+                      <span className="text-yellow-600 dark:text-yellow-500 text-[11px]">
+                        ⚠️ {fallbackCount} giao dịch chưa rõ tên đối tác (vui lòng kiểm tra lại)
                       </span>
                     )}
                   </div>
