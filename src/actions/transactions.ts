@@ -102,8 +102,9 @@ export async function createTransaction(formData: FormData) {
         if (matchedDebt) {
           const oldPaid = Number(matchedDebt.paidAmount || 0);
           const totalAmount = Number(matchedDebt.amount);
-          const newPaid = oldPaid + Number(data.amount);
-          const newStatus = newPaid >= totalAmount ? "PAID" : "PARTIAL";
+          // Cap: không cho phép paidAmount vượt quá tổng nợ (bất biến toán học)
+          const newPaid = Math.min(oldPaid + Number(data.amount), totalAmount);
+          const newStatus = newPaid >= totalAmount ? "PAID" : newPaid > 0 ? "PARTIAL" : "PENDING";
           const logNote = `Thanh toán từ GD ngày ${txDateStr}: ${formatCurrency(data.amount)} ${syncTag}`;
           const updatedNote = matchedDebt.note ? `${matchedDebt.note} | ${logNote}` : logNote;
 
