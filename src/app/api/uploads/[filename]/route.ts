@@ -10,7 +10,7 @@ const MIME_MAP: Record<string, string> = {
   ".png": "image/png",
   ".webp": "image/webp",
   ".gif": "image/gif",
-  ".svg": "image/svg+xml",
+  // .svg intentionally excluded — SVG can contain inline JavaScript (XSS vector)
   ".heic": "image/heic",
   ".heif": "image/heif",
 };
@@ -38,6 +38,8 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": contentType,
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'",
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
@@ -45,3 +47,4 @@ export async function GET(
     return new NextResponse("Lỗi đọc tệp tin", { status: 500 });
   }
 }
+

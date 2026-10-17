@@ -33,7 +33,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'de6eebc66d533408774fe0efb52f8a039ecddfe1cb562f8c69f0dcec6d7bb765'>;
+  StorageHashBase<'3c1f6b28753f2d59a1581b263de62218a127bebff22c64ca3e261d985a975c39'>;
 export type ExecutionHash =
   ExecutionHashBase<'288b36db1497fdbad063c7f236151383840d6533f126816138f10711bd53f843'>;
 export type ProfileHash =
@@ -1305,6 +1305,12 @@ type ContractBase = Omit<
                   readonly name: 'DebtLog_debtId_recordedAt_idx_490e8817';
                   readonly prefix: 'DebtLog_debtId_recordedAt_idx';
                   readonly columns: readonly ['debtId', 'recordedAt'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'DebtLog_txId_idx_1334f695';
+                  readonly prefix: 'DebtLog_txId_idx';
+                  readonly columns: readonly ['txId'];
                   readonly unique: false;
                 },
               ];

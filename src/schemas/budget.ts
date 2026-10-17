@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const BudgetSchema = z.object({
-  categoryId: z.string().cuid("Chọn danh mục"),
+  categoryId: z.string().min(1, "Chọn danh mục"),
   limitAmount: z.coerce
     .number({ error: "Số tiền không hợp lệ" })
     .positive("Hạn mức phải lớn hơn 0"),
@@ -10,3 +10,4 @@ export const BudgetSchema = z.object({
 });
 
 export type BudgetInput = z.infer<typeof BudgetSchema>;
+

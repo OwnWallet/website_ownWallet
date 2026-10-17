@@ -18,6 +18,11 @@ export default auth((req) => {
 
   const isPublic = PUBLIC_ROUTES.some((r) => pathname.startsWith(r));
 
+  // API routes chưa đăng nhập → trả JSON 401 thay vì redirect HTML
+  if (!session && !isPublic && pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   // Chưa login + vào route bảo vệ → redirect login
   if (!session && !isPublic) {
     return NextResponse.redirect(new URL("/login", nextUrl));

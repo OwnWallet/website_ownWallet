@@ -104,10 +104,14 @@ export async function deleteCategory(id: string) {
   const category = await db.orm.public.Category.where({ id, userId }).first();
   if (!category) return { error: "Không tìm thấy danh mục" };
 
-  const txCount = await db.orm.public.Transaction.where({ categoryId: id, userId }).all();
-  if (txCount.length > 0) {
+  // Dùng LIMIT 1 thay vì .all() để tránh full scan bảng Transaction
+  const txInUse = await db.orm.public.Transaction
+    .select("id")
+    .where({ categoryId: id, userId })
+    .first();
+  if (txInUse) {
     return {
-      error: `Không thể xóa danh mục đang được sử dụng trong ${txCount.length} giao dịch.`,
+      error: "Không thể xóa danh mục đang được sử dụng trong các giao dịch.",
     };
   }
 
@@ -118,6 +122,7 @@ export async function deleteCategory(id: string) {
   revalidatePath("/transactions");
   return { success: true };
 }
+
 
 export async function getAiConfig() {
   await getUserId();

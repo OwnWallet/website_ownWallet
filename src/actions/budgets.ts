@@ -205,6 +205,7 @@ export async function getAutoRolloverBudgets(
   const rangeTo = new Date(Date.UTC(maxYear, maxMonth, 0, 23, 59, 59, 999) - VN_OFFSET_MINUTES * 60_000);
 
   let expenseQuery = db.orm.public.Transaction
+    .select("amount", "categoryId", "recordedAt")
     .where((t) => t.userId.eq(userId))
     .where((t) => t.type.eq("EXPENSE"))
     .where((t) => t.recordedAt.gte(toInstant(rangeFrom)))

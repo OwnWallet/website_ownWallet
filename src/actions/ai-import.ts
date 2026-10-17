@@ -87,12 +87,20 @@ export async function confirmAiImport(
         });
         categoryMap.set(name, newCat.id);
       } catch {
-        // Category đã tồn tại (race condition) — tìm lại
+        // Category đã tồn tại (race condition) — tìm lại đúng theo tên thay vì lấy ngẫu nhiên
+        const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
         const existing = await db.orm.public.Category
-          .where({ userId })
+          .where({ userId, name: formattedName })
           .first();
         if (existing) {
           categoryMap.set(name, existing.id);
+        } else {
+          // Fallback tìm kiếm case-insensitive
+          const allCats = await db.orm.public.Category.where({ userId }).all();
+          const match = allCats.find((c: any) => c.name.toLowerCase() === name);
+          if (match) {
+            categoryMap.set(name, match.id);
+          }
         }
       }
     }

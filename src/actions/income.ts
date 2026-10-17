@@ -100,8 +100,9 @@ export async function getCashFlowData(): Promise<CashFlowData> {
     // Mục tiêu tích lũy
     db.orm.public.Goal.where((g) => g.userId.eq(userId)).all(),
 
-    // Giao dịch 90 ngày gần đây
+    // Giao dịch 90 ngày gần đây (chỉ cần amount và type để tính burn rate)
     db.orm.public.Transaction
+      .select("amount", "type")
       .where((t) => t.userId.eq(userId))
       .where((t) => t.recordedAt.gte(ninetyDaysInstant))
       .all(),

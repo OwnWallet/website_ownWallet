@@ -252,6 +252,7 @@ model DebtLog {
 
   @@index([debtId])
   @@index([debtId, recordedAt])
+  @@index([txId])
   @@map("DebtLog")
 }
 
