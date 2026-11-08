@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { formatCurrency, formatCurrencyCompact } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Wallet, Shield } from "lucide-react";
+import { formatCurrencyCompact } from "@/lib/utils";
+import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface FinancialHealthProps {
   income: number;
@@ -70,7 +70,7 @@ interface MetricBarProps {
   invert?: boolean; // higher is worse
 }
 
-function MetricBar({ label, value, max, color, description, icon, invert }: MetricBarProps) {
+function MetricBar({ label, value, max, color, description, icon }: MetricBarProps) {
   const clamped = Math.min(100, (value / max) * 100);
   return (
     <div className="space-y-1">
@@ -140,7 +140,7 @@ export function FinancialHealthScore({
       runwayMonths: Math.round(runwayMonths * 10) / 10,
       runwayColor,
     };
-  }, [income, expense, totalDebt, totalWalletBalance, totalInvestmentValue, budgets, monthlyExpenseAvg]);
+  }, [income, expense, totalDebt, totalWalletBalance, budgets, monthlyExpenseAvg]);
 
   const netWorth = totalWalletBalance + totalInvestmentValue + totalReceivable - totalDebt;
 

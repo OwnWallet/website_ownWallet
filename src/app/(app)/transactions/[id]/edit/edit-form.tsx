@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Calendar, HandCoins } from "lucide-react";
+import { toast } from "sonner";
 import { updateTransaction } from "@/actions/transactions";
 import { TransactionSchema, type TransactionInput } from "@/schemas/transaction";
 import { toDate } from "@/lib/utils";
@@ -26,7 +27,7 @@ interface Props {
     walletId?: string | null;
   };
   categories: { id: string; name: string; type: string; color: string; icon: string | null }[];
-  wallets?: { id: string; name: string; bankName?: string | null }[];
+  wallets?: { id: string; name: string; bankName?: string | null; isDefault?: boolean }[];
   goals?: { id: string; name: string }[];
 }
 
@@ -53,16 +54,16 @@ export function EditTransactionForm({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
     setValue,
-    watch,
   } = useForm<TransactionInput>({
     resolver: zodResolver(TransactionSchema) as any,
     defaultValues: {
       amount: Number(transaction.amount),
       type: transaction.type,
       categoryId: transaction.categoryId,
-      walletId: transaction.walletId || undefined,
+      walletId: transaction.walletId || "",
       debtPerson: initialDebtPerson || undefined,
       description: initialCleanNote || "",
       goalId: transaction.goalId || undefined,
@@ -71,7 +72,8 @@ export function EditTransactionForm({
   });
 
   const isLoading = isSubmitting || isNavigating;
-  const selectedCatId = watch("categoryId");
+  const currentAmount = useWatch({ control, name: "amount" });
+  const selectedCatId = useWatch({ control, name: "categoryId" });
   const selectedCat = categories.find((c) => c.id === selectedCatId);
   const isDebt = isDebtCategory(selectedCat);
 
@@ -105,8 +107,16 @@ export function EditTransactionForm({
 
     const result = await updateTransaction(transaction.id, formData);
     if (result?.success) {
+      toast.success("Đã cập nhật giao dịch thành công");
       setIsNavigating(true);
       router.push("/transactions");
+    } else if ((result as any)?.error) {
+      const errObj = (result as any).error;
+      const msg =
+        typeof errObj === "string"
+          ? errObj
+          : Object.values(errObj).flat()[0] || "Không thể cập nhật giao dịch";
+      toast.error(String(msg));
     }
   }
 
@@ -224,7 +234,7 @@ export function EditTransactionForm({
               Số tiền (₫) *
             </label>
             <SmartCurrencyInput
-              value={watch("amount") ?? ""}
+              value={currentAmount ?? ""}
               onChangeValue={(val) => setValue("amount", val, { shouldValidate: true })}
               placeholder="0"
               showQuickButtons
@@ -264,10 +274,10 @@ export function EditTransactionForm({
                   borderColor: errors.walletId ? "var(--color-danger)" : "var(--border-strong)",
                 }}
               >
-                <option value="">-- Mặc định --</option>
+                <option value="">-- Không gắn ví (Tiền ngoài sổ) --</option>
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.bankName === "CASH" ? "💵" : "💳"} {w.name}
+                    {w.bankName === "CASH" ? "💵" : "💳"} {w.name}{w.isDefault ? " (Mặc định)" : ""}
                   </option>
                 ))}
               </select>

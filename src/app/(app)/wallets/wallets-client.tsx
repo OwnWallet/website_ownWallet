@@ -1,19 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Landmark,
   Building2,
   CreditCard,
   Plus,
   ArrowRight,
+  ArrowLeftRight,
   Edit2,
   Trash2,
   RefreshCw,
   Banknote,
   Coins,
   Wallet as WalletIcon,
+  Loader2,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
@@ -22,6 +25,7 @@ import {
   updateWallet,
   deleteWallet,
   reassignTransactions,
+  transferBetweenWallets,
 } from "@/actions/wallets";
 import {
   Dialog,
@@ -65,7 +69,9 @@ interface WalletsClientProps {
 }
 
 export function WalletsClient({ initialWallets, unassignedCount }: WalletsClientProps) {
+  const router = useRouter();
   const wallets = initialWallets;
+  const [isPending, startTransition] = useTransition();
 
   // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -79,6 +85,13 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
   const [reassignTargetId, setReassignTargetId] = useState<string>(
     wallets[0]?.id || ""
   );
+
+  // Transfer between wallets modal state
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [transferFromId, setTransferFromId] = useState<string>(wallets[0]?.id || "");
+  const [transferToId, setTransferToId] = useState<string>(wallets[1]?.id || "");
+  const [transferAmount, setTransferAmount] = useState<number | string>("");
+  const [transferFee, setTransferFee] = useState<number | string>(0);
 
   // Cash vs Bank categorization
   const cashWallets = wallets.filter(
@@ -161,7 +174,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
     } else {
       toast.success("Đã thêm tài khoản / ví mới!");
       setIsCreateOpen(false);
-      window.location.reload();
+      router.refresh();
     }
   }
 
@@ -175,7 +188,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
     } else {
       toast.success("Đã cập nhật thông tin tài khoản / ví!");
       setEditingWallet(null);
-      window.location.reload();
+      router.refresh();
     }
   }
 
@@ -185,7 +198,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
     if (res.success) {
       toast.success("Đã xóa tài khoản / ví!");
       setDeletingId(null);
-      window.location.reload();
+      router.refresh();
     }
   }
 
@@ -195,8 +208,29 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
     if (res.success) {
       toast.success("Đã chuyển các giao dịch sang tài khoản mới!");
       setIsReassignOpen(false);
-      window.location.reload();
+      router.refresh();
+    } else if ((res as any)?.error) {
+      toast.error(String((res as any).error));
     }
+  }
+
+  function handleTransferSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const res = await transferBetweenWallets(fd);
+      if ((res as any)?.error) {
+        toast.error(String((res as any).error));
+      } else {
+        toast.success(
+          `Đã chuyển ${formatCurrency(Number(res.amount))} từ "${res.fromName}" sang "${res.toName}"!`
+        );
+        setIsTransferOpen(false);
+        setTransferAmount("");
+        setTransferFee(0);
+        router.refresh();
+      }
+    });
   }
 
   return (
@@ -213,7 +247,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           {unassignedCount > 0 && (
             <button
               type="button"
@@ -222,6 +256,21 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
             >
               <RefreshCw size={13} className="text-amber-700" />
               <span>Gán {unassignedCount} GD chưa có ví</span>
+            </button>
+          )}
+
+          {wallets.length >= 2 && (
+            <button
+              type="button"
+              onClick={() => {
+                setTransferFromId(wallets[0]?.id || "");
+                setTransferToId(wallets[1]?.id || "");
+                setIsTransferOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100 text-xs font-bold shadow-2xs transition-all cursor-pointer"
+            >
+              <ArrowLeftRight size={14} className="text-orange-600" />
+              <span>Chuyển tiền giữa các ví</span>
             </button>
           )}
 
@@ -815,6 +864,137 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
               Xác nhận gán {unassignedCount} giao dịch
             </button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Modal Chuyển tiền nội bộ giữa các ví ─────────────── */}
+      <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowLeftRight size={18} className="text-orange-600" />
+              <span>Chuyển tiền nội bộ giữa các ví</span>
+            </DialogTitle>
+            <DialogDescription>
+              Luân chuyển số dư giữa các tài khoản ngân hàng và ví tiền mặt mà không làm phình ảo Tổng Thu/Chi tiêu dùng trong báo cáo tháng.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleTransferSubmit} className="space-y-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-foreground block mb-1">
+                  Từ ví nguồn *
+                </label>
+                <select
+                  name="fromWalletId"
+                  value={transferFromId}
+                  onChange={(e) => setTransferFromId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-border bg-card outline-none focus:border-primary font-medium"
+                  required
+                >
+                  {wallets.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({formatCurrency(w.currentBalance)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground block mb-1">
+                  Sang ví đích *
+                </label>
+                <select
+                  name="toWalletId"
+                  value={transferToId}
+                  onChange={(e) => setTransferToId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-border bg-card outline-none focus:border-primary font-medium"
+                  required
+                >
+                  {wallets.map((w) => (
+                    <option key={w.id} value={w.id} disabled={w.id === transferFromId}>
+                      {w.name} ({formatCurrency(w.currentBalance)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground block mb-1">
+                Số tiền chuyển (₫) *
+              </label>
+              <SmartCurrencyInput
+                name="amount"
+                value={transferAmount}
+                onChangeValue={(val) => setTransferAmount(val)}
+                placeholder="VD: 2.000.000"
+                className="form-input"
+                showQuickButtons
+                showWordsPreview
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-foreground block mb-1">
+                  Phí chuyển khoản (₫)
+                </label>
+                <SmartCurrencyInput
+                  name="fee"
+                  value={transferFee}
+                  onChangeValue={(val) => setTransferFee(val)}
+                  placeholder="0"
+                  className="form-input"
+                  showQuickButtons={false}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground block mb-1">
+                  Ngày thực hiện
+                </label>
+                <input
+                  type="date"
+                  name="recordedAt"
+                  defaultValue={new Date().toISOString().slice(0, 10)}
+                  className="form-input"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground block mb-1">
+                Ghi chú (Tùy chọn)
+              </label>
+              <input
+                type="text"
+                name="note"
+                placeholder="VD: Rút tiền mặt tiêu vặt, Nạp ví..."
+                className="form-input"
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <button
+                type="button"
+                onClick={() => setIsTransferOpen(false)}
+                className="px-4 py-2 rounded-xl border border-border text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={isPending || transferFromId === transferToId}
+                className="btn-primary text-xs disabled:opacity-60"
+              >
+                {isPending ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <ArrowLeftRight size={14} className="mr-1.5" />}
+                {isPending ? "Đang chuyển..." : "Xác nhận chuyển tiền"}
+              </button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

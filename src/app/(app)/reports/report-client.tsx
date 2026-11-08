@@ -1,10 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { CategoryPieChart } from "@/components/ui/CategoryPieChart";
 import { MonthComparisonChart } from "@/components/ui/MonthComparisonChart";
 import { formatCurrency, formatMetric } from "@/lib/utils";
-import { exportTransactionsCSV } from "@/actions/reports";
+import {
+  exportTransactionsCSV,
+  generateAiFinancialReport,
+  type AiFinancialAdvice,
+} from "@/actions/reports";
 import {
   Download,
   TrendingUp,
@@ -12,6 +17,10 @@ import {
   PieChart as PieIcon,
   BarChart3,
   Loader2,
+  Sparkles,
+  CheckCircle2,
+  AlertTriangle,
+  Lightbulb,
 } from "lucide-react";
 
 interface CategorySpend {
@@ -57,6 +66,8 @@ export function ReportClient({
   isYearly = false,
 }: Props) {
   const [downloading, setDownloading] = useState(false);
+  const [analyzingAi, setAnalyzingAi] = useState(false);
+  const [aiAdvice, setAiAdvice] = useState<AiFinancialAdvice | null>(null);
 
   const netCurrent = currentMonthIncome - currentMonthExpense;
   const netLast = lastMonthIncome - lastMonthExpense;
@@ -96,12 +107,40 @@ export function ReportClient({
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        toast.success("Đã xuất báo cáo CSV thành công!");
       }
     } catch (err) {
       console.error(err);
-      alert("Không thể xuất file CSV");
+      toast.error("Không thể xuất file CSV");
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function handleAnalyzeAI() {
+    try {
+      setAnalyzingAi(true);
+      const res = await generateAiFinancialReport({
+        periodName: currentMonthName,
+        currentIncome: currentMonthIncome,
+        currentExpense: currentMonthExpense,
+        lastIncome: lastMonthIncome,
+        lastExpense: lastMonthExpense,
+        closingBalance: closingCumulativeBalance,
+        topCategories: categorySpending.slice(0, 5).map((c) => ({
+          name: c.name,
+          value: c.value,
+        })),
+      });
+      if (res?.success && res.advice) {
+        setAiAdvice(res.advice);
+        toast.success("Đã hoàn tất phân tích báo cáo tài chính!");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Không thể phân tích báo cáo lúc này.");
+    } finally {
+      setAnalyzingAi(false);
     }
   }
 
@@ -121,19 +160,116 @@ export function ReportClient({
           </div>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          disabled={downloading}
-          className="btn-primary py-2 px-4 text-xs inline-flex items-center gap-2"
-        >
-          {downloading ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Download size={14} />
-          )}
-          <span>{downloading ? "Đang xuất CSV..." : "Xuất báo cáo CSV"}</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleAnalyzeAI}
+            disabled={analyzingAi}
+            className="btn-secondary py-2 px-4 text-xs inline-flex items-center gap-2 border-indigo-500/30 text-indigo-700 hover:bg-indigo-500/10"
+          >
+            {analyzingAi ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Sparkles size={14} className="text-indigo-600" />
+            )}
+            <span>{analyzingAi ? "AI đang phân tích..." : "Cố vấn AI phân tích"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            disabled={downloading}
+            className="btn-primary py-2 px-4 text-xs inline-flex items-center gap-2"
+          >
+            {downloading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Download size={14} />
+            )}
+            <span>{downloading ? "Đang xuất CSV..." : "Xuất báo cáo CSV"}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Trợ lý AI Phân tích Tài chính (Gemini Financial Coach) */}
+      {aiAdvice && (
+        <div className="card p-5 border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent space-y-4 animate-fade-in">
+          <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                <Sparkles size={16} />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <span>Nhận định từ Cố vấn Tài chính AI ({currentMonthName})</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-700">
+                    {aiAdvice.source === "gemini" ? "Gemini AI" : "Smart CFP Engine"}
+                  </span>
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{aiAdvice.summary}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAiAdvice(null)}
+              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md"
+            >
+              Ẩn
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            {/* Điểm sáng */}
+            <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 space-y-2">
+              <p className="font-bold text-emerald-700 flex items-center gap-1.5">
+                <CheckCircle2 size={14} />
+                <span>Điểm sáng tài chính</span>
+              </p>
+              {aiAdvice.highlights.length === 0 ? (
+                <p className="text-muted-foreground">Đang theo dõi thêm dữ liệu kỳ này.</p>
+              ) : (
+                <ul className="space-y-1.5 text-foreground/90">
+                  {aiAdvice.highlights.map((item, idx) => (
+                    <li key={idx} className="leading-relaxed">• {item}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Cảnh báo */}
+            <div className="p-3.5 rounded-xl bg-rose-500/5 border border-rose-500/20 space-y-2">
+              <p className="font-bold text-rose-700 flex items-center gap-1.5">
+                <AlertTriangle size={14} />
+                <span>Điểm cần lưu ý</span>
+              </p>
+              {aiAdvice.warnings.length === 0 ? (
+                <p className="text-emerald-700 font-medium">
+                  Không phát hiện rủi ro thâm hụt hay vượt chi bất thường trong kỳ này.
+                </p>
+              ) : (
+                <ul className="space-y-1.5 text-foreground/90">
+                  {aiAdvice.warnings.map((item, idx) => (
+                    <li key={idx} className="leading-relaxed">• {item}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Khuyến nghị hành động */}
+            <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+              <p className="font-bold text-amber-800 flex items-center gap-1.5">
+                <Lightbulb size={14} />
+                <span>Khuyến nghị hành động</span>
+              </p>
+              <ul className="space-y-1.5 text-foreground/90">
+                {aiAdvice.actionableTips.map((item, idx) => (
+                  <li key={idx} className="leading-relaxed">• {item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {/* MoM / YoY Performance Cards */}

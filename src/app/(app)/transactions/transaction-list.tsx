@@ -21,6 +21,7 @@ import {
  formatDate,
  formatTime,
  formatDayHeader,
+ getVNDateParts,
  toDate,
 } from "@/lib/utils";
 import { deleteTransaction, deleteTransactions } from "@/actions/transactions";
@@ -189,13 +190,13 @@ export function TransactionList({
           if (!desc.includes(q) && !cat.includes(q) && !amtStr.includes(q)) return false;
         }
 
-        // Time / Month filters (driven by Sidebar)
-        const txDate = toDate(tx.recordedAt);
+        // Time / Month filters (driven by Sidebar — chuẩn hóa theo múi giờ Việt Nam UTC+7)
+        const { year: txYear, month: txMonth } = getVNDateParts(tx.recordedAt);
         if (selectedMonth !== "ALL") {
-          if (txDate.getMonth() + 1 !== selectedMonth) return false;
+          if (txMonth !== selectedMonth) return false;
         }
         if (selectedYear !== "ALL") {
-          if (txDate.getFullYear() !== selectedYear) return false;
+          if (txYear !== selectedYear) return false;
         }
 
         return true;
@@ -244,103 +245,106 @@ export function TransactionList({
  let expense = 0;
  const daysWithExpense = new Set<string>();
 
- filtered.forEach((tx) => {
- const amt = Number(tx.amount);
- const d = toDate(tx.recordedAt);
- const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const isAllWallets = !selectedWallet || selectedWallet === "ALL";
+  const isSearchingTransfer = search.toLowerCase().includes("chuyển") || search.toLowerCase().includes("transfer");
 
- if (tx.type === "INCOME") {
- income += amt;
- } else {
- expense += amt;
- daysWithExpense.add(dayKey);
- }
- });
+  filtered.forEach((tx) => {
+    const isInternalTransfer = isAllWallets && !isSearchingTransfer && String(tx.note || "").startsWith("[TRANSFER]");
+    if (isInternalTransfer) return;
 
- const net = income - expense;
+    const amt = Number(tx.amount);
+    const { year: y, month: m, day } = getVNDateParts(tx.recordedAt);
+    const dayKey = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
- // Tính số dư kỳ trước (ví dụ Tháng 9/2026 khi đang xem Tháng 10/2026) và tổng lũy kế trước kỳ đang xem
- let prevIncome = 0;
- let prevExpense = 0;
- let allPriorIncome = 0;
- let allPriorExpense = 0;
+    if (tx.type === "INCOME") {
+      income += amt;
+    } else {
+      expense += amt;
+      daysWithExpense.add(dayKey);
+    }
+  });
 
- const hasSpecificYear = typeof selectedYear === "number";
- const hasSpecificMonth = typeof selectedMonth === "number";
+  const net = income - expense;
 
- const prevMonthNum = hasSpecificMonth
-   ? selectedMonth === 1
-     ? 12
-     : selectedMonth - 1
-   : null;
- const prevYearNum = hasSpecificYear
-   ? hasSpecificMonth
-     ? selectedMonth === 1
-       ? selectedYear - 1
-       : selectedYear
-     : selectedYear - 1
-   : null;
+  // Tính số dư kỳ trước và tổng lũy kế thực tế của Ví (không bị méo khi lọc theo Danh mục / Loại / Tìm kiếm)
+  let prevIncome = 0;
+  let prevExpense = 0;
+  let allPriorIncome = 0;
+  let allPriorExpense = 0;
+  let walletPeriodIncome = 0;
+  let walletPeriodExpense = 0;
 
- const periodStartMs = hasSpecificYear
-   ? new Date(
-       selectedYear,
-       hasSpecificMonth ? selectedMonth - 1 : 0,
-       1,
-       0,
-       0,
-       0,
-       0
-     ).getTime()
-   : null;
+  const hasSpecificYear = typeof selectedYear === "number";
+  const hasSpecificMonth = typeof selectedMonth === "number";
 
- initialTransactions.forEach((tx) => {
-   if (selectedWallet !== "ALL") {
-     if (selectedWallet === "UNASSIGNED") {
-       if (tx.walletId) return;
-     } else if (tx.walletId !== selectedWallet) {
-       return;
-     }
-   }
-   if (selectedType !== "ALL" && tx.type !== selectedType) return;
-   if (selectedCategory !== "ALL" && tx.categoryId !== selectedCategory) return;
-   if (search.trim() !== "") {
-     const q = search.toLowerCase();
-     const desc = (tx.note || tx.description || "").toLowerCase();
-     const cat = (tx.category?.name || "").toLowerCase();
-     const amtStr = String(Number(tx.amount));
-     if (!desc.includes(q) && !cat.includes(q) && !amtStr.includes(q)) return;
-   }
+  const prevMonthNum = hasSpecificMonth
+    ? selectedMonth === 1
+      ? 12
+      : selectedMonth - 1
+    : null;
+  const prevYearNum = hasSpecificYear
+    ? hasSpecificMonth
+      ? selectedMonth === 1
+        ? selectedYear - 1
+        : selectedYear
+      : selectedYear - 1
+    : null;
 
-   const d = toDate(tx.recordedAt);
-   const txY = d.getFullYear();
-   const txM = d.getMonth() + 1;
-   const amt = Number(tx.amount);
+  const periodStartMs = hasSpecificYear
+    ? new Date(
+        `${selectedYear}-${String(hasSpecificMonth ? selectedMonth : 1).padStart(2, "0")}-01T00:00:00.000+07:00`
+      ).getTime()
+    : null;
 
-   if (periodStartMs !== null && d.getTime() < periodStartMs) {
-     if (tx.type === "INCOME") allPriorIncome += amt;
-     else allPriorExpense += amt;
-   }
+  initialTransactions.forEach((tx) => {
+    if (selectedWallet !== "ALL") {
+      if (selectedWallet === "UNASSIGNED") {
+        if (tx.walletId) return;
+      } else if (tx.walletId !== selectedWallet) {
+        return;
+      }
+    }
 
-   if (hasSpecificYear && prevYearNum !== null) {
-     const isInPrevPeriod = hasSpecificMonth
-       ? txY === prevYearNum && txM === prevMonthNum
-       : txY === prevYearNum;
-     if (isInPrevPeriod) {
-       if (tx.type === "INCOME") prevIncome += amt;
-       else prevExpense += amt;
-     }
-   }
- });
+    const d = toDate(tx.recordedAt);
+    const { year: txY, month: txM } = getVNDateParts(tx.recordedAt);
+    const amt = Number(tx.amount);
 
- const initialWalletBal = (_wallets || []).reduce((sum, w) => {
-   if (!selectedWallet || selectedWallet === "ALL") return sum + Number(w.balance ?? 0);
-   if (selectedWallet === "UNASSIGNED") return 0;
-   return w.id === selectedWallet ? sum + Number(w.balance ?? 0) : sum;
- }, 0);
+    if (periodStartMs !== null && d.getTime() < periodStartMs) {
+      if (tx.type === "INCOME") allPriorIncome += amt;
+      else allPriorExpense += amt;
+    }
 
- const prevNet = prevIncome - prevExpense;
- const openingCumulativeBalance = initialWalletBal + (allPriorIncome - allPriorExpense);
- const closingCumulativeBalance = openingCumulativeBalance + net;
+    const isInCurrPeriod =
+      (selectedYear === "ALL" || txY === selectedYear) &&
+      (selectedMonth === "ALL" || txM === selectedMonth);
+    if (isInCurrPeriod) {
+      if (tx.type === "INCOME") walletPeriodIncome += amt;
+      else walletPeriodExpense += amt;
+    }
+
+    if (hasSpecificYear && prevYearNum !== null) {
+      const isInPrevPeriod = hasSpecificMonth
+        ? txY === prevYearNum && txM === prevMonthNum
+        : txY === prevYearNum;
+      if (isInPrevPeriod) {
+        if (tx.type === "INCOME") prevIncome += amt;
+        else prevExpense += amt;
+      }
+    }
+  });
+
+  const initialWalletBal = (_wallets || []).reduce((sum, w) => {
+    if (!selectedWallet || selectedWallet === "ALL") return sum + Number(w.balance ?? 0);
+    if (selectedWallet === "UNASSIGNED") return 0;
+    return w.id === selectedWallet ? sum + Number(w.balance ?? 0) : sum;
+  }, 0);
+
+  const prevNet = prevIncome - prevExpense;
+  const openingCumulativeBalance = initialWalletBal + (allPriorIncome - allPriorExpense);
+  const isSubFiltered = selectedType !== "ALL" || selectedCategory !== "ALL" || search.trim() !== "";
+  const closingCumulativeBalance = isSubFiltered
+    ? openingCumulativeBalance + (walletPeriodIncome - walletPeriodExpense)
+    : openingCumulativeBalance + net;
 
  const prevLabel = hasSpecificMonth
    ? `T${prevMonthNum}`
@@ -679,6 +683,9 @@ export function TransactionList({
                 setSearch("");
                 setSelectedType("ALL");
                 setSelectedCategory("ALL");
+                if (typeof document !== "undefined") {
+                  document.cookie = "ownwallet_selected_wallet=; path=/; max-age=0";
+                }
                 const params = new URLSearchParams(searchParams ? searchParams.toString() : "");
                 params.delete("wallet");
                 router.push(`${pathname}?${params.toString()}`);

@@ -104,11 +104,17 @@ export async function getCashFlowSources() {
   let totalMonthlyInvestmentYield = 0;
   let totalMonthlyRental = 0;
   let totalMonthlyOther = 0;
+  let totalMonthlyFixedBills = 0;
   let totalExpectedThisMonth = 0;
 
   const enrichedSources = sources.map((s: any) => {
     const amt = Number(s.amount);
     const d = toDate(s.nextExpectedDate);
+    const cat: any = s.categoryId ? categoryMap.get(s.categoryId) ?? null : null;
+    const isBill = Boolean(
+      (typeof s.note === "string" && s.note.startsWith("[BILL]")) ||
+      cat?.type === "EXPENSE"
+    );
 
     // Tính quy đổi tương đương theo tháng
     let monthlyEquiv = 0;
@@ -120,23 +126,28 @@ export async function getCashFlowSources() {
     else monthlyEquiv = amt;
 
     if (s.isActive) {
-      if (s.type === "SALARY") totalMonthlySalary += monthlyEquiv;
-      else if (s.type === "INVESTMENT_DIVIDEND") totalMonthlyInvestmentYield += monthlyEquiv;
-      else if (s.type === "RENTAL") totalMonthlyRental += monthlyEquiv;
-      else totalMonthlyOther += monthlyEquiv;
+      if (isBill) {
+        totalMonthlyFixedBills += monthlyEquiv;
+      } else {
+        if (s.type === "SALARY") totalMonthlySalary += monthlyEquiv;
+        else if (s.type === "INVESTMENT_DIVIDEND") totalMonthlyInvestmentYield += monthlyEquiv;
+        else if (s.type === "RENTAL") totalMonthlyRental += monthlyEquiv;
+        else totalMonthlyOther += monthlyEquiv;
 
-      // Khoản dự kiến về trong tháng này
-      if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-        totalExpectedThisMonth += amt;
+        // Khoản dự kiến về trong tháng này
+        if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+          totalExpectedThisMonth += amt;
+        }
       }
     }
 
     return {
       ...s,
+      isBill,
       amount: amt,
       nextExpectedDate: d.toISOString(),
       wallet: s.walletId ? walletMap.get(s.walletId) ?? null : null,
-      category: s.categoryId ? categoryMap.get(s.categoryId) ?? null : null,
+      category: cat,
       investment: s.investmentId ? investMap.get(s.investmentId) ?? null : null,
     };
   });
@@ -165,6 +176,7 @@ export async function getCashFlowSources() {
       totalMonthlyInvestmentYield: Math.round(totalMonthlyInvestmentYield),
       totalMonthlyRental: Math.round(totalMonthlyRental),
       totalMonthlyOther: Math.round(totalMonthlyOther),
+      totalMonthlyFixedBills: Math.round(totalMonthlyFixedBills),
       totalMonthlyExpectedInflows: Math.round(totalMonthlyExpectedInflows),
       totalExpectedThisMonth: Math.round(totalExpectedThisMonth),
       activeCount: enrichedSources.filter((s: any) => s.isActive).length,
@@ -299,11 +311,21 @@ export async function collectCashFlow(formData: FormData) {
   const actualAmount = parsed.data.actualAmount;
   const receivedDate = parsed.data.receivedDate;
 
-  // Tìm danh mục thu nhập tương ứng
+  // Kiểm tra nguồn dòng tiền là Thu nhập định kỳ hay Hóa đơn chi tiêu định kỳ ([BILL])
+  const linkedCat = source.categoryId
+    ? await db.orm.public.Category.where({ id: source.categoryId, userId }).first()
+    : null;
+  const isBill = Boolean(
+    (typeof source.note === "string" && source.note.startsWith("[BILL]")) ||
+      linkedCat?.type === "EXPENSE"
+  );
+  const targetTxType = isBill ? "EXPENSE" : "INCOME";
+
+  // Tìm danh mục tương ứng
   let categoryId = source.categoryId;
   if (!categoryId) {
     const cat = await db.orm.public.Category
-      .where({ userId, type: "INCOME" })
+      .where({ userId, type: targetTxType })
       .first();
     if (cat) categoryId = cat.id;
   }
@@ -316,16 +338,19 @@ export async function collectCashFlow(formData: FormData) {
     source.dayOfMonth
   );
 
-  const newBalance = Number(wallet.balance ?? 0) + actualAmount;
+  const newBalance = isBill
+    ? Number(wallet.balance ?? 0) - actualAmount
+    : Number(wallet.balance ?? 0) + actualAmount;
 
   await db.transaction(async (tx: any) => {
-    // 1. Tạo Transaction INCOME (số dư thực tế currentBalance của ví tự động cộng qua bảng Transaction)
-    // Nếu chưa có bất kỳ danh mục INCOME nào thì mới cộng trực tiếp vào số dư khởi tạo của ví
+    // 1. Tạo Transaction INCOME hoặc EXPENSE (số dư thực tế currentBalance của ví tự động tính qua bảng Transaction)
     if (categoryId) {
       await tx.orm.public.Transaction.create({
         amount: String(actualAmount),
-        type: "INCOME",
-        note: parsed.data.note?.trim() || `Thu từ dòng tiền: ${source.name}`,
+        type: targetTxType,
+        note:
+          parsed.data.note?.trim() ||
+          (isBill ? `Thanh toán hóa đơn định kỳ: ${source.name}` : `Thu từ dòng tiền: ${source.name}`),
         recordedAt: toInstant(receivedDate),
         walletId: wallet.id,
         categoryId,
@@ -359,6 +384,7 @@ export async function collectCashFlow(formData: FormData) {
 
   return {
     success: true,
+    isBill,
     sourceName: source.name,
     actualAmount,
     walletName: wallet.name,

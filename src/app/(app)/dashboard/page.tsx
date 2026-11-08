@@ -21,7 +21,6 @@ async function getDashboardData(
   year: number,
   walletId?: string
 ) {
-  const fromInstant = toInstant(from);
   const toInstantVal = toInstant(to);
 
   // Xác định khoảng thời gian kỳ liền trước (ví dụ: Tháng 9/2026 khi đang xem Tháng 10/2026)
@@ -31,68 +30,46 @@ async function getDashboardData(
       : getFilterDateRange(month === 1 ? 12 : month - 1, month === 1 ? year - 1 : year);
 
   try {
-    let txQuery = db.orm.public.Transaction
-      .where((t) => t.userId.eq(userId))
-      .where((t) => t.recordedAt.gte(fromInstant))
-      .where((t) => t.recordedAt.lte(toInstantVal));
-
-    let recentTxQuery = db.orm.public.Transaction
-      .where((t) => t.userId.eq(userId))
-      .where((t) => t.recordedAt.gte(fromInstant))
-      .where((t) => t.recordedAt.lte(toInstantVal));
-
     let allPriorAndCurrentTxQuery = db.orm.public.Transaction
       .where((t) => t.userId.eq(userId))
       .where((t) => t.recordedAt.lte(toInstantVal));
 
     if (walletId && walletId !== "ALL") {
       if (walletId === "UNASSIGNED") {
-        txQuery = txQuery.where({ walletId: null });
-        recentTxQuery = recentTxQuery.where({ walletId: null });
         allPriorAndCurrentTxQuery = allPriorAndCurrentTxQuery.where({ walletId: null });
       } else {
-        txQuery = txQuery.where({ walletId });
-        recentTxQuery = recentTxQuery.where({ walletId });
         allPriorAndCurrentTxQuery = allPriorAndCurrentTxQuery.where({ walletId });
       }
     }
 
-    // 6-month historical data for cash flow trend
-    const sixMonthsAgo = new Date(from);
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-    sixMonthsAgo.setDate(1);
-    sixMonthsAgo.setHours(0, 0, 0, 0);
-    const sixMonthsAgoInstant = toInstant(sixMonthsAgo);
+    // 6-month historical data for cash flow trend (chuẩn hóa theo múi giờ Việt Nam UTC+7)
+    const { year: anchorYear, month: anchorMonth } = getVNDateParts(from);
+    const sixMonthsDate = new Date(Date.UTC(anchorYear, anchorMonth - 1 - 5, 1));
+    const smYear = sixMonthsDate.getUTCFullYear();
+    const smMonth = String(sixMonthsDate.getUTCMonth() + 1).padStart(2, "0");
+    const sixMonthsAgo = new Date(`${smYear}-${smMonth}-01T00:00:00.000+07:00`);
+    const sixMonthsAgoMs = sixMonthsAgo.getTime();
+    const fromMs = from.getTime();
+    const toMs = to.getTime();
+    const prevFromMs = prevRange.from.getTime();
+    const prevToMs = prevRange.to.getTime();
 
     const [
-      monthTransactions,
       investments,
-      debts,
       allDebts,
       autoBudgetResult,
       goals,
-      recentTx,
       realWallets,
-      historicalTx,
-      categoryData,
       allPriorAndCurrentTxs,
     ] = await Promise.all([
-      txQuery
-        .orderBy((t) => t.recordedAt.asc())
-        .all(),
       db.orm.public.Investment
         .where((t) => t.userId.eq(userId))
         .all(),
+      // All active debts (sorted by dueDate) for both top 5 list and health score
       db.orm.public.Debt
         .where((t) => t.userId.eq(userId))
         .where((t) => t.status.neq("PAID"))
         .orderBy((t) => t.dueDate.asc())
-        .limit(5)
-        .all(),
-      // All active debts for health score
-      db.orm.public.Debt
-        .where((t) => t.userId.eq(userId))
-        .where((t) => t.status.neq("PAID"))
         .all(),
       getAutoRolloverBudgets(userId, month, year, walletId),
       db.orm.public.Goal
@@ -100,33 +77,36 @@ async function getDashboardData(
         .orderBy((t) => t.deadline.asc())
         .limit(4)
         .all(),
-      recentTxQuery
+      getWallets(),
+      // Gộp 1 truy vấn duy nhất lấy toàn bộ giao dịch đến cuối kỳ kèm Category và Wallet
+      allPriorAndCurrentTxQuery
         .include("category", (cat) => cat)
         .include("wallet", (w) => w)
-        .orderBy((t) => t.recordedAt.desc())
-        .limit(8)
-        .all(),
-      getWallets(),
-      // 6-month historical transactions for trend chart
-      db.orm.public.Transaction
-        .where((t) => t.userId.eq(userId))
-        .where((t) => t.recordedAt.gte(sixMonthsAgoInstant))
-        .where((t) => t.recordedAt.lte(toInstantVal))
         .orderBy((t) => t.recordedAt.asc())
         .all(),
-      // Transactions with category for spending pie
-      txQuery
-        .include("category", (cat) => cat)
-        .all(),
-      // All transactions up to current period end for automatic balance carry-over
-      allPriorAndCurrentTxQuery.all(),
     ]);
 
+    const debts = (allDebts as any[]).slice(0, 5);
+    const monthTransactions = (allPriorAndCurrentTxs as any[]).filter((t) => {
+      const recMs = toDate(t.recordedAt).getTime();
+      return recMs >= fromMs && recMs <= toMs;
+    });
+    const categoryData = monthTransactions;
+    const recentTx = [...monthTransactions].reverse().slice(0, 8);
+    const historicalTx = (allPriorAndCurrentTxs as any[]).filter((t) => {
+      const recMs = toDate(t.recordedAt).getTime();
+      return recMs >= sixMonthsAgoMs && recMs <= toMs;
+    });
+
+    const isAllWallets = !walletId || walletId === "ALL";
     let income = 0;
     let expense = 0;
     const spentMap = new Map<string, number>();
 
     monthTransactions.forEach((t: any) => {
+      const isInternalTransfer = isAllWallets && String(t.note || "").startsWith("[TRANSFER]");
+      if (isInternalTransfer) return;
+
       const amt = Number(t.amount);
       if (t.type === "INCOME") {
         income += amt;
@@ -142,10 +122,6 @@ async function getDashboardData(
     let allPriorIncome = 0;
     let allPriorExpense = 0;
 
-    const fromMs = from.getTime();
-    const prevFromMs = prevRange.from.getTime();
-    const prevToMs = prevRange.to.getTime();
-
     for (const t of allPriorAndCurrentTxs as any[]) {
       const recMs = toDate(t.recordedAt).getTime();
       const amt = Number(t.amount);
@@ -154,8 +130,11 @@ async function getDashboardData(
         else if (t.type === "EXPENSE") allPriorExpense += amt;
       }
       if (recMs >= prevFromMs && recMs <= prevToMs) {
-        if (t.type === "INCOME") prevPeriodIncome += amt;
-        else if (t.type === "EXPENSE") prevPeriodExpense += amt;
+        const isInternalTransfer = isAllWallets && String(t.note || "").startsWith("[TRANSFER]");
+        if (!isInternalTransfer) {
+          if (t.type === "INCOME") prevPeriodIncome += amt;
+          else if (t.type === "EXPENSE") prevPeriodExpense += amt;
+        }
       }
     }
 
@@ -186,6 +165,7 @@ async function getDashboardData(
     const categorySpendMap = new Map<string, { name: string; color: string; icon: string; value: number }>();
     for (const tx of categoryData as any[]) {
       if (tx.type !== "EXPENSE") continue;
+      if (isAllWallets && String(tx.note || "").startsWith("[TRANSFER]")) continue;
       const cat = tx.category;
       const key = cat?.id ?? "__none__";
       const existing = categorySpendMap.get(key);
@@ -205,7 +185,6 @@ async function getDashboardData(
 
     // 6-month trend (chuẩn hóa theo múi giờ Việt Nam UTC+7)
     const monthlyMap = new Map<string, { month: string; income: number; expense: number }>();
-    const { year: anchorYear, month: anchorMonth } = getVNDateParts(from);
     for (let i = 5; i >= 0; i--) {
       const d = new Date(Date.UTC(anchorYear, anchorMonth - 1 - i, 1));
       const y = d.getUTCFullYear();
@@ -215,6 +194,7 @@ async function getDashboardData(
       monthlyMap.set(key, { month: label, income: 0, expense: 0 });
     }
     for (const tx of historicalTx as any[]) {
+      if (isAllWallets && String(tx.note || "").startsWith("[TRANSFER]")) continue;
       const { year: y, month: m } = getVNDateParts(tx.recordedAt);
       const key = `${y}-${String(m).padStart(2, "0")}`;
       const entry = monthlyMap.get(key);
@@ -478,6 +458,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <Link
             href={`/dashboard?${(() => {
               const p = new URLSearchParams();
+              p.set("wallet", "ALL");
               if (resolvedSearchParams.month) p.set("month", resolvedSearchParams.month);
               if (resolvedSearchParams.year) p.set("year", resolvedSearchParams.year);
               return p.toString();

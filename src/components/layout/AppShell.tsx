@@ -339,6 +339,17 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
         >
           <PageWrapper>{children}</PageWrapper>
         </main>
+
+        {/* Mobile Floating Action Button (FAB) — Thêm nhanh giao dịch 1 chạm */}
+        <Link
+          href="/transactions/new"
+          aria-label="Thêm giao dịch mới"
+          title="Thêm giao dịch mới"
+          className="md:hidden fixed bottom-5 right-5 z-30 flex items-center gap-1.5 px-4 py-3 rounded-full bg-gradient-to-r from-orange-600 to-amber-500 text-white text-xs font-bold shadow-lg shadow-orange-600/30 active:scale-95 transition-transform"
+        >
+          <Plus size={18} strokeWidth={2.5} />
+          <span>Giao dịch</span>
+        </Link>
       </div>
     </div>
   );

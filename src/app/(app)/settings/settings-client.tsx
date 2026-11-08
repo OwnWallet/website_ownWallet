@@ -3,6 +3,17 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import {
   changePassword,
   updateProfile,
@@ -158,6 +169,7 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [categorySuccess, setCategorySuccess] = useState(false);
+  const [deleteCatTarget, setDeleteCatTarget] = useState<{ id: string; name: string } | null>(null);
 
   const {
     register: regCat,
@@ -241,13 +253,8 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
     }
   }
 
-  async function handleDeleteCategory(id: string, name: string) {
-    if (confirm(`Bạn có chắc muốn xóa danh mục "${name}"?`)) {
-      const res = await deleteCategory(id);
-      if (res?.error) {
-        alert(res.error);
-      }
-    }
+  function handleDeleteCategory(id: string, name: string) {
+    setDeleteCatTarget({ id, name });
   }
 
   // Group categories by type
@@ -722,6 +729,36 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
           </div>
         </div>
       </section>
+
+      <AlertDialog open={!!deleteCatTarget} onOpenChange={(open) => !open && setDeleteCatTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-rose-600">Xác nhận xóa danh mục</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn xóa danh mục &ldquo;{deleteCatTarget?.name}&rdquo;? Hành động này không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteCatTarget(null)}>Hủy bỏ</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              onClick={async () => {
+                if (deleteCatTarget) {
+                  const res = await deleteCategory(deleteCatTarget.id);
+                  if (res?.error) {
+                    toast.error(res.error);
+                  } else {
+                    toast.success(`Đã xóa danh mục "${deleteCatTarget.name}"`);
+                  }
+                  setDeleteCatTarget(null);
+                }
+              }}
+            >
+              Xóa danh mục
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
