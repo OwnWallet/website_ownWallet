@@ -1,15 +1,16 @@
 import { auth } from "@/lib/auth";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
-import { formatCurrency, calcPercent, formatMetric, getFilterDateRange } from "@/lib/utils";
-import { upsertBudget, getAutoRolloverBudgets, EnrichedBudgetItem } from "@/actions/budgets";
+import { formatCurrency, calcPercent, formatMetric, getFilterDateRange, serializeData } from "@/lib/utils";
+import { getAutoRolloverBudgets, EnrichedBudgetItem } from "@/actions/budgets";
 import { BudgetListClient } from "./budget-list-client";
-import { PiggyBank, TrendingDown, AlertCircle, Wallet, Plus, Sparkles } from "lucide-react";
-import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
+import { PiggyBank, TrendingDown, AlertCircle, Wallet, Sparkles } from "lucide-react";
 
 interface BudgetPageProps {
   searchParams: Promise<{
     month?: string;
     year?: string;
+    wallet?: string;
   }>;
 }
 
@@ -20,6 +21,9 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
 
   const resolvedSearchParams = (await searchParams) || {};
   const filterDate = getFilterDateRange(resolvedSearchParams.month, resolvedSearchParams.year);
+  const cookieStore = await cookies();
+  const savedCookieWallet = cookieStore.get("ownwallet_selected_wallet")?.value;
+  const selectedWalletId = resolvedSearchParams.wallet || savedCookieWallet || "ALL";
 
   let budgets: EnrichedBudgetItem[] = [];
   let expenseCategories: any[] = [];
@@ -30,7 +34,7 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
 
   try {
     const [autoBudgetData, cList] = await Promise.all([
-      getAutoRolloverBudgets(userId, filterDate.month, filterDate.year),
+      getAutoRolloverBudgets(userId, filterDate.month, filterDate.year, selectedWalletId),
       db.orm.public.Category
         .where((c) => c.userId.eq(userId))
         .where((c) => c.type.eq("EXPENSE"))
@@ -42,7 +46,7 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
     totalRolloverAmount = autoBudgetData.totalRolloverAmount;
     totalLimit = autoBudgetData.totalEffectiveLimit;
     totalSpent = autoBudgetData.totalSpent;
-    expenseCategories = cList;
+    expenseCategories = serializeData(cList);
   } catch (error) {
     console.error("Failed to fetch budget data:", error);
     return (
@@ -149,10 +153,11 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
         </div>
       </div>
 
-      {/* Budget List with Bulk Delete */}
+      {/* Budget List + Interactive Upsert Form */}
       <BudgetListClient
         budgets={budgets.map((b) => ({
           id: b.id,
+          categoryId: b.categoryId,
           month: b.month,
           year: b.year,
           categoryName: b.category?.name || "Chung",
@@ -166,81 +171,12 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
           spent: b.spent,
           percent: b.percent,
         }))}
+        expenseCategories={expenseCategories}
+        filterMonth={filterDate.month}
+        filterYear={filterDate.year}
         isMonthAll={filterDate.month === "ALL"}
         filterLabel={filterDate.label}
       />
-
-      {/* Add / Upsert Budget Form */}
-      <div className="card bg-gradient-to-br from-orange-50/40 to-white border-orange-200/60">
-        <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
-            <Plus size={16} className="text-orange-600" />
-          </div>
-          <h2 className="text-lg font-bold text-foreground">
-            Thiết lập ngân sách {filterDate.month === "ALL" ? `cho năm ${filterDate.year}` : `cho ${filterDate.label.toLowerCase()}`}
-          </h2>
-        </div>
-        <form
-          action={async (fd) => {
-            "use server";
-            await upsertBudget(fd);
-          }}
-          className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"
-        >
-          {filterDate.month === "ALL" ? (
-            <div>
-              <label className="form-label form-label-required">Tháng áp dụng</label>
-              <select
-                name="month"
-                defaultValue={new Date().getMonth() + 1}
-                className="form-input"
-                required
-              >
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                  <option key={m} value={m}>
-                    Tháng {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <input type="hidden" name="month" value={filterDate.month} />
-          )}
-          <input type="hidden" name="year" value={filterDate.year} />
-
-          <div>
-            <label className="form-label form-label-required">Danh mục</label>
-            <select name="categoryId" className="form-input" required>
-              <option value="">-- Chọn danh mục --</option>
-              {expenseCategories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.icon} {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="form-label form-label-required">Hạn mức (₫)</label>
-            <SmartCurrencyInput
-              name="limitAmount"
-              placeholder="VD: 5.000.000"
-              className="form-input"
-              showQuickButtons
-              showWordsPreview
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="btn-primary py-2.5 px-6 cursor-pointer"
-          >
-            <PiggyBank size={16} className="mr-1.5" />
-            Lưu ngân sách
-          </button>
-        </form>
-      </div>
     </div>
   );
 }

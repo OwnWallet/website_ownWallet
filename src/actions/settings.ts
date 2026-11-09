@@ -105,21 +105,43 @@ export async function deleteCategory(id: string) {
   if (!category) return { error: "Không tìm thấy danh mục" };
 
   // Dùng LIMIT 1 thay vì .all() để tránh full scan bảng Transaction
-  const txInUse = await db.orm.public.Transaction
-    .select("id")
-    .where({ categoryId: id, userId })
-    .first();
+  const [txInUse, budgetInUse] = await Promise.all([
+    db.orm.public.Transaction
+      .select("id")
+      .where({ categoryId: id, userId })
+      .first(),
+    db.orm.public.Budget
+      .select("id")
+      .where({ categoryId: id, userId })
+      .first(),
+  ]);
+
   if (txInUse) {
     return {
       error: "Không thể xóa danh mục đang được sử dụng trong các giao dịch.",
     };
   }
 
-  await db.orm.public.Category.where({ id, userId }).delete();
+  if (budgetInUse) {
+    return {
+      error: "Không thể xóa danh mục đang được thiết lập Ngân sách chi tiêu. Vui lòng xóa ngân sách liên quan trước.",
+    };
+  }
+
+  await db.transaction(async (t: any) => {
+    const relatedSources = await t.orm.public.CashFlowSource
+      .where({ userId, categoryId: id })
+      .all();
+    for (const s of relatedSources) {
+      await t.orm.public.CashFlowSource.where({ id: s.id }).update({ categoryId: null });
+    }
+    await t.orm.public.Category.where({ id, userId }).delete();
+  });
 
   revalidatePath("/settings");
   revalidatePath("/transactions/new");
   revalidatePath("/transactions");
+  revalidatePath("/income");
   return { success: true };
 }
 

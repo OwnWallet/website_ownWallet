@@ -21,15 +21,72 @@ export async function createInvestment(formData: FormData) {
   const parsed = InvestmentSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await db.orm.public.Investment.create({
-    ...parsed.data,
-    targetPrice: parsed.data.targetPrice ? String(parsed.data.targetPrice) : null,
-    quantity: String(parsed.data.quantity),
-    buyPrice: String(parsed.data.buyPrice),
-    boughtAt: toInstant(parsed.data.boughtAt),
-    userId,
+  const { walletId, ...invData } = parsed.data;
+  const totalAmount = invData.quantity * invData.buyPrice;
+  const boughtInstant = toInstant(invData.boughtAt);
+
+  await db.transaction(async (tx: any) => {
+    const created = await tx.orm.public.Investment.create({
+      ...invData,
+      targetPrice: invData.targetPrice ? String(invData.targetPrice) : null,
+      quantity: String(invData.quantity),
+      buyPrice: String(invData.buyPrice),
+      currentPrice: String(invData.buyPrice),
+      boughtAt: boughtInstant,
+      userId,
+    });
+
+    // Ghi nhận InvestLog khởi tạo (BUY)
+    if (created?.id) {
+      await tx.orm.public.InvestLog.create({
+        action: "BUY",
+        quantity: String(invData.quantity),
+        price: String(invData.buyPrice),
+        recordedAt: boughtInstant,
+        investmentId: created.id,
+      });
+    }
+
+    // Nếu người dùng chọn Ví nguồn để trích tiền mua đầu tư
+    if (walletId) {
+      const wallet = await tx.orm.public.Wallet
+        .where({ id: walletId, userId })
+        .first();
+
+      if (wallet) {
+        let category = await tx.orm.public.Category
+          .where({ userId, type: "INVEST" })
+          .first();
+        if (!category) {
+          category = await tx.orm.public.Category
+            .where({ userId, type: "EXPENSE" })
+            .first();
+        }
+        if (!category) {
+          category = await tx.orm.public.Category
+            .where({ userId })
+            .first();
+        }
+
+        if (category) {
+          await tx.orm.public.Transaction.create({
+            amount: String(totalAmount),
+            type: "EXPENSE",
+            categoryId: category.id,
+            note: `Mua mới ${invData.quantity.toLocaleString("vi-VN")} ${invData.name}${invData.ticker ? ` (${invData.ticker})` : ""}`,
+            walletId: wallet.id,
+            userId,
+            recordedAt: boughtInstant,
+          });
+        }
+      }
+    }
   });
+
   revalidatePath("/investments");
+  revalidatePath("/wallets");
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
@@ -202,8 +259,18 @@ export async function addInvestLog(investmentId: string, formData: FormData) {
 
 export async function deleteInvestment(id: string) {
   const userId = await getUserId();
-  await db.orm.public.Investment.where({ id, userId }).delete();
+  await db.transaction(async (t: any) => {
+    const relatedSources = await t.orm.public.CashFlowSource
+      .where({ userId, investmentId: id })
+      .all();
+    for (const s of relatedSources) {
+      await t.orm.public.CashFlowSource.where({ id: s.id }).update({ investmentId: null });
+    }
+    await t.orm.public.Investment.where({ id, userId }).delete();
+  });
   revalidatePath("/investments");
+  revalidatePath("/income");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
@@ -216,12 +283,19 @@ export async function deleteInvestments(ids: string[]) {
     for (const id of ids) {
       const inv = await t.orm.public.Investment.where({ id, userId }).first();
       if (!inv) continue;
+      const relatedSources = await t.orm.public.CashFlowSource
+        .where({ userId, investmentId: id })
+        .all();
+      for (const s of relatedSources) {
+        await t.orm.public.CashFlowSource.where({ id: s.id }).update({ investmentId: null });
+      }
       await t.orm.public.Investment.where({ id, userId }).delete();
       count++;
     }
   });
 
   revalidatePath("/investments");
+  revalidatePath("/income");
   revalidatePath("/dashboard");
   return { success: true, count };
 }

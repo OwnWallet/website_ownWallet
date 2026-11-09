@@ -6,6 +6,16 @@ import { updateCurrentPrice, addInvestLog, deleteInvestment } from "@/actions/in
 import { Trash2, PlusCircle, History, Edit3, X, ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 
 interface InvestLog {
   id: string;
@@ -65,6 +75,7 @@ export function InvestmentCard({
 }) {
   const [activeTab, setActiveTab] = useState<"view" | "price" | "trade" | "logs">("view");
   const [loading, setLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [tradeAction, setTradeAction] = useState<"BUY" | "SELL">("SELL");
   const [tradeQty, setTradeQty] = useState<string>("");
   const [tradePrice, setTradePrice] = useState<string>("");
@@ -126,19 +137,15 @@ export function InvestmentCard({
           </div>
 
           <div className="flex items-center gap-1">
-            <form
-              action={async () => {
-                await deleteInvestment(inv.id);
-              }}
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              title="Xóa tài sản"
+              aria-label={`Xóa tài sản ${inv.name}`}
+              className="p-1.5 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
             >
-              <button
-                type="submit"
-                title="Xóa tài sản"
-                className="p-1.5 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
-              >
-                <Trash2 size={14} />
-              </button>
-            </form>
+              <Trash2 size={14} />
+            </button>
           </div>
         </div>
 
@@ -223,11 +230,21 @@ export function InvestmentCard({
         {/* Tab content: Price update */}
         {activeTab === "price" && (
           <form
-            action={async (fd) => {
+            onSubmit={async (e) => {
+              e.preventDefault();
               setLoading(true);
-              await updateCurrentPrice(inv.id, fd);
-              setLoading(false);
-              setActiveTab("view");
+              try {
+                const fd = new FormData(e.currentTarget);
+                const res = await updateCurrentPrice(inv.id, fd);
+                if ((res as any)?.error) {
+                  toast.error("Giá thị trường không hợp lệ");
+                } else {
+                  toast.success(`Đã cập nhật giá thị trường cho ${inv.name}`);
+                  setActiveTab("view");
+                }
+              } finally {
+                setLoading(false);
+              }
             }}
             className="mt-3 p-3 bg-elevated rounded-lg border border-border-strong animate-fade-in space-y-2"
           >
@@ -359,17 +376,23 @@ export function InvestmentCard({
               </div>
             </div>
 
-            {/* Khi bán: chọn tài khoản nhận tiền về */}
-            {tradeAction === "SELL" && (
+            {/* Chọn tài khoản liên kết khi Mua thêm hoặc Bán */}
+            {wallets.length > 0 && (
               <div className="pt-1">
                 <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
-                  💳 Chuyển tiền về tài khoản:
+                  {tradeAction === "SELL"
+                    ? "💳 Chuyển tiền bán về tài khoản:"
+                    : "💳 Trích tiền mua từ tài khoản:"}
                 </label>
                 <select
                   name="walletId"
                   className="w-full bg-background border border-border-strong rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-primary text-foreground"
                 >
-                  <option value="">-- Không chuyển vào tài khoản (chỉ ghi sổ) --</option>
+                  <option value="">
+                    {tradeAction === "SELL"
+                      ? "-- Không chuyển vào tài khoản (chỉ ghi sổ) --"
+                      : "-- Không trừ tài khoản (chỉ ghi sổ) --"}
+                  </option>
                   {wallets.map((w: any) => (
                     <option key={w.id} value={w.id}>
                       {w.name} {w.currentBalance !== undefined ? `(${formatCurrency(w.currentBalance)})` : ""}
@@ -377,14 +400,16 @@ export function InvestmentCard({
                   ))}
                 </select>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Tiền bán sẽ được tự động ghi nhận vào tài khoản được chọn và cập nhật số dư.
+                  {tradeAction === "SELL"
+                    ? "Tiền bán sẽ được tự động cộng vào tài khoản được chọn."
+                    : "Chi phí mua thêm sẽ được tự động khấu trừ khỏi tài khoản được chọn."}
                 </p>
               </div>
             )}
 
             {/* Preview số tiền ước tính */}
             {tradeQty && Number(tradeQty) > 0 && (
-              <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-border text-xs flex justify-between items-center">
+              <div className="p-2 rounded-lg bg-slate-50 border border-border text-xs flex justify-between items-center">
                 <span className="text-muted-foreground">
                   {tradeAction === "SELL" ? "Tiền thu về ước tính:" : "Tổng chi phí mua:"}
                 </span>
@@ -438,6 +463,34 @@ export function InvestmentCard({
       <p className="text-[11px] text-muted text-center pt-2 border-t border-border">
         Cập nhật {formatRelativeTime(inv.updatedAt)}
       </p>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-rose-600">Xác nhận xóa tài sản đầu tư</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn xóa &ldquo;{inv.name}&rdquo; khỏi danh mục đầu tư? Hành động này không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowDeleteConfirm(false)}>Hủy bỏ</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              onClick={async () => {
+                const res = await deleteInvestment(inv.id);
+                if ((res as any)?.error) {
+                  toast.error(String((res as any).error));
+                } else {
+                  toast.success(`Đã xóa tài sản "${inv.name}"`);
+                }
+                setShowDeleteConfirm(false);
+              }}
+            >
+              Xóa tài sản
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

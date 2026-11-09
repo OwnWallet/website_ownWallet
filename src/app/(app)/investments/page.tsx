@@ -105,7 +105,7 @@ export default async function InvestmentsPage() {
         </div>
 
         {/* Add Form */}
-        <AddInvestmentForm />
+        <AddInvestmentForm wallets={wallets} />
 
         {/* Investment Cards Grid with Bulk Delete */}
         <InvestmentListClient investments={plainInvestments} wallets={wallets} />

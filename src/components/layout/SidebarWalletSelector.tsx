@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useTransition } from "react";
+import { useTransition, useEffect } from "react";
 import {
   CreditCard,
   Landmark,
@@ -56,6 +56,12 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
   const urlWallet = searchParams ? searchParams.get("wallet") : null;
   const savedCookieWallet = getSavedWalletCookie();
   const selectedWalletId = urlWallet || savedCookieWallet || "ALL";
+
+  useEffect(() => {
+    if (urlWallet === "ALL" && typeof document !== "undefined") {
+      document.cookie = "ownwallet_selected_wallet=; path=/; max-age=0";
+    }
+  }, [urlWallet]);
 
   const selectedWallet =
     selectedWalletId === "ALL"

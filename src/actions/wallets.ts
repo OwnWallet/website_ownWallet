@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
-import { serializeData } from "@/lib/utils";
+import { serializeData, toInstant } from "@/lib/utils";
 
 const WalletSchema = z.object({
   name: z.string().min(1, "Tên tài khoản không được để trống").max(50),
@@ -218,20 +218,31 @@ export async function updateWallet(id: string, formData: FormData) {
 export async function deleteWallet(id: string) {
   const userId = await getUserId();
 
-  // Đặt walletId của các giao dịch liên quan về null trước khi xóa
-  const relatedTxs = await db.orm.public.Transaction
-    .where((t) => t.userId.eq(userId))
-    .where((t) => t.walletId.eq(id))
-    .all();
+  await db.transaction(async (tx: any) => {
+    // Đặt walletId của các giao dịch liên quan về null trước khi xóa
+    const relatedTxs = await tx.orm.public.Transaction
+      .where({ userId, walletId: id })
+      .all();
 
-  for (const t of relatedTxs) {
-    await db.orm.public.Transaction.where({ id: t.id }).update({ walletId: null });
-  }
+    for (const t of relatedTxs) {
+      await tx.orm.public.Transaction.where({ id: t.id }).update({ walletId: null });
+    }
 
-  await db.orm.public.Wallet.where({ id, userId }).delete();
+    // Đặt walletId của các nguồn dòng tiền định kỳ về null để tránh lỗi Foreign Key
+    const relatedSources = await tx.orm.public.CashFlowSource
+      .where({ userId, walletId: id })
+      .all();
+
+    for (const s of relatedSources) {
+      await tx.orm.public.CashFlowSource.where({ id: s.id }).update({ walletId: null });
+    }
+
+    await tx.orm.public.Wallet.where({ id, userId }).delete();
+  });
 
   revalidatePath("/wallets");
   revalidatePath("/transactions");
+  revalidatePath("/income");
   revalidatePath("/dashboard");
   return { success: true };
 }
@@ -249,12 +260,111 @@ export async function reassignTransactions(fromWalletId: string | "UNASSIGNED", 
     ? await db.orm.public.Transaction.where({ userId, walletId: null }).all()
     : await db.orm.public.Transaction.where({ userId, walletId: fromWalletId }).all();
 
-  for (const t of txs) {
-    await db.orm.public.Transaction.where({ id: t.id, userId }).update({ walletId: toWalletId });
-  }
+  await db.transaction(async (tx: any) => {
+    for (const t of txs) {
+      await tx.orm.public.Transaction.where({ id: t.id, userId }).update({ walletId: toWalletId });
+    }
+  });
 
   revalidatePath("/wallets");
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
   return { success: true };
+}
+
+const TransferSchema = z.object({
+  fromWalletId: z.string().min(1, "Vui lòng chọn ví nguồn"),
+  toWalletId: z.string().min(1, "Vui lòng chọn ví đích"),
+  amount: z.coerce.number().positive("Số tiền chuyển phải lớn hơn 0"),
+  fee: z.coerce.number().min(0, "Phí chuyển không hợp lệ").default(0),
+  note: z.string().max(300).optional(),
+  recordedAt: z.coerce.date().default(() => new Date()),
+});
+
+export async function transferBetweenWallets(formData: FormData) {
+  const userId = await getUserId();
+  const parsed = TransferSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    const firstErr = Object.values(parsed.error.flatten().fieldErrors)[0]?.[0];
+    return { error: firstErr || "Dữ liệu chuyển khoản không hợp lệ" };
+  }
+
+  const { fromWalletId, toWalletId, amount, fee, note, recordedAt } = parsed.data;
+  if (fromWalletId === toWalletId) {
+    return { error: "Ví nguồn và ví đích không được trùng nhau" };
+  }
+
+  const [fromWallet, toWallet] = await Promise.all([
+    db.orm.public.Wallet.where({ id: fromWalletId, userId }).first(),
+    db.orm.public.Wallet.where({ id: toWalletId, userId }).first(),
+  ]);
+
+  if (!fromWallet || !toWallet) {
+    return { error: "Không tìm thấy ví nguồn hoặc ví đích hợp lệ" };
+  }
+
+  const recordedInstant = toInstant(recordedAt);
+  const customNote = note?.trim() ? ` - ${note.trim()}` : "";
+
+  await db.transaction(async (tx: any) => {
+    // Tìm hoặc tạo danh mục Chuyển khoản nội bộ
+    const expenseCat = await tx.orm.public.Category
+      .where({ userId, type: "EXPENSE" })
+      .first();
+    const incomeCat = await tx.orm.public.Category
+      .where({ userId, type: "INCOME" })
+      .first();
+    const fallbackCat = expenseCat || incomeCat || (await tx.orm.public.Category.where({ userId }).first());
+
+    if (!fallbackCat) {
+      throw new Error("Không tìm thấy danh mục giao dịch");
+    }
+
+    // 1. Ghi giảm Ví nguồn (EXPENSE)
+    await tx.orm.public.Transaction.create({
+      amount: String(amount),
+      type: "EXPENSE",
+      categoryId: (expenseCat || fallbackCat).id,
+      note: `[TRANSFER] Chuyển tiền sang ${toWallet.name}${customNote}`,
+      walletId: fromWallet.id,
+      userId,
+      recordedAt: recordedInstant,
+    });
+
+    // 2. Ghi tăng Ví đích (INCOME)
+    await tx.orm.public.Transaction.create({
+      amount: String(amount),
+      type: "INCOME",
+      categoryId: (incomeCat || fallbackCat).id,
+      note: `[TRANSFER] Nhận tiền từ ${fromWallet.name}${customNote}`,
+      walletId: toWallet.id,
+      userId,
+      recordedAt: recordedInstant,
+    });
+
+    // 3. Nếu có phí chuyển khoản, ghi 1 khoản chi phí thực tế ở Ví nguồn
+    if (fee > 0) {
+      await tx.orm.public.Transaction.create({
+        amount: String(fee),
+        type: "EXPENSE",
+        categoryId: (expenseCat || fallbackCat).id,
+        note: `Phí chuyển khoản từ ${fromWallet.name} sang ${toWallet.name}`,
+        walletId: fromWallet.id,
+        userId,
+        recordedAt: recordedInstant,
+      });
+    }
+  });
+
+  revalidatePath("/wallets");
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath("/reports");
+  return {
+    success: true,
+    fromName: fromWallet.name,
+    toName: toWallet.name,
+    amount,
+    fee,
+  };
 }

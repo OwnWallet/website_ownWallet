@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Calendar, HandCoins } from "lucide-react";
+import { toast } from "sonner";
 import { createTransaction } from "@/actions/transactions";
 import { TransactionSchema, type TransactionInput } from "@/schemas/transaction";
 import { EvidenceUpload } from "@/components/ui/evidence-upload";
@@ -13,7 +14,7 @@ import { isDebtCategory } from "@/lib/debt-sync";
 
 interface Props {
   categories: { id: string; name: string; type: string; color: string; icon: string | null }[];
-  wallets?: { id: string; name: string; bankName?: string | null }[];
+  wallets?: { id: string; name: string; bankName?: string | null; isDefault?: boolean }[];
 }
 
 export function NewTransactionForm({ categories, wallets = [] }: Props) {
@@ -22,23 +23,26 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
   const [evidenceUrl, setEvidenceUrl] = useState<string | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
 
+  const defaultWallet = wallets.find((w) => w.isDefault) || wallets[0];
+
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
     setValue,
-    watch,
   } = useForm<TransactionInput>({
     resolver: zodResolver(TransactionSchema) as any,
     defaultValues: {
       type: "EXPENSE",
+      walletId: defaultWallet?.id || "",
       recordedAt: new Date(),
     },
   });
 
   const isLoading = isSubmitting || isNavigating;
-  const currentAmount = watch("amount");
-  const selectedCatId = watch("categoryId");
+  const currentAmount = useWatch({ control, name: "amount" });
+  const selectedCatId = useWatch({ control, name: "categoryId" });
   const selectedCat = categories.find((c) => c.id === selectedCatId);
   const isDebt = isDebtCategory(selectedCat);
 
@@ -73,8 +77,16 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
     formData.append("recordedAt", data.recordedAt.toISOString());
     const result = await createTransaction(formData);
     if (result?.success) {
+      toast.success("Đã ghi nhận giao dịch thành công");
       setIsNavigating(true);
       router.push("/transactions");
+    } else if ((result as any)?.error) {
+      const errObj = (result as any).error;
+      const msg =
+        typeof errObj === "string"
+          ? errObj
+          : Object.values(errObj).flat()[0] || "Không thể lưu giao dịch";
+      toast.error(String(msg));
     }
   }
 
@@ -237,10 +249,10 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
                   borderColor: errors.walletId ? "var(--color-danger)" : "var(--border-strong)",
                 }}
               >
-                <option value="">-- Mặc định --</option>
+                <option value="">-- Không gắn ví (Tiền ngoài sổ) --</option>
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.bankName === "CASH" ? "💵" : "💳"} {w.name}
+                    {w.bankName === "CASH" ? "💵" : "💳"} {w.name}{w.isDefault ? " (Mặc định)" : ""}
                   </option>
                 ))}
               </select>

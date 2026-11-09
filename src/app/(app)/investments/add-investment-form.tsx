@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 import { createInvestment } from "@/actions/investments";
+import { formatCurrency } from "@/lib/utils";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 
 const ASSET_TYPES = [
@@ -36,7 +38,7 @@ const POPULAR_EXCHANGES = [
   "VinaCapital",
 ];
 
-export function AddInvestmentForm() {
+export function AddInvestmentForm({ wallets = [] }: { wallets?: any[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isPending] = useTransition();
@@ -94,10 +96,18 @@ export function AddInvestmentForm() {
           setLoading(true);
           try {
             const fd = new FormData(e.currentTarget);
-            await createInvestment(fd);
-            setIsOpen(false);
+            const res = await createInvestment(fd);
+            if ((res as any)?.error) {
+              const err = (res as any).error;
+              const msg = typeof err === "string" ? err : Object.values(err).flat()[0] || "Không thể thêm khoản đầu tư";
+              toast.error(String(msg));
+            } else {
+              toast.success("Đã thêm tài sản đầu tư mới vào danh mục!");
+              setIsOpen(false);
+            }
           } catch (err) {
             console.error(err);
+            toast.error("Đã xảy ra lỗi khi lưu tài sản đầu tư");
           } finally {
             setLoading(false);
           }
@@ -228,8 +238,29 @@ export function AddInvestmentForm() {
           />
         </div>
 
+        {/* Wallet Deduction (Optional) */}
+        {wallets.length > 0 && (
+          <div className="md:col-span-2">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+              💳 Trích tiền mua từ ví (Tùy chọn)
+            </label>
+            <select
+              name="walletId"
+              disabled={isBusy}
+              className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm focus:outline-none border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            >
+              <option value="">-- Không trừ ví (Tài sản đã có sẵn) --</option>
+              {wallets.map((w: any) => (
+                <option key={w.id} value={w.id}>
+                  {w.name} ({formatCurrency(w.currentBalance ?? w.balance ?? 0)})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Note / Strategy */}
-        <div className="md:col-span-2 lg:col-span-4">
+        <div className={wallets.length > 0 ? "md:col-span-2" : "md:col-span-2 lg:col-span-4"}>
           <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
             Ghi chú chiến lược (Tùy chọn)
           </label>

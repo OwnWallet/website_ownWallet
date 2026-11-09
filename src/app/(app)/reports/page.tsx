@@ -92,7 +92,13 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     const startPrevMs = startPrevious.getTime();
     const endPrevMs = endPrevious.getTime();
 
+    const isAllWallets = !walletId || walletId === "ALL";
+
     txs.forEach((tx: any) => {
+      const isInternalTransfer =
+        typeof tx.note === "string" && tx.note.startsWith("[TRANSFER]");
+      if (isAllWallets && isInternalTransfer) return;
+
       const recDate = toDate(tx.recordedAt);
       const recMs = recDate.getTime();
       const { year: txY, month: txM } = getVNDateParts(tx.recordedAt);

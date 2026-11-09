@@ -55,6 +55,7 @@ interface CashFlowManagerProps {
       totalMonthlyInvestmentYield: number;
       totalMonthlyRental: number;
       totalMonthlyOther: number;
+      totalMonthlyFixedBills?: number;
       totalMonthlyExpectedInflows: number;
       totalExpectedThisMonth: number;
       activeCount: number;
@@ -105,6 +106,13 @@ const TYPE_CONFIG: Record<
     bg: "rgba(8, 145, 178, 0.1)",
     border: "rgba(8, 145, 178, 0.25)",
   },
+  BILL: {
+    label: "Hóa đơn định kỳ",
+    icon: Calendar,
+    color: "#e11d48",
+    bg: "rgba(225, 29, 72, 0.1)",
+    border: "rgba(225, 29, 72, 0.25)",
+  },
   OTHER: {
     label: "Khác",
     icon: Sparkles,
@@ -123,8 +131,13 @@ const FREQUENCY_LABELS: Record<string, string> = {
   ONE_TIME: "Một lần",
 };
 
+function cleanBillNote(note?: string | null): string {
+  if (!note) return "";
+  return note.replace(/^\[BILL\]\s*/i, "").trim();
+}
+
 export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
-  const { sources, upcomingInflows, summary, wallets, investments } = sourcesData;
+  const { sources, upcomingInflows, summary, wallets, categories, investments } = sourcesData;
 
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -142,6 +155,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
   const mounted = useMounted();
 
   // Form state
+  const [formIsBill, setFormIsBill] = useState(false);
   const [formName, setFormName] = useState("");
   const [formAmount, setFormAmount] = useState<number>(0);
   const [formType, setFormType] = useState<string>("SALARY");
@@ -153,11 +167,12 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
   const [formCategoryId, setFormCategoryId] = useState<string>("");
   const [formNote, setFormNote] = useState<string>("");
 
-  const openCreateModal = () => {
+  const openCreateModal = (asBill = false) => {
     setEditingSource(null);
+    setFormIsBill(asBill);
     setFormName("");
     setFormAmount(0);
-    setFormType("SALARY");
+    setFormType(asBill ? "OTHER" : "SALARY");
     setFormFrequency("MONTHLY");
     setFormDayOfMonth(5);
 
@@ -177,7 +192,13 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
   };
 
   const openEditModal = (source: any) => {
+    const isBill = Boolean(
+      source.isBill ||
+        (typeof source.note === "string" && source.note.startsWith("[BILL]")) ||
+        source.category?.type === "EXPENSE"
+    );
     setEditingSource(source);
+    setFormIsBill(isBill);
     setFormName(source.name);
     setFormAmount(Number(source.amount));
     setFormType(source.type);
@@ -187,7 +208,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
     setFormWalletId(source.walletId || "");
     setFormInvestmentId(source.investmentId || "");
     setFormCategoryId(source.categoryId || "");
-    setFormNote(source.note || "");
+    setFormNote(cleanBillNote(source.note));
     setIsFormOpen(true);
   };
 
@@ -196,14 +217,19 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
     setCollectAmount(Number(source.amount));
     setCollectWalletId(source.walletId || (wallets[0]?.id ?? ""));
     setCollectDate(new Date().toISOString().slice(0, 10));
-    setCollectNote(`Ghi nhận từ dòng tiền: ${source.name}`);
+    setCollectNote(
+      source.isBill
+        ? `Thanh toán hóa đơn định kỳ: ${source.name}`
+        : `Ghi nhận từ dòng tiền: ${source.name}`
+    );
   };
 
   const filteredSources = sources.filter((s) => {
     if (activeTab === "ALL") return true;
     if (activeTab === "ACTIVE") return s.isActive;
     if (activeTab === "PAUSED") return !s.isActive;
-    return s.type === activeTab;
+    if (activeTab === "BILL") return Boolean(s.isBill);
+    return !s.isBill && s.type === activeTab;
   });
 
   return (
@@ -281,46 +307,56 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
         </div>
       </div>
 
-      {/* DÒNG TIỀN SẮP VỀ TRONG 30 NGÀY TỚI (UPCOMING INFLOWS TIMELINE) */}
+      {/* DÒNG TIỀN SẮP ĐẾN HẠN TRONG 30 NGÀY TỚI (UPCOMING TIMELINE) */}
       <div className="p-5 sm:p-6 rounded-2xl border border-border bg-card shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border pb-3">
           <div>
             <h3 className="font-bold text-base sm:text-lg text-foreground flex items-center gap-2">
               <Clock size={18} className="text-emerald-500" />
-              <span>Lịch Dòng Tiền Sắp Về (30 Ngày Tới)</span>
+              <span>Lịch Dòng Tiền & Hóa Đơn Sắp Tới (30 Ngày)</span>
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Theo dõi thời điểm dòng tiền chảy vào ví và ghi nhận thu tiền thực tế
+              Theo dõi thời điểm nhận lương/cổ tức hoặc hạn thanh toán hóa đơn cố định
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-primary text-primary-foreground hover:opacity-90 transition-all shadow-xs flex items-center gap-1.5 w-fit cursor-pointer"
-          >
-            <Plus size={14} />
-            <span>Thêm nguồn dòng tiền</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => openCreateModal(true)}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold border border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/20 transition-all shadow-xs flex items-center gap-1.5 w-fit cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Thêm hóa đơn định kỳ</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openCreateModal(false)}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-primary text-primary-foreground hover:opacity-90 transition-all shadow-xs flex items-center gap-1.5 w-fit cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Thêm nguồn thu</span>
+            </button>
+          </div>
         </div>
 
         {upcomingInflows.length === 0 ? (
           <div className="text-center py-10 px-4 rounded-xl border border-dashed border-border/80 bg-slate-50/50 dark:bg-slate-900/30 space-y-2">
             <Calendar size={28} className="mx-auto text-muted-foreground opacity-60" />
             <p className="text-xs font-medium text-muted-foreground">
-              Không có khoản dòng tiền nào dự kiến trong 30 ngày tới.
+              Không có khoản dòng tiền hoặc hóa đơn nào dự kiến trong 30 ngày tới.
             </p>
             <button
               type="button"
-              onClick={openCreateModal}
+              onClick={() => openCreateModal(false)}
               className="text-xs font-bold text-primary hover:underline cursor-pointer"
             >
-              + Tạo nguồn dòng tiền lương hoặc cổ tức đầu tư
+              + Tạo nguồn thu hoặc lịch nhắc hóa đơn định kỳ
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {upcomingInflows.map((item) => {
-              const conf = TYPE_CONFIG[item.type] || TYPE_CONFIG.OTHER;
+              const conf = item.isBill ? TYPE_CONFIG.BILL : TYPE_CONFIG[item.type] || TYPE_CONFIG.OTHER;
               const IconComp = conf.icon;
               const nextDate = toDate(item.nextExpectedDate);
               const today = new Date();
@@ -334,10 +370,12 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
               let badgeText = `${formatDate(nextDate)}`;
               let badgeColor = "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
               if (diffDays === 0) {
-                badgeText = "Hôm nay về 🎉";
-                badgeColor = "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold animate-pulse";
+                badgeText = item.isBill ? "Đến hạn hôm nay 🔔" : "Hôm nay về 🎉";
+                badgeColor = item.isBill
+                  ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 font-bold animate-pulse"
+                  : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold animate-pulse";
               } else if (diffDays === 1) {
-                badgeText = "Ngày mai về";
+                badgeText = item.isBill ? "Hạn ngày mai" : "Ngày mai về";
                 badgeColor = "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-semibold";
               } else if (diffDays < 0) {
                 badgeText = `Đã quá ${Math.abs(diffDays)} ngày`;
@@ -345,6 +383,8 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
               } else {
                 badgeText = `Còn ${diffDays} ngày (${nextDate.getDate()}/${nextDate.getMonth() + 1})`;
               }
+
+              const displayNote = cleanBillNote(item.note);
 
               return (
                 <div
@@ -381,9 +421,9 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                           {item.investment.ticker && ` (${item.investment.ticker})`}
                         </p>
                       )}
-                      {item.note && (
+                      {displayNote && (
                         <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
-                          {item.note}
+                          {displayNote}
                         </p>
                       )}
                     </div>
@@ -391,20 +431,35 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
 
                   <div className="pt-2.5 border-t border-border/60 flex items-center justify-between gap-2">
                     <div>
-                      <span className="text-[10px] text-muted-foreground block">Số tiền dự kiến:</span>
-                      <strong className="text-emerald-600 font-extrabold text-sm">
-                        +{formatCurrency(Number(item.amount))}
+                      <span className="text-[10px] text-muted-foreground block">
+                        {item.isBill ? "Số tiền hóa đơn:" : "Số tiền dự kiến:"}
+                      </span>
+                      <strong
+                        className={`font-extrabold text-sm ${
+                          item.isBill ? "text-rose-600" : "text-emerald-600"
+                        }`}
+                      >
+                        {item.isBill ? "−" : "+"}
+                        {formatCurrency(Number(item.amount))}
                       </strong>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => openCollectModal(item)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-2xs flex items-center gap-1 active:scale-95 cursor-pointer"
-                      title="Ghi nhận tiền đã về ví thực tế"
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all shadow-2xs flex items-center gap-1 active:scale-95 cursor-pointer ${
+                        item.isBill
+                          ? "bg-rose-600 hover:bg-rose-700"
+                          : "bg-emerald-600 hover:bg-emerald-700"
+                      }`}
+                      title={
+                        item.isBill
+                          ? "Xác nhận thanh toán hóa đơn định kỳ"
+                          : "Ghi nhận tiền đã về ví thực tế"
+                      }
                     >
-                      <span>💳</span>
-                      <span>Ghi nhận về</span>
+                      <span>{item.isBill ? "🧾" : "💳"}</span>
+                      <span>{item.isBill ? "Thanh toán" : "Ghi nhận về"}</span>
                     </button>
                   </div>
                 </div>
@@ -420,10 +475,10 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
           <div>
             <h3 className="font-bold text-base sm:text-lg text-foreground flex items-center gap-2">
               <Banknote size={18} className="text-primary" />
-              <span>Danh Mục Nguồn Dòng Tiền ({sources.length})</span>
+              <span>Danh Mục Dòng Tiền & Hóa Đơn Định Kỳ ({sources.length})</span>
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Cấu hình các nguồn lương định kỳ, cổ tức đầu tư và tài sản sinh dòng tiền
+              Cấu hình lương định kỳ, cổ tức đầu tư, cho thuê và hóa đơn cố định hàng tháng
             </p>
           </div>
 
@@ -475,6 +530,17 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab("BILL")}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === "BILL"
+                  ? "bg-rose-600 text-white"
+                  : "bg-slate-100 dark:bg-slate-800 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              🧾 Hóa đơn ({sources.filter((s) => s.isBill).length})
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab("PAUSED")}
               className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                 activeTab === "PAUSED"
@@ -489,21 +555,24 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
 
         {filteredSources.length === 0 ? (
           <div className="text-center py-12 px-4 rounded-xl border border-dashed border-border/80 text-muted-foreground text-xs space-y-2">
-            <p>Chưa có nguồn dòng tiền nào trong mục này.</p>
+            <p>Chưa có mục nào trong phân loại này.</p>
             <button
               type="button"
-              onClick={openCreateModal}
+              onClick={() => openCreateModal(activeTab === "BILL")}
               className="font-bold text-primary hover:underline cursor-pointer"
             >
-              + Thêm nguồn dòng tiền mới
+              + Thêm mới ngay
             </button>
           </div>
         ) : (
           <div className="space-y-3">
             {filteredSources.map((source) => {
-              const conf = TYPE_CONFIG[source.type] || TYPE_CONFIG.OTHER;
+              const conf = source.isBill
+                ? TYPE_CONFIG.BILL
+                : TYPE_CONFIG[source.type] || TYPE_CONFIG.OTHER;
               const IconComp = conf.icon;
               const nextDate = toDate(source.nextExpectedDate);
+              const displayNote = cleanBillNote(source.note);
 
               return (
                 <div
@@ -556,7 +625,8 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                         </span>
                         {source.wallet && (
                           <span>
-                            Ví nhận: <strong>{source.wallet.name}</strong>
+                            {source.isBill ? "Ví thanh toán:" : "Ví nhận:"}{" "}
+                            <strong>{source.wallet.name}</strong>
                           </span>
                         )}
                         {source.investment && (
@@ -566,9 +636,9 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                         )}
                       </div>
 
-                      {source.note && (
+                      {displayNote && (
                         <p className="text-[11px] text-muted-foreground line-clamp-1">
-                          {source.note}
+                          {displayNote}
                         </p>
                       )}
                     </div>
@@ -576,9 +646,16 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
 
                   <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/60">
                     <div className="text-left sm:text-right">
-                      <span className="text-[10px] text-muted-foreground block">Số tiền dự kiến:</span>
-                      <strong className="text-foreground text-sm sm:text-base font-extrabold text-emerald-600">
-                        +{formatCurrency(Number(source.amount))}
+                      <span className="text-[10px] text-muted-foreground block">
+                        {source.isBill ? "Chi phí mỗi kỳ:" : "Số tiền dự kiến:"}
+                      </span>
+                      <strong
+                        className={`text-sm sm:text-base font-extrabold ${
+                          source.isBill ? "text-rose-600" : "text-emerald-600"
+                        }`}
+                      >
+                        {source.isBill ? "−" : "+"}
+                        {formatCurrency(Number(source.amount))}
                       </strong>
                     </div>
 
@@ -592,8 +669,8 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                             if (res.success) {
                               toast.success(
                                 res.isActive
-                                  ? `Đã kích hoạt nguồn "${source.name}"`
-                                  : `Đã tạm dừng nguồn "${source.name}"`
+                                  ? `Đã kích hoạt "${source.name}"`
+                                  : `Đã tạm dừng "${source.name}"`
                               );
                             }
                           });
@@ -613,7 +690,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                         type="button"
                         onClick={() => openEditModal(source)}
                         className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Chỉnh sửa nguồn dòng tiền"
+                        title="Chỉnh sửa"
                       >
                         <Pencil size={14} />
                       </button>
@@ -623,7 +700,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                         type="button"
                         onClick={() => setDeleteTargetId(source.id)}
                         className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                        title="Xóa nguồn dòng tiền"
+                        title="Xóa"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -636,7 +713,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
         )}
       </div>
 
-      {/* MODAL THÊM / SỬA NGUỒN DÒNG TIỀN */}
+      {/* MODAL THÊM / SỬA NGUỒN DÒNG TIỀN HOẶC HÓA ĐƠN ĐỊNH KỲ */}
       {mounted && isFormOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
           <div
@@ -648,10 +725,16 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
               <div>
                 <h3 className="font-bold text-base sm:text-lg text-foreground flex items-center gap-2">
                   <Banknote size={18} className="text-primary" />
-                  <span>{editingSource ? "Chỉnh sửa nguồn dòng tiền" : "Tạo nguồn dòng tiền mới"}</span>
+                  <span>
+                    {editingSource
+                      ? "Chỉnh sửa lịch định kỳ"
+                      : formIsBill
+                      ? "Tạo lịch nhắc hóa đơn định kỳ"
+                      : "Tạo nguồn dòng tiền mới"}
+                  </span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Quản lý tiền lương định kỳ, cổ tức đầu tư và tài sản sinh dòng tiền
+                  Quản lý thu nhập định kỳ (lương, cổ tức) và hóa đơn cố định (thuê nhà, điện nước, trả góp)
                 </p>
               </div>
               <button
@@ -669,7 +752,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                 if (isPending) return;
 
                 if (!formName.trim()) {
-                  toast.warning("Vui lòng nhập tên nguồn dòng tiền");
+                  toast.warning("Vui lòng nhập tên khoản thu / hóa đơn");
                   return;
                 }
                 if (!formAmount || formAmount <= 0) {
@@ -684,16 +767,22 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                 const fd = new FormData();
                 fd.set("name", formName.trim());
                 fd.set("amount", String(formAmount));
-                fd.set("type", formType);
+                fd.set("type", formIsBill ? "OTHER" : formType);
                 fd.set("frequency", formFrequency);
                 if (formFrequency === "MONTHLY" && formDayOfMonth) {
                   fd.set("dayOfMonth", String(formDayOfMonth));
                 }
                 fd.set("nextExpectedDate", formNextDate);
                 if (formWalletId) fd.set("walletId", formWalletId);
-                if (formInvestmentId) fd.set("investmentId", formInvestmentId);
+                if (!formIsBill && formInvestmentId) fd.set("investmentId", formInvestmentId);
                 if (formCategoryId) fd.set("categoryId", formCategoryId);
-                if (formNote.trim()) fd.set("note", formNote.trim());
+
+                const cleanedNote = cleanBillNote(formNote);
+                if (formIsBill) {
+                  fd.set("note", `[BILL] ${cleanedNote || "Hóa đơn chi tiêu định kỳ"}`.trim());
+                } else if (cleanedNote) {
+                  fd.set("note", cleanedNote);
+                }
 
                 startTransition(async () => {
                   try {
@@ -705,60 +794,121 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                     }
 
                     if (res?.error) {
-                      toast.error("Không thể lưu nguồn dòng tiền. Vui lòng kiểm tra lại.");
+                      toast.error("Không thể lưu lịch định kỳ. Vui lòng kiểm tra lại.");
                     } else {
                       toast.success(
                         editingSource
-                          ? `Đã cập nhật nguồn "${formName}" thành công!`
-                          : `Đã tạo nguồn dòng tiền "${formName}" thành công!`
+                          ? `Đã cập nhật "${formName}" thành công!`
+                          : `Đã tạo "${formName}" thành công!`
                       );
                       setIsFormOpen(false);
                     }
                   } catch (err: any) {
                     console.error(err);
-                    toast.error(err?.message || "Lỗi khi lưu nguồn dòng tiền");
+                    toast.error(err?.message || "Lỗi khi lưu lịch định kỳ");
                   }
                 });
               }}
               className="space-y-4"
             >
+              {/* Chuyển đổi Thu nhập định kỳ vs Hóa đơn định kỳ */}
+              <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormIsBill(false);
+                    if (formType === "OTHER") setFormType("SALARY");
+                    setFormCategoryId("");
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    !formIsBill
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  📥 Nguồn thu định kỳ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormIsBill(true);
+                    setFormType("OTHER");
+                    setFormInvestmentId("");
+                    setFormCategoryId("");
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    formIsBill
+                      ? "bg-rose-600 text-white shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  🧾 Hóa đơn chi định kỳ
+                </button>
+              </div>
+
               {/* Tên nguồn & Loại */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Tên nguồn dòng tiền
+                    {formIsBill ? "Tên hóa đơn / Khoản chi định kỳ" : "Tên nguồn dòng tiền"}
                   </label>
                   <input
                     type="text"
                     required
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
-                    placeholder="VD: Lương công ty Tech Corp, Cổ tức FPT quý 3, Cho thuê nhà..."
+                    placeholder={
+                      formIsBill
+                        ? "VD: Tiền thuê nhà, Điện nước, Internet FPT, Bảo hiểm..."
+                        : "VD: Lương công ty Tech Corp, Cổ tức FPT quý 3, Cho thuê nhà..."
+                    }
                     className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm focus:outline-none border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Phân loại nguồn thu
-                  </label>
-                  <select
-                    value={formType}
-                    onChange={(e) => setFormType(e.target.value)}
-                    className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm focus:outline-none border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                  >
-                    <option value="SALARY">💼 Tiền lương định kỳ</option>
-                    <option value="INVESTMENT_DIVIDEND">📈 Cổ tức / Lợi nhuận đầu tư</option>
-                    <option value="RENTAL">🏢 Cho thuê BĐS / Tài sản</option>
-                    <option value="INTEREST">💰 Tiền lãi gửi / Trái phiếu</option>
-                    <option value="BUSINESS">📊 Kinh doanh / Freelance</option>
-                    <option value="OTHER">✨ Thu nhập định kỳ khác</option>
-                  </select>
-                </div>
+                {!formIsBill ? (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                      Phân loại nguồn thu
+                    </label>
+                    <select
+                      value={formType}
+                      onChange={(e) => setFormType(e.target.value)}
+                      className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm focus:outline-none border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                    >
+                      <option value="SALARY">💼 Tiền lương định kỳ</option>
+                      <option value="INVESTMENT_DIVIDEND">📈 Cổ tức / Lợi nhuận đầu tư</option>
+                      <option value="RENTAL">🏢 Cho thuê BĐS / Tài sản</option>
+                      <option value="INTEREST">💰 Tiền lãi gửi / Trái phiếu</option>
+                      <option value="BUSINESS">📊 Kinh doanh / Freelance</option>
+                      <option value="OTHER">✨ Thu nhập định kỳ khác</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                      Danh mục chi tiêu
+                    </label>
+                    <select
+                      value={formCategoryId}
+                      onChange={(e) => setFormCategoryId(e.target.value)}
+                      className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm focus:outline-none border border-slate-200 focus:border-rose-500"
+                    >
+                      <option value="">-- Tự động chọn danh mục chi --</option>
+                      {(categories || [])
+                        .filter((c: any) => c.type === "EXPENSE")
+                        .map((c: any) => (
+                          <option key={c.id} value={c.id}>
+                            {c.icon || "📁"} {c.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Chu kỳ dòng tiền
+                    Chu kỳ lặp lại
                   </label>
                   <select
                     value={formFrequency}
@@ -778,26 +928,26 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
               {/* Số tiền dự kiến */}
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Số tiền dự kiến mỗi kỳ (₫)
+                  {formIsBill ? "Số tiền hóa đơn mỗi kỳ (₫)" : "Số tiền dự kiến mỗi kỳ (₫)"}
                 </label>
                 <SmartCurrencyInput
                   name="amount"
                   value={formAmount > 0 ? formAmount : undefined}
                   required
                   min={1000}
-                  placeholder="VD: 25,000,000"
+                  placeholder={formIsBill ? "VD: 5,000,000" : "VD: 25,000,000"}
                   showQuickButtons={true}
                   showWordsPreview={true}
                   onChangeValue={(val) => setFormAmount(val)}
                 />
               </div>
 
-              {/* Ngày nhận tiền */}
+              {/* Ngày nhận / thanh toán */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-border">
                 {formFrequency === "MONTHLY" && (
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Ngày nhận trong tháng (1 - 31)
+                      {formIsBill ? "Ngày đến hạn hàng tháng (1 - 31)" : "Ngày nhận trong tháng (1 - 31)"}
                     </label>
                     <input
                       type="number"
@@ -812,7 +962,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
 
                 <div className={formFrequency === "MONTHLY" ? "" : "sm:col-span-2"}>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                    Ngày dự kiến nhận tiếp theo
+                    {formIsBill ? "Hạn thanh toán kỳ tiếp theo" : "Ngày dự kiến nhận tiếp theo"}
                   </label>
                   <input
                     type="date"
@@ -824,11 +974,11 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                 </div>
               </div>
 
-              {/* Liên kết ví nhận & khoản đầu tư (nếu có) */}
+              {/* Liên kết ví & khoản đầu tư (nếu có) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+                <div className={formIsBill ? "sm:col-span-2" : ""}>
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Ví / Tài khoản nhận tiền
+                    {formIsBill ? "Ví / Tài khoản trích thanh toán" : "Ví / Tài khoản nhận tiền"}
                   </label>
                   <select
                     value={formWalletId}
@@ -844,24 +994,26 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                   </select>
                 </div>
 
-                {/* Liên kết khoản đầu tư (nếu là cổ tức/lợi nhuận) */}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Liên kết khoản đầu tư (Tùy chọn)
-                  </label>
-                  <select
-                    value={formInvestmentId}
-                    onChange={(e) => setFormInvestmentId(e.target.value)}
-                    className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm border border-slate-200 focus:border-emerald-500"
-                  >
-                    <option value="">-- Không liên kết --</option>
-                    {investments.map((inv: any) => (
-                      <option key={inv.id} value={inv.id}>
-                        {inv.name} {inv.ticker ? `(${inv.ticker})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Liên kết khoản đầu tư (nếu là nguồn thu) */}
+                {!formIsBill && (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                      Liên kết khoản đầu tư (Tùy chọn)
+                    </label>
+                    <select
+                      value={formInvestmentId}
+                      onChange={(e) => setFormInvestmentId(e.target.value)}
+                      className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm border border-slate-200 focus:border-emerald-500"
+                    >
+                      <option value="">-- Không liên kết --</option>
+                      {investments.map((inv: any) => (
+                        <option key={inv.id} value={inv.id}>
+                          {inv.name} {inv.ticker ? `(${inv.ticker})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Ghi chú */}
@@ -873,7 +1025,11 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                   type="text"
                   value={formNote}
                   onChange={(e) => setFormNote(e.target.value)}
-                  placeholder="VD: Sau khi trừ thuế & bảo hiểm, cổ tức tạm ứng đợt 1..."
+                  placeholder={
+                    formIsBill
+                      ? "VD: Mã khách hàng PE01..., thanh toán qua tự động trích nợ..."
+                      : "VD: Sau khi trừ thuế & bảo hiểm, cổ tức tạm ứng đợt 1..."
+                  }
                   className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm border border-slate-200 focus:border-emerald-500"
                 />
               </div>
@@ -891,10 +1047,18 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="px-6 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-sm transition-all"
+                  className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white cursor-pointer shadow-sm transition-all ${
+                    formIsBill ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"
+                  }`}
                   style={{ opacity: isPending ? 0.7 : 1 }}
                 >
-                  {isPending ? "Đang lưu..." : editingSource ? "Lưu thay đổi" : "Tạo nguồn dòng tiền"}
+                  {isPending
+                    ? "Đang lưu..."
+                    : editingSource
+                    ? "Lưu thay đổi"
+                    : formIsBill
+                    ? "Tạo lịch hóa đơn"
+                    : "Tạo nguồn dòng tiền"}
                 </button>
               </div>
             </form>
@@ -903,7 +1067,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
         document.body
       )}
 
-      {/* MODAL 1-CLICK: GHI NHẬN TIỀN VỀ (COLLECT CASH IN) */}
+      {/* MODAL 1-CLICK: GHI NHẬN TIỀN VỀ HOẶC THANH TOÁN HÓA ĐƠN */}
       {mounted && collectTarget && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
           <div
@@ -914,11 +1078,17 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
             <div className="flex justify-between items-start border-b border-border pb-3">
               <div>
                 <h3 className="font-bold text-base sm:text-lg text-foreground flex items-center gap-2">
-                  <span>🎉</span>
-                  <span>Ghi nhận tiền đã về ví</span>
+                  <span>{collectTarget.isBill ? "🧾" : "🎉"}</span>
+                  <span>
+                    {collectTarget.isBill
+                      ? "Thanh toán hóa đơn định kỳ"
+                      : "Ghi nhận tiền đã về ví"}
+                  </span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Xác nhận nguồn thu &ldquo;{collectTarget.name}&rdquo; đã chuyển khoản thành công
+                  {collectTarget.isBill
+                    ? `Xác nhận thanh toán khoản "${collectTarget.name}" và dời lịch kỳ kế tiếp`
+                    : `Xác nhận nguồn thu "${collectTarget.name}" đã chuyển khoản thành công`}
                 </p>
               </div>
               <button
@@ -936,11 +1106,11 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                 if (isPending) return;
 
                 if (!collectAmount || collectAmount <= 0) {
-                  toast.warning("Vui lòng nhập số tiền thực nhận lớn hơn 0");
+                  toast.warning("Vui lòng nhập số tiền thực tế lớn hơn 0");
                   return;
                 }
                 if (!collectWalletId) {
-                  toast.warning("Vui lòng chọn ví nhận tiền");
+                  toast.warning("Vui lòng chọn ví giao dịch");
                   return;
                 }
 
@@ -955,17 +1125,19 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                   try {
                     const res = await collectCashFlow(fd);
                     if (res?.error || !res?.actualAmount) {
-                      toast.error("Không thể ghi nhận tiền về. Vui lòng thử lại.");
+                      toast.error("Không thể thực hiện giao dịch. Vui lòng thử lại.");
                     } else {
                       toast.success(
-                        `🎉 Đã cộng ${formatCurrency(res.actualAmount)} vào ví ${res.walletName}! Lịch nhận tiếp theo: ${formatDate(res.nextExpectedDate)}.`,
+                        res.isBill
+                          ? `🧾 Đã thanh toán ${formatCurrency(res.actualAmount)} từ ví ${res.walletName}! Kỳ tiếp theo: ${formatDate(res.nextExpectedDate)}.`
+                          : `🎉 Đã cộng ${formatCurrency(res.actualAmount)} vào ví ${res.walletName}! Lịch nhận tiếp theo: ${formatDate(res.nextExpectedDate)}.`,
                         { duration: 5000 }
                       );
                       setCollectTarget(null);
                     }
                   } catch (err: any) {
                     console.error(err);
-                    toast.error(err?.message || "Lỗi khi ghi nhận tiền về");
+                    toast.error(err?.message || "Lỗi khi ghi nhận giao dịch");
                   }
                 });
               }}
@@ -973,14 +1145,14 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
             >
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Số tiền thực nhận (₫)
+                  {collectTarget.isBill ? "Số tiền thanh toán thực tế (₫)" : "Số tiền thực nhận (₫)"}
                 </label>
                 <SmartCurrencyInput
                   name="actualAmount"
                   value={collectAmount > 0 ? collectAmount : undefined}
                   required
                   min={1000}
-                  placeholder="VD: 25,000,000"
+                  placeholder="VD: 5,000,000"
                   showQuickButtons={true}
                   showWordsPreview={true}
                   onChangeValue={(val) => setCollectAmount(val)}
@@ -989,7 +1161,9 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
 
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Tài khoản / Ví nhận tiền
+                  {collectTarget.isBill
+                    ? "Tài khoản / Ví trích thanh toán"
+                    : "Tài khoản / Ví nhận tiền"}
                 </label>
                 <select
                   required
@@ -997,7 +1171,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                   onChange={(e) => setCollectWalletId(e.target.value)}
                   className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm border border-slate-200 focus:border-emerald-500"
                 >
-                  <option value="">-- Chọn ví nhận tiền --</option>
+                  <option value="">-- Chọn ví giao dịch --</option>
                   {wallets.map((w: any) => (
                     <option key={w.id} value={w.id}>
                       {w.name} ({formatCurrency(Number(w.balance))})
@@ -1008,7 +1182,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
 
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Ngày nhận tiền
+                  {collectTarget.isBill ? "Ngày thanh toán" : "Ngày nhận tiền"}
                 </label>
                 <input
                   type="date"
@@ -1031,12 +1205,20 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                 />
               </div>
 
-              <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/80 text-xs text-emerald-800 dark:text-emerald-200 space-y-1">
+              <div
+                className={`p-3 rounded-xl border text-xs space-y-1 ${
+                  collectTarget.isBill
+                    ? "bg-rose-50/70 dark:bg-rose-950/30 border-rose-200/80 text-rose-800 dark:text-rose-200"
+                    : "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200/80 text-emerald-800 dark:text-emerald-200"
+                }`}
+              >
                 <p className="font-bold flex items-center gap-1.5">
                   <span>💡 Tự động hóa:</span>
                 </p>
                 <p className="text-[11px] leading-relaxed">
-                  Hệ thống sẽ tự động cộng tiền vào ví đã chọn, tạo 1 giao dịch thu nhập (Income Transaction) và tự động dời lịch dự kiến sang kỳ tiếp theo!
+                  {collectTarget.isBill
+                    ? "Hệ thống sẽ tự động trừ tiền từ ví đã chọn, tạo 1 giao dịch chi tiêu (Expense) và tự động dời hạn thanh toán sang kỳ tiếp theo!"
+                    : "Hệ thống sẽ tự động cộng tiền vào ví đã chọn, tạo 1 giao dịch thu nhập (Income) và tự động dời lịch dự kiến sang kỳ tiếp theo!"}
                 </p>
               </div>
 
@@ -1052,10 +1234,18 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="px-5 py-2.5 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-sm transition-all"
+                  className={`px-5 py-2.5 rounded-xl font-bold text-xs text-white cursor-pointer shadow-sm transition-all ${
+                    collectTarget.isBill
+                      ? "bg-rose-600 hover:bg-rose-700"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  }`}
                   style={{ opacity: isPending ? 0.7 : 1 }}
                 >
-                  {isPending ? "Đang xử lý..." : "Xác nhận đã nhận tiền"}
+                  {isPending
+                    ? "Đang xử lý..."
+                    : collectTarget.isBill
+                    ? "Xác nhận thanh toán"
+                    : "Xác nhận đã nhận tiền"}
                 </button>
               </div>
             </form>

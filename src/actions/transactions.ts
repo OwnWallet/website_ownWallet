@@ -322,10 +322,19 @@ async function reverseDebtLogsForTx(t: any, txId: string, userId: string) {
         updatedPaid = Math.max(0, updatedPaid - logAmt);
       } else if (log.type === "TOPUP") {
         updatedAmount = Math.max(0, updatedAmount - logAmt);
+      } else if (log.type === "INIT") {
+        updatedAmount = Math.max(0, updatedAmount - logAmt);
+      }
+
+      // Nếu là log khởi tạo (INIT) và số tiền gốc giảm về 0 (chưa có nợ khác gộp vào), xóa luôn bản ghi nợ ma
+      if (log.type === "INIT" && updatedAmount <= 0 && updatedPaid <= 0) {
+        await t.orm.public.DebtLog.where({ id: log.id }).delete();
+        await t.orm.public.Debt.where({ id: debt.id, userId }).delete();
+        continue;
       }
 
       const updatedStatus: "PAID" | "PARTIAL" | "PENDING" =
-        updatedPaid >= updatedAmount ? "PAID" : updatedPaid > 0 ? "PARTIAL" : "PENDING";
+        updatedPaid >= updatedAmount && updatedAmount > 0 ? "PAID" : updatedPaid > 0 ? "PARTIAL" : "PENDING";
 
       // Dọn dẹp thẻ [tx_id:xxx] và các mệnh đề liên quan khỏi note của Debt
       let updatedNote = debt.note;

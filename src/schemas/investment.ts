@@ -11,6 +11,7 @@ export const InvestmentSchema = z.object({
   quantity: z.coerce.number().positive("Số lượng phải lớn hơn 0"),
   buyPrice: z.coerce.number().positive("Giá mua phải lớn hơn 0"),
   boughtAt: z.coerce.date({ error: "Chọn ngày mua" }),
+  walletId: z.string().optional().nullable(),
 });
 
 export const UpdatePriceSchema = z.object({

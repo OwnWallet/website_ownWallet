@@ -133,7 +133,7 @@ export async function confirmAiImport(
     revalidatePath("/transactions");
     revalidatePath("/dashboard");
     revalidatePath("/wallets");
-    revalidatePath("/budgets");
+    revalidatePath("/budget");
     revalidatePath("/reports");
 
     return { success: true, imported: transactionData.length };

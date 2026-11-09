@@ -24,6 +24,27 @@ export async function createGoal(formData: FormData) {
     userId,
   });
   revalidatePath("/goals");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function updateGoal(id: string, formData: FormData) {
+  const userId = await getUserId();
+  const parsed = GoalSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+
+  const existing = await db.orm.public.Goal.where({ id, userId }).first();
+  if (!existing) return { error: "Không tìm thấy mục tiêu" };
+
+  await db.orm.public.Goal.where({ id, userId }).update({
+    name: parsed.data.name,
+    targetAmount: String(parsed.data.targetAmount),
+    deadline: parsed.data.deadline ? toInstant(parsed.data.deadline) : null,
+    note: parsed.data.note ?? null,
+  });
+
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
@@ -57,11 +78,13 @@ export async function contributeToGoal(goalId: string, formData: FormData) {
     });
   }
 
-  // Xác định ví trích tiền (ưu tiên walletId truyền lên, nếu không có thì lấy ví mặc định của user)
+  // Xác định ví trích tiền (nếu truyền "NONE" thì chỉ ghi tăng mục tiêu, nếu truyền ID ví thì trừ ví đó)
   const requestedWalletId = formData.get("walletId")?.toString() || null;
   let resolvedWalletId: string | null = null;
 
-  if (requestedWalletId) {
+  if (requestedWalletId === "NONE") {
+    resolvedWalletId = null;
+  } else if (requestedWalletId) {
     const w = await db.orm.public.Wallet.where({ id: requestedWalletId, userId }).first();
     if (w) resolvedWalletId = w.id;
   } else {

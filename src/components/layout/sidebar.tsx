@@ -21,26 +21,48 @@ import {
   LogOut,
   X,
   Sparkles,
-  PiggyBank,
   Landmark,
   PanelLeftClose,
   PanelLeft,
+  Layers,
 } from "lucide-react";
 
-export const NAV_ITEMS = [
-  { href: "/dashboard",    label: "Tổng quan",      icon: LayoutDashboard },
-  { href: "/income",       label: "Dòng tiền",      icon: Banknote        },
-  { href: "/transactions", label: "Giao dịch",      icon: ArrowLeftRight  },
-  { href: "/wallets",      label: "Tài khoản",      icon: Landmark        },
-  { href: "/import",       label: "AI Import",      icon: Sparkles        },
-  { href: "/reports",      label: "Báo cáo",        icon: BarChart3       },
-  { href: "/budget",       label: "Ngân sách",      icon: Wallet          },
-  { href: "/investments",  label: "Đầu tư",         icon: TrendingUp      },
-  { href: "/savings",      label: "Tiết kiệm",      icon: PiggyBank       },
-  { href: "/debts",        label: "Sổ nợ",          icon: HandCoins       },
-  { href: "/goals",        label: "Mục tiêu",       icon: Target          },
-  { href: "/settings",     label: "Cài đặt",        icon: Settings        },
+export const NAV_GROUPS = [
+  {
+    title: "Tổng quan",
+    items: [
+      { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
+      { href: "/reports", label: "Báo cáo & AI", icon: BarChart3 },
+      { href: "/assets", label: "Tổng tài sản", icon: Layers },
+    ],
+  },
+  {
+    title: "Dòng tiền & Ngân sách",
+    items: [
+      { href: "/transactions", label: "Sổ giao dịch", icon: ArrowLeftRight },
+      { href: "/income", label: "Dòng tiền định kỳ", icon: Banknote },
+      { href: "/budget", label: "Ngân sách", icon: Wallet },
+      { href: "/import", label: "AI Import", icon: Sparkles },
+    ],
+  },
+  {
+    title: "Tài sản & Công nợ",
+    items: [
+      { href: "/wallets", label: "Ví & Tài khoản", icon: Landmark },
+      { href: "/investments", label: "Đầu tư", icon: TrendingUp },
+      { href: "/debts", label: "Sổ nợ", icon: HandCoins },
+      { href: "/goals", label: "Mục tiêu & Tiết kiệm", icon: Target },
+    ],
+  },
+  {
+    title: "Hệ thống",
+    items: [
+      { href: "/settings", label: "Cài đặt", icon: Settings },
+    ],
+  },
 ];
+
+export const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -148,66 +170,71 @@ export function Sidebar({
         {/* Scrollable Middle Area: Navigation Only */}
         <ScrollArea className="flex-1 min-h-0 w-full overflow-hidden">
           <div className="flex flex-col py-2">
-            {/* Navigation Items */}
-            <div className="px-2.5">
-              <div className={cn("px-2.5 mb-2 transition-all", isCollapsed && "lg:hidden")}>
-                <span className="text-[10px] font-bold text-slate-400/80 uppercase tracking-wider">
-                  Menu chính
-                </span>
-              </div>
+            {/* Navigation Groups */}
+            <div className="px-2.5 space-y-3">
+              {NAV_GROUPS.map((group) => (
+                <div key={group.title}>
+                  <div className={cn("px-2.5 mb-1.5 transition-all", isCollapsed && "lg:hidden")}>
+                    <span className="text-[10px] font-bold text-slate-400/75 uppercase tracking-wider">
+                      {group.title}
+                    </span>
+                  </div>
 
-              <nav className="space-y-1">
-                {NAV_ITEMS.map((item) => {
-                  const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}`));
-                  const Icon = item.icon;
+                  <nav className="space-y-1" aria-label={group.title}>
+                    {group.items.map((item) => {
+                      const isActive =
+                        pathname === item.href ||
+                        (item.href !== "/dashboard" && pathname.startsWith(`${item.href}`));
+                      const Icon = item.icon;
+                      const targetHref = searchStr ? `${item.href}?${searchStr}` : item.href;
 
-                  const targetHref = searchStr ? `${item.href}?${searchStr}` : item.href;
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={targetHref}
-                      onClick={() => onClose?.()}
-                      title={item.label}
-                      className={cn(
-                        "flex items-center rounded-xl text-sm font-medium transition-all duration-150 group relative",
-                        isCollapsed
-                          ? "px-3 py-2.5 lg:justify-center lg:px-0 lg:py-2.5"
-                          : "gap-3 px-3 py-2.5",
-                        isActive
-                          ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold shadow-lg shadow-orange-500/25 border border-orange-400/40"
-                          : "text-slate-300 hover:text-white hover:bg-white/10 border border-transparent"
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all",
-                          isActive
-                            ? "bg-white/20 text-white shadow-xs"
-                            : "bg-white/5 text-slate-400 group-hover:text-white group-hover:bg-white/15"
-                        )}
-                      >
-                        <Icon size={16} />
-                      </div>
-
-                      {/* Label (hidden in collapsed mode on desktop) */}
-                      <span className={cn("truncate flex-1 transition-opacity", isCollapsed && "lg:hidden")}>
-                        {item.label}
-                      </span>
-
-                      {/* Active indicator dot */}
-                      {isActive && (
-                        <div
+                      return (
+                        <Link
+                          key={item.href}
+                          href={targetHref}
+                          onClick={() => onClose?.()}
+                          title={item.label}
                           className={cn(
-                            "w-1.5 h-1.5 rounded-full bg-white shrink-0 shadow-[0_0_6px_rgba(255,255,255,0.8)]",
-                            isCollapsed && "lg:hidden"
+                            "flex items-center rounded-xl text-sm font-medium transition-all duration-150 group relative",
+                            isCollapsed
+                              ? "px-3 py-2 lg:justify-center lg:px-0 lg:py-2"
+                              : "gap-3 px-3 py-2",
+                            isActive
+                              ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold shadow-lg shadow-orange-500/25 border border-orange-400/40"
+                              : "text-slate-300 hover:text-white hover:bg-white/10 border border-transparent"
                           )}
-                        />
-                      )}
-                    </Link>
-                  );
-                })}
-              </nav>
+                        >
+                          <div
+                            className={cn(
+                              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all",
+                              isActive
+                                ? "bg-white/20 text-white shadow-xs"
+                                : "bg-white/5 text-slate-400 group-hover:text-white group-hover:bg-white/15"
+                            )}
+                          >
+                            <Icon size={16} />
+                          </div>
+
+                          {/* Label (hidden in collapsed mode on desktop) */}
+                          <span className={cn("truncate flex-1 transition-opacity", isCollapsed && "lg:hidden")}>
+                            {item.label}
+                          </span>
+
+                          {/* Active indicator dot */}
+                          {isActive && (
+                            <div
+                              className={cn(
+                                "w-1.5 h-1.5 rounded-full bg-white shrink-0 shadow-[0_0_6px_rgba(255,255,255,0.8)]",
+                                isCollapsed && "lg:hidden"
+                              )}
+                            />
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                </div>
+              ))}
             </div>
           </div>
         </ScrollArea>

@@ -32,8 +32,6 @@ export function IncomeAreaChart({ data }: { data: MonthData[] }) {
     );
   }
 
-  const max = Math.max(...data.map((d) => d.amount));
-
   return (
     <div className="h-[200px] w-full">
       <ResponsiveContainer width="100%" height="100%">
