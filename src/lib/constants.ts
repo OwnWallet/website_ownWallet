@@ -499,6 +499,144 @@ export function getAllTags(): string[] {
   return Array.from(set);
 }
 
+/**
+ * Đóng gói ghi chú giao dịch lưu trữ kèm Tag và Người nợ (nếu có)
+ * Ví dụ: formatTransactionNote({ tag: "Cà phê", description: "Ăn trưa với khách", debtPerson: "Quân" })
+ * -> "[Tag: Cà phê] [Người: Quân] Ăn trưa với khách"
+ */
+export function formatTransactionNote(opts: {
+  tag?: string | null;
+  description?: string | null;
+  debtPerson?: string | null;
+}): string | null {
+  const parts: string[] = [];
+  const tag = (opts.tag || "").trim();
+  const person = (opts.debtPerson || "").trim();
+  const desc = (opts.description || "").trim();
+
+  if (tag) {
+    parts.push(`[Tag: ${tag}]`);
+  }
+  if (person) {
+    parts.push(`[Người: ${person}]`);
+  }
+  if (desc) {
+    parts.push(desc);
+  }
+
+  const result = parts.join(" ").trim();
+  return result || null;
+}
+
+/**
+ * Bóc tách ghi chú giao dịch thành Tag, Người nợ và Mô tả sạch (độc lập nhau).
+ */
+export function parseTransactionNote(
+  rawNote?: string | null,
+  categoryName?: string | null
+): {
+  tag: string | null;
+  description: string;
+  debtPerson: string | null;
+} {
+  if (!rawNote) {
+    return { tag: null, description: "", debtPerson: null };
+  }
+
+  let text = rawNote.trim();
+
+  // 1. Trích xuất [Tag: ...]
+  let explicitTag: string | null = null;
+  const tagMatch = text.match(/\[Tag:\s*([^\]]+)\]/i);
+  if (tagMatch) {
+    explicitTag = tagMatch[1].trim();
+    text = text.replace(tagMatch[0], "").trim();
+  }
+
+  // 2. Trích xuất [Người: ...] hoặc [Đối tác: ...]
+  let debtPerson: string | null = null;
+  const personMatch = text.match(/\[(?:Người|Đối tác):\s*([^\]]+)\]/i);
+  if (personMatch) {
+    debtPerson = personMatch[1].trim();
+    text = text.replace(personMatch[0], "").trim();
+  }
+
+  // Dọn dẹp các system tags khác như [Đã vào sổ nợ], [tx_id:...], [SCHEDULE:...]
+  text = text
+    .replace(/\[Đã vào sổ nợ\]/gi, "")
+    .replace(/\[tx_id:[^\]]+\]/gi, "")
+    .replace(/\[SCHEDULE:\{.*?\}\]/gi, "")
+    .replace(/\[skip_debt_sync\]/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  // 3. Nếu chưa có explicitTag, thử nhận diện từ extractTagFromNote
+  const resolvedTag = explicitTag || extractTagFromNote(rawNote, categoryName);
+
+  return {
+    tag: resolvedTag || null,
+    description: text,
+    debtPerson: debtPerson || null,
+  };
+}
+
+export interface TagSpendingItem {
+  name: string;
+  categoryName: string;
+  categoryColor: string;
+  value: number;
+  count: number;
+  percentage: number;
+}
+
+/**
+ * Tổng hợp thống kê chi tiêu theo Tag chi tiết
+ */
+export function aggregateTagSpending(
+  transactions: {
+    note?: string | null;
+    description?: string | null;
+    amount: number | string | { toString: () => string };
+    type: string;
+    category?: { name: string; color: string } | null;
+  }[],
+  totalExpense: number
+): TagSpendingItem[] {
+  const map = new Map<string, { value: number; count: number; categoryName: string; categoryColor: string }>();
+
+  for (const tx of transactions) {
+    if (tx.type !== "EXPENSE") continue;
+    const amt = Number(tx.amount);
+    if (isNaN(amt) || amt <= 0) continue;
+
+    const catName = tx.category?.name || "Chi tiêu khác";
+    const catColor = tx.category?.color || "#ea580c";
+    const parsed = parseTransactionNote(tx.note || tx.description, catName);
+    const tagName = parsed.tag || "Chưa gắn tag";
+
+    const curr = map.get(tagName) || {
+      value: 0,
+      count: 0,
+      categoryName: catName,
+      categoryColor: catColor,
+    };
+    curr.value += amt;
+    curr.count += 1;
+    map.set(tagName, curr);
+  }
+
+  return Array.from(map.entries())
+    .map(([name, data]) => ({
+      name,
+      categoryName: data.categoryName,
+      categoryColor: data.categoryColor,
+      value: data.value,
+      count: data.count,
+      percentage: totalExpense > 0 ? Math.round((data.value / totalExpense) * 100) : 0,
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
 // ─────────────────────────────────────────
 // Navigation sidebar items
 // ─────────────────────────────────────────

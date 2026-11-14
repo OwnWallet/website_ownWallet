@@ -5,7 +5,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { TransactionSchema } from "@/schemas/transaction";
 import { toInstant } from "@/lib/utils";
-import { isDebtCategory, formatDebtNote, analyzeDebtTransaction } from "@/lib/debt-sync";
+import { isDebtCategory, analyzeDebtTransaction } from "@/lib/debt-sync";
+import { formatTransactionNote } from "@/lib/constants";
 import { applyDebtSync, reverseDebtLogsForTx, updateDebtLogsForTxEdit } from "@/lib/debt-sync-db";
 
 async function getUserId(): Promise<string> {
@@ -36,7 +37,8 @@ export async function createTransaction(formData: FormData) {
   }
 
   const data = parsed.data;
-  let note = data.note || data.description || null;
+  const debtPerson = data.debtPerson?.toString()?.trim() || "";
+  const syncToDebt = data.syncToDebt === true;
 
   // Xác thực quyền sở hữu danh mục
   const category = await db.orm.public.Category.where({ id: data.categoryId, userId }).first();
@@ -44,13 +46,12 @@ export async function createTransaction(formData: FormData) {
     return { error: { categoryId: ["Danh mục không tồn tại hoặc không thuộc quyền sở hữu"] } };
   }
 
-  // Xử lý người sở hữu khoản nợ nếu là danh mục Vay / Cho vay
-  const debtPerson = data.debtPerson?.toString()?.trim() || "";
-  const syncToDebt = data.syncToDebt === true;
-
-  if (isDebtCategory(category) && debtPerson) {
-    note = formatDebtNote(debtPerson, note);
-  }
+  // Đóng gói ghi chú chuẩn hóa (tag riêng, mô tả riêng, người nợ riêng)
+  const note = formatTransactionNote({
+    tag: data.tag,
+    description: data.description || data.note,
+    debtPerson: isDebtCategory(category) && debtPerson ? debtPerson : null,
+  });
 
   // Xác thực quyền sở hữu ví (nếu có chọn ví)
   if (data.walletId) {
@@ -142,7 +143,6 @@ export async function updateTransaction(id: string, formData: FormData) {
   }
 
   const data = parsed.data;
-  let note = data.note || data.description || null;
 
   // Kiểm tra giao dịch tồn tại và thuộc quyền sở hữu của user
   const existingTx = await db.orm.public.Transaction.where({ id, userId }).first();
@@ -157,9 +157,11 @@ export async function updateTransaction(id: string, formData: FormData) {
   }
 
   const debtPerson = data.debtPerson?.toString()?.trim() || "";
-  if (isDebtCategory(category) && debtPerson) {
-    note = formatDebtNote(debtPerson, note);
-  }
+  const note = formatTransactionNote({
+    tag: data.tag,
+    description: data.description || data.note,
+    debtPerson: isDebtCategory(category) && debtPerson ? debtPerson : null,
+  });
 
   // Xác thực quyền sở hữu ví (nếu có chọn ví)
   if (data.walletId) {

@@ -6,6 +6,7 @@ import { ReportClient } from "./report-client";
 import { getWallets } from "@/actions/wallets";
 import { toInstant, toDate, getFilterDateRange, getVNDateParts } from "@/lib/utils";
 import { isTransfer } from "@/lib/finance";
+import { aggregateTagSpending } from "@/lib/constants";
 
 interface ReportsPageProps {
   searchParams: Promise<{
@@ -168,6 +169,24 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
     const monthlyTrend = Object.values(monthlyMap);
 
+    // Tổng hợp chi tiêu theo Tag chi tiết trong kỳ
+    const currentPeriodExpenses = txs
+      .filter((tx: any) => {
+        if (isAllWallets && isTransfer(tx)) return false;
+        if (tx.type !== "EXPENSE") return false;
+        const recMs = toDate(tx.recordedAt).getTime();
+        return recMs >= startCurrentMs && recMs <= endCurrentMs;
+      })
+      .map((tx: any) => {
+        const cat = catMap.get(tx.categoryId);
+        return {
+          ...tx,
+          category: cat ? { name: cat.name, color: cat.color } : null,
+        };
+      });
+
+    const tagSpending = aggregateTagSpending(currentPeriodExpenses, currentExpense);
+
     return (
       <ReportClient
         currentMonthName={filterDate.label}
@@ -178,6 +197,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         openingCumulativeBalance={openingCumulativeBalance}
         closingCumulativeBalance={closingCumulativeBalance}
         categorySpending={categorySpending}
+        tagSpending={tagSpending}
         monthlyTrend={monthlyTrend}
         currentMonth={filterDate.month}
         currentYear={filterDate.year}

@@ -22,7 +22,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Lightbulb,
+  Tag as TagIcon,
 } from "lucide-react";
+import type { TagSpendingItem } from "@/lib/constants";
 
 interface CategorySpend {
   name: string;
@@ -46,6 +48,7 @@ interface Props {
   openingCumulativeBalance: number;
   closingCumulativeBalance: number;
   categorySpending: CategorySpend[];
+  tagSpending?: TagSpendingItem[];
   monthlyTrend: MonthItem[];
   currentMonth: number | "ALL";
   currentYear: number;
@@ -61,6 +64,7 @@ export function ReportClient({
   openingCumulativeBalance,
   closingCumulativeBalance,
   categorySpending,
+  tagSpending = [],
   monthlyTrend,
   currentMonth: _currentMonth,
   currentYear,
@@ -69,6 +73,7 @@ export function ReportClient({
   const [downloading, setDownloading] = useState(false);
   const [analyzingAi, setAnalyzingAi] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<AiFinancialAdvice | null>(null);
+  const [breakdownView, setBreakdownView] = useState<"category" | "tag">("category");
 
   const netCurrent = currentMonthIncome - currentMonthExpense;
   const netLast = lastMonthIncome - lastMonthExpense;
@@ -126,6 +131,11 @@ export function ReportClient({
         topCategories: categorySpending.slice(0, 5).map((c) => ({
           name: c.name,
           value: c.value,
+        })),
+        topTags: tagSpending.slice(0, 5).map((t) => ({
+          name: t.name,
+          categoryName: t.categoryName,
+          value: t.value,
         })),
       });
       if (res?.success && res.advice) {
@@ -361,39 +371,153 @@ export function ReportClient({
 
       {/* Main Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Category Breakdown (Pie) */}
+        {/* Category & Tag Breakdown */}
         <div className="lg:col-span-5 card p-5 space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div>
               <h2 className="text-base font-bold flex items-center gap-2">
-                <PieIcon size={16} className="text-primary" />
-                Cơ cấu chi tiêu theo danh mục
+                {breakdownView === "category" ? (
+                  <PieIcon size={16} className="text-primary" />
+                ) : (
+                  <TagIcon size={16} className="text-primary" />
+                )}
+                {breakdownView === "category"
+                  ? "Cơ cấu theo danh mục"
+                  : "Chi tiêu theo Tag chi tiết"}
               </h2>
               <p className="text-xs text-muted mt-0.5">{currentMonthName}</p>
             </div>
+
+            {/* View Switcher Toggle */}
+            <div className="inline-flex items-center p-1 bg-slate-100 rounded-lg border border-border text-xs self-start sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setBreakdownView("category")}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  breakdownView === "category"
+                    ? "bg-primary text-white font-semibold shadow-xs"
+                    : "text-muted-foreground hover:text-foreground font-medium"
+                }`}
+              >
+                Theo Danh mục
+              </button>
+              <button
+                type="button"
+                onClick={() => setBreakdownView("tag")}
+                className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                  breakdownView === "tag"
+                    ? "bg-primary text-white font-semibold shadow-xs"
+                    : "text-muted-foreground hover:text-foreground font-medium"
+                }`}
+              >
+                <span>Theo Tag</span>
+                {tagSpending.length > 0 && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      breakdownView === "tag"
+                        ? "bg-white/25 text-white"
+                        : "bg-slate-200 text-slate-700"
+                    }`}
+                  >
+                    {tagSpending.length}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
 
-          <CategoryPieChart data={categorySpending} />
+          {breakdownView === "category" ? (
+            <>
+              <CategoryPieChart data={categorySpending} />
 
-          {/* Category Legends / Breakdown Table */}
-          {categorySpending.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-border max-h-48 overflow-y-auto pr-1">
-              {categorySpending.map((cat) => (
-                <div key={cat.name} className="flex justify-between items-center text-xs">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                    <span className="text-foreground font-medium">
-                      {cat.icon} {cat.name}
-                    </span>
-                  </div>
-                  <span className="font-bold text-foreground">
-                    {formatCurrency(cat.value)}
-                  </span>
+              {/* Category Legends / Breakdown Table */}
+              {categorySpending.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-border max-h-52 overflow-y-auto pr-1">
+                  {categorySpending.map((cat) => (
+                    <div key={cat.name} className="flex justify-between items-center text-xs">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        <span className="text-foreground font-medium">
+                          {cat.icon} {cat.name}
+                        </span>
+                      </div>
+                      <span className="font-bold text-foreground tabular-nums">
+                        {formatCurrency(cat.value)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+            </>
+          ) : (
+            <div className="space-y-3 pt-1">
+              {tagSpending.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground text-xs">
+                  <TagIcon size={28} className="mx-auto mb-2 opacity-40 text-muted-foreground" />
+                  <p className="font-medium text-foreground">Chưa có dữ liệu tag chi tiêu trong kỳ này.</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Gắn tag khi tạo giao dịch (ví dụ: #Cà phê, #Xăng xe) để theo dõi thống kê chi tiết.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground font-medium pb-2 border-b border-border">
+                    <span>Tag & Danh mục cha</span>
+                    <span>Số tiền (% tổng chi)</span>
+                  </div>
+
+                  <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                    {tagSpending.map((item) => (
+                      <div key={item.name} className="space-y-1.5 group">
+                        <div className="flex justify-between items-start text-xs">
+                          <div className="min-w-0 flex-1 pr-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                                #{item.name}
+                              </span>
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
+                                style={{
+                                  backgroundColor: `${item.categoryColor}15`,
+                                  color: item.categoryColor,
+                                  border: `1px solid ${item.categoryColor}30`,
+                                }}
+                              >
+                                {item.categoryName}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                ({item.count} GD)
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="font-bold text-foreground tabular-nums block">
+                              {formatCurrency(item.value)}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground tabular-nums font-medium">
+                              {item.percentage}%
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{
+                              width: `${Math.min(item.percentage, 100)}%`,
+                              backgroundColor: item.categoryColor || "var(--brand)",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

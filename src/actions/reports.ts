@@ -19,6 +19,7 @@ export interface AiFinancialReportInput {
   lastExpense: number;
   closingBalance: number;
   topCategories: { name: string; value: number }[];
+  topTags?: { name: string; categoryName: string; value: number }[];
 }
 
 export interface AiFinancialAdvice {
@@ -93,6 +94,16 @@ function buildFallbackAdvice(input: AiFinancialReportInput): AiFinancialAdvice {
     }
   }
 
+  if (input.topTags && input.topTags.length > 0 && currentExpense > 0) {
+    const topTag = input.topTags[0];
+    const topTagShare = Math.round((topTag.value / currentExpense) * 100);
+    if (topTagShare >= 15 && topTag.name !== "Chưa gắn tag") {
+      actionableTips.push(
+        `Khoản chi tiêu cho tag "#${topTag.name}" (${topTag.categoryName}) chiếm ${topTagShare}% tổng chi (${formatCurrency(topTag.value)}). Cân nhắc rà soát và tối ưu các khoản phát sinh này.`
+      );
+    }
+  }
+
   if (savingsRate < 20 && currentIncome > 0) {
     actionableTips.push(
       `Áp dụng quy tắc 50/30/20: trích tự động tối thiểu 20% thu nhập (${formatCurrency(Math.round(currentIncome * 0.2))}) vào Mục tiêu Tiết kiệm ngay khi nhận lương.`
@@ -135,11 +146,20 @@ export async function generateAiFinancialReport(
         .map((c) => `${c.name}: ${formatCurrency(c.value)}`)
         .join(", ") || "Chưa có chi tiêu";
 
+    const topTagText =
+      input.topTags && input.topTags.length > 0
+        ? input.topTags
+            .slice(0, 5)
+            .map((t) => `#${t.name} (${t.categoryName}): ${formatCurrency(t.value)}`)
+            .join(", ")
+        : "Chưa phân loại tag chi tiết";
+
     const prompt = `Bạn là Chuyên gia Cố vấn Tài chính Cá nhân (CFP). Hãy phân tích số liệu báo cáo tài chính kỳ "${input.periodName}" của người dùng Việt Nam sau đây và trả về JSON thuần (không bọc markdown):
 - Thu nhập kỳ này: ${formatCurrency(input.currentIncome)} (Kỳ trước: ${formatCurrency(input.lastIncome)})
 - Chi tiêu kỳ này: ${formatCurrency(input.currentExpense)} (Kỳ trước: ${formatCurrency(input.lastExpense)})
 - Số dư lũy kế cuối kỳ: ${formatCurrency(input.closingBalance)}
 - Top danh mục chi tiêu lớn nhất: ${topCatText}
+- Top tag chi tiêu chi tiết: ${topTagText}
 
 Trả về đúng cấu trúc JSON:
 {
