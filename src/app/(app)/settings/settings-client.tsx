@@ -33,7 +33,7 @@ import {
   type UpdateProfileInput,
   type CreateCategoryInput,
 } from "@/schemas/settings";
-import { CATEGORY_TYPE_COLORS, CATEGORY_TYPE_LABELS } from "@/lib/constants";
+import { CATEGORY_TYPE_COLORS, CATEGORY_TYPE_LABELS, getCategoryTags } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import {
   User,
@@ -51,6 +51,9 @@ import {
   EyeOff,
   ExternalLink,
   Cpu,
+  Tag,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface Props {
@@ -174,6 +177,7 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [categorySuccess, setCategorySuccess] = useState(false);
   const [deleteCatTarget, setDeleteCatTarget] = useState<{ id: string; name: string } | null>(null);
+  const [expandedCatId, setExpandedCatId] = useState<string | null>(null);
 
   const {
     register: regCat,
@@ -726,28 +730,63 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
                 {CATEGORY_TYPE_LABELS[type as keyof typeof CATEGORY_TYPE_LABELS]} ({cats.length})
               </h3>
               <div className="flex flex-wrap gap-2.5">
-                {cats.map((cat) => (
-                  <div
-                    key={cat.id}
-                    className="flex items-center gap-2 bg-elevated border border-border-strong px-3 py-1.5 rounded-xl text-xs group hover:border-border transition-colors"
-                  >
-                    <span className="text-base">{cat.icon || "📁"}</span>
-                    <span className="font-semibold text-foreground">{cat.name}</span>
-                    <span
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                    {!cat.isDefault && (
-                      <button
-                        onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                        title="Xóa danh mục tùy chỉnh"
-                        className="ml-1 text-muted hover:text-danger p-0.5 rounded transition-colors cursor-pointer"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </div>
-                ))}
+                {cats.map((cat) => {
+                  const tags = getCategoryTags(cat.name);
+                  const isExpanded = expandedCatId === cat.id;
+                  return (
+                    <div
+                      key={cat.id}
+                      className="bg-elevated border border-border-strong rounded-xl text-xs transition-all overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 px-3 py-2">
+                        <span className="text-base">{cat.icon || "📁"}</span>
+                        <span className="font-semibold text-foreground">{cat.name}</span>
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        {tags.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedCatId(isExpanded ? null : cat.id)}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-muted/80 text-muted-foreground hover:text-foreground hover:bg-muted border border-border cursor-pointer transition-colors"
+                            title="Xem các tag chi tiết"
+                          >
+                            <Tag size={10} className="text-primary" />
+                            <span>{tags.length} tag</span>
+                            {isExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                          </button>
+                        )}
+                        {!cat.isDefault && (
+                          <button
+                            onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                            title="Xóa danh mục tùy chỉnh"
+                            className="ml-auto text-muted hover:text-danger p-0.5 rounded transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Expanded Tag List */}
+                      {isExpanded && tags.length > 0 && (
+                        <div className="px-3 pb-2.5 pt-1.5 border-t border-border/60 bg-muted/30">
+                          <p className="text-[11px] text-muted-foreground mb-1.5 font-medium">Tag gợi ý chi tiết:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-md bg-card border border-border text-foreground font-medium"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

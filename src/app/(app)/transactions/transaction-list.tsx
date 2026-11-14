@@ -50,6 +50,7 @@ import {
 import { WalletBadge } from "@/components/ui/wallet-badge";
 import { EvidenceModal } from "@/components/ui/evidence-modal";
 import { isDebtCategory, extractDebtPerson } from "@/lib/debt-sync";
+import { extractTagFromNote } from "@/lib/constants";
 
 interface Category {
  id: string;
@@ -830,6 +831,26 @@ export function TransactionList({
                           {tx.category?.name}
                         </span>
 
+                        {/* Detected Detailed Tag */}
+                        {(() => {
+                          const detectedTag = extractTagFromNote(tx.note || tx.description, tx.category?.name);
+                          if (!detectedTag) return null;
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearch(detectedTag);
+                              }}
+                              className="inline-flex items-center gap-1 font-medium px-2 py-0.5 rounded-full text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors cursor-pointer"
+                              title={`Lọc theo tag "${detectedTag}"`}
+                            >
+                              <Tag size={10} className="text-primary" />
+                              #{detectedTag}
+                            </button>
+                          );
+                        })()}
+
                         {/* Debt Person Badge */}
                         {(() => {
                           const isDebt = isDebtCategory(tx.category);
@@ -1014,6 +1035,24 @@ export function TransactionList({
             >
               {tx.category?.name}
             </span>
+            {(() => {
+              const detectedTag = extractTagFromNote(tx.note || tx.description, tx.category?.name);
+              if (!detectedTag) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSearch(detectedTag);
+                  }}
+                  className="inline-flex items-center gap-1 font-medium px-2 py-0.5 rounded-full text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors cursor-pointer"
+                  title={`Lọc theo tag "${detectedTag}"`}
+                >
+                  <Tag size={10} className="text-primary" />
+                  #{detectedTag}
+                </button>
+              );
+            })()}
             {(() => {
               const isDebt = isDebtCategory(tx.category);
               const { person } = extractDebtPerson(tx.note || tx.description);
