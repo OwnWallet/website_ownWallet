@@ -10,18 +10,32 @@ import { createTransaction } from "@/actions/transactions";
 import { TransactionSchema, type TransactionInput } from "@/schemas/transaction";
 import { EvidenceUpload } from "@/components/ui/evidence-upload";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
-import { isDebtCategory } from "@/lib/debt-sync";
+import { isDebtCategory, analyzeDebtTransaction } from "@/lib/debt-sync";
+import { formatCurrency, formatDate } from "@/lib/utils";
+
+export interface OpenDebtOption {
+  id: string;
+  person: string;
+  amount: number;
+  paidAmount: number;
+  direction: "OWE" | "OWED";
+  createdAt: string;
+}
 
 interface Props {
   categories: { id: string; name: string; type: string; color: string; icon: string | null }[];
   wallets?: { id: string; name: string; bankName?: string | null; isDefault?: boolean }[];
+  openDebts?: OpenDebtOption[];
 }
 
-export function NewTransactionForm({ categories, wallets = [] }: Props) {
+export function NewTransactionForm({ categories, wallets = [], openDebts = [] }: Props) {
   const router = useRouter();
   const [txType, setTxType] = useState<"EXPENSE" | "INCOME">("EXPENSE");
   const [evidenceUrl, setEvidenceUrl] = useState<string | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
+  // Gộp nợ là tùy chọn: mặc định tạo khoản nợ mới
+  const [debtMode, setDebtMode] = useState<"NEW" | "MERGE">("NEW");
+  const [targetDebtId, setTargetDebtId] = useState<string>("");
 
   const defaultWallet = wallets.find((w) => w.isDefault) || wallets[0];
 
@@ -45,6 +59,23 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
   const selectedCatId = useWatch({ control, name: "categoryId" });
   const selectedCat = categories.find((c) => c.id === selectedCatId);
   const isDebt = isDebtCategory(selectedCat);
+  const debtPersonVal = (useWatch({ control, name: "debtPerson" }) || "").trim();
+  const syncToDebtVal = useWatch({ control, name: "syncToDebt" });
+  const descriptionVal = useWatch({ control, name: "description" });
+
+  const debtAnalysis = isDebt ? analyzeDebtTransaction(selectedCat, txType, descriptionVal || "") : null;
+  // Khoản nợ chưa tất toán cùng chiều; ưu tiên người trùng tên lên đầu
+  const candidateDebts = debtAnalysis
+    ? openDebts
+        .filter((d) => d.direction === debtAnalysis.direction)
+        .sort((a, b) => {
+          const p = debtPersonVal.toLowerCase();
+          const am = a.person.trim().toLowerCase() === p ? 0 : 1;
+          const bm = b.person.trim().toLowerCase() === p ? 0 : 1;
+          if (am !== bm) return am - bm;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        })
+    : [];
 
   const filteredCats = categories.filter((c) => {
     if (c.type === txType) return true;
@@ -60,6 +91,10 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
   });
 
   async function onSubmit(data: TransactionInput) {
+    if (isDebt && (data.syncToDebt ?? true) && debtMode === "MERGE" && !debtAnalysis?.isRepayment && !targetDebtId) {
+      toast.warning("Vui lòng chọn khoản nợ cần gộp, hoặc chọn \"Tạo khoản nợ mới\"");
+      return;
+    }
     const formData = new FormData();
     formData.append("amount", String(data.amount));
     formData.append("type", data.type);
@@ -67,6 +102,10 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
     formData.append("categoryId", data.categoryId);
     if (data.debtPerson) formData.append("debtPerson", data.debtPerson);
     formData.append("syncToDebt", String(data.syncToDebt ?? true));
+    if (isDebt) {
+      formData.append("debtMode", debtMode);
+      if (targetDebtId) formData.append("targetDebtId", targetDebtId);
+    }
     if (data.description || data.note) {
       formData.append("note", (data.description || data.note)!);
       formData.append("description", (data.description || data.note)!);
@@ -349,10 +388,79 @@ export function NewTransactionForm({ categories, wallets = [] }: Props) {
                     Tự động đồng bộ ngay vào Sổ nợ
                   </span>
                   <span className="text-[11px] text-muted-foreground block leading-tight">
-                    Hệ thống sẽ đối chiếu: cộng dồn vào nợ cũ nếu người này đã có nợ, hoặc tạo nợ mới nếu chưa có.
+                    Ghi theo đúng ngày giao dịch. Bạn chọn tạo khoản nợ mới hoặc gộp vào khoản nợ cũ bên dưới.
                   </span>
                 </div>
               </label>
+
+              {(syncToDebtVal ?? true) !== false && debtAnalysis && (
+                debtAnalysis.isRepayment ? (
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-foreground">
+                      Ghi nhận trả nợ vào khoản
+                    </label>
+                    <select
+                      value={targetDebtId}
+                      onChange={(e) => setTargetDebtId(e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="">Tự động: khoản chưa trả cũ nhất của người này</option>
+                      {candidateDebts.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.person} · {formatDate(d.createdAt)} · còn {formatCurrency(d.amount - d.paidAmount)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["NEW", "MERGE"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => {
+                            setDebtMode(mode);
+                            if (mode === "NEW") setTargetDebtId("");
+                          }}
+                          className={`text-xs font-semibold rounded-lg border px-2 py-2 cursor-pointer transition-colors ${
+                            debtMode === mode
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border text-muted-foreground hover:bg-muted/40"
+                          }`}
+                        >
+                          {mode === "NEW" ? "🆕 Tạo khoản nợ mới" : "➕ Gộp vào khoản nợ cũ"}
+                        </button>
+                      ))}
+                    </div>
+                    {debtMode === "MERGE" && (
+                      candidateDebts.length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground">
+                          Chưa có khoản nợ nào đang mở cùng chiều để gộp — giao dịch sẽ cần tạo khoản nợ mới.
+                        </p>
+                      ) : (
+                        <>
+                          <select
+                            value={targetDebtId}
+                            onChange={(e) => setTargetDebtId(e.target.value)}
+                            style={inputStyle}
+                          >
+                            <option value="">-- Chọn khoản nợ cần gộp --</option>
+                            {candidateDebts.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.person} · {formatDate(d.createdAt)} · nợ {formatCurrency(d.amount)} (còn {formatCurrency(d.amount - d.paidAmount)})
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[11px] text-muted-foreground leading-tight">
+                            Số tiền sẽ được cộng vào khoản đã chọn và lưu thành một dòng lịch sử trong khoản nợ đó.
+                          </p>
+                        </>
+                      )
+                    )}
+                  </div>
+                )
+              )}
             </div>
           )}
 

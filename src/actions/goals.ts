@@ -18,9 +18,10 @@ export async function createGoal(formData: FormData) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   await db.orm.public.Goal.create({
-    ...parsed.data,
+    name: parsed.data.name,
     targetAmount: String(parsed.data.targetAmount),
     deadline: parsed.data.deadline ? toInstant(parsed.data.deadline) : null,
+    note: parsed.data.note ?? null,
     userId,
   });
   revalidatePath("/goals");

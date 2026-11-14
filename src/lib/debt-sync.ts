@@ -26,6 +26,34 @@ export function extractSyncedTxIds(note?: string | null): Set<string> {
   return set;
 }
 
+/** Các mệnh đề do hệ thống tự ghi vào Debt.note ở phiên bản cũ (nay đã chuyển sang DebtLog) */
+const SYSTEM_NOTE_SEGMENT =
+  /^(Tạo từ GD ngày|Gộp thêm từ GD ngày|Thanh toán từ GD ngày|Ghi nhận trả nợ từ GD ngày|Đồng bộ (gộp )?từ GD ngày|Gộp thêm[:\s+])/i;
+const SYNC_TAG_GLOBAL = /\[tx_id:\s*[a-zA-Z0-9_-]+\]/g;
+const SCHEDULE_TAG = /\[SCHEDULE:\{.*?\}\]/; // khớp với SCHEDULE_TAG_REGEX trong debt-schedule.ts
+
+/**
+ * Loại bỏ các mệnh đề lịch sử / tag đồng bộ do hệ thống tự nối vào Debt.note
+ * (VD: "| Gộp thêm từ GD ngày 01/10/2026: +2.000.000 ₫ [tx_id:abc]"),
+ * chỉ giữ lại ghi chú người dùng tự nhập và tag [SCHEDULE:...].
+ */
+export function stripDebtSystemNotes(note?: string | null): string {
+  if (!note) return "";
+  const scheduleMatch = note.match(SCHEDULE_TAG);
+  const withoutSchedule = scheduleMatch ? note.replace(scheduleMatch[0], " ") : note;
+
+  const kept = withoutSchedule
+    .split("|")
+    .map((seg) => seg.trim())
+    .filter((seg) => seg.length > 0 && !SYSTEM_NOTE_SEGMENT.test(seg))
+    .map((seg) => seg.replace(SYNC_TAG_GLOBAL, "").replace(/\s{2,}/g, " ").trim())
+    .filter((seg) => seg.length > 0);
+
+  const userText = kept.join(" | ");
+  if (!scheduleMatch) return userText;
+  return userText ? `${userText} ${scheduleMatch[0]}` : scheduleMatch[0];
+}
+
 /**
  * Kiểm tra xem giao dịch này đã được đưa vào sổ nợ hay chưa.
  * Nguồn sự thật chính: note của Debt records (tag chuẩn).
