@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { CategoryPieChart } from "@/components/ui/CategoryPieChart";
 import { MonthComparisonChart } from "@/components/ui/MonthComparisonChart";
 import { formatCurrency, formatMetric } from "@/lib/utils";
+import { pctChange } from "@/lib/finance";
 import {
   exportTransactionsCSV,
   generateAiFinancialReport,
@@ -81,15 +82,10 @@ export function ReportClient({
   const prevShortLabel = isYearly ? `Năm ${currentYear - 1}` : `T${prevMonthNum}`;
   const currShortLabel = isYearly ? `Năm ${currentYear}` : `T${_currentMonth}`;
 
-  const incomeChange =
-    lastMonthIncome > 0
-      ? formatMetric(((currentMonthIncome - lastMonthIncome) / lastMonthIncome) * 100)
-      : null;
-
-  const expenseChange =
-    lastMonthExpense > 0
-      ? formatMetric(((currentMonthExpense - lastMonthExpense) / lastMonthExpense) * 100)
-      : null;
+  // Keep the change as a number; format only when rendering (formatMetric returns
+  // a vi-VN string like "12,5", and Number("12,5") is NaN).
+  const incomeChange = pctChange(currentMonthIncome, lastMonthIncome);
+  const expenseChange = pctChange(currentMonthExpense, lastMonthExpense);
 
   const comparePeriodLabel = isYearly ? "năm trước" : "tháng trước";
 
@@ -287,11 +283,11 @@ export function ReportClient({
             {incomeChange !== null ? (
               <span
                 className={`font-semibold ${
-                  Number(incomeChange) >= 0 ? "text-emerald-600" : "text-rose-600"
+                  incomeChange >= 0 ? "text-emerald-600" : "text-rose-600"
                 }`}
               >
-                {Number(incomeChange) >= 0 ? "+" : ""}
-                {incomeChange}%
+                {incomeChange >= 0 ? "+" : ""}
+                {formatMetric(incomeChange)}%
               </span>
             ) : (
               <span className="text-muted-foreground">N/A</span>
@@ -313,11 +309,11 @@ export function ReportClient({
             {expenseChange !== null ? (
               <span
                 className={`font-semibold ${
-                  Number(expenseChange) <= 0 ? "text-emerald-600" : "text-rose-600"
+                  expenseChange <= 0 ? "text-emerald-600" : "text-rose-600"
                 }`}
               >
-                {Number(expenseChange) > 0 ? "+" : ""}
-                {expenseChange}%
+                {expenseChange > 0 ? "+" : ""}
+                {formatMetric(expenseChange)}%
               </span>
             ) : (
               <span className="text-muted-foreground">N/A</span>

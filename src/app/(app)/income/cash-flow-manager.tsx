@@ -988,7 +988,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                     <option value="">-- Chưa chỉ định ví --</option>
                     {wallets.map((w: any) => (
                       <option key={w.id} value={w.id}>
-                        {w.name} ({formatCurrency(Number(w.balance))})
+                        {w.name} ({formatCurrency(Number(w.currentBalance ?? w.balance))})
                       </option>
                     ))}
                   </select>
@@ -1174,7 +1174,7 @@ export function CashFlowManager({ sourcesData }: CashFlowManagerProps) {
                   <option value="">-- Chọn ví giao dịch --</option>
                   {wallets.map((w: any) => (
                     <option key={w.id} value={w.id}>
-                      {w.name} ({formatCurrency(Number(w.balance))})
+                      {w.name} ({formatCurrency(Number(w.currentBalance ?? w.balance))})
                     </option>
                   ))}
                 </select>

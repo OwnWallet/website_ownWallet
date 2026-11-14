@@ -1,23 +1,21 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 
+// Enter-only fade: no exit animation, so navigation never waits on the previous page to animate out.
 export function PageWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={pathname}
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0, transitionEnd: { transform: "none" } }}
-        exit={{ opacity: 0, y: -15 }}
-        transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="w-full h-full"
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <motion.div
+      key={pathname}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0, transitionEnd: { transform: "none" } }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
+      className="w-full h-full"
+    >
+      {children}
+    </motion.div>
   );
 }

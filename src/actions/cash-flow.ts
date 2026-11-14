@@ -338,29 +338,32 @@ export async function collectCashFlow(formData: FormData) {
     source.dayOfMonth
   );
 
-  const newBalance = isBill
-    ? Number(wallet.balance ?? 0) - actualAmount
-    : Number(wallet.balance ?? 0) + actualAmount;
-
   await db.transaction(async (tx: any) => {
-    // 1. Tạo Transaction INCOME hoặc EXPENSE (số dư thực tế currentBalance của ví tự động tính qua bảng Transaction)
-    if (categoryId) {
-      await tx.orm.public.Transaction.create({
-        amount: String(actualAmount),
+    // 1. Luôn tạo Transaction INCOME/EXPENSE (currentBalance của ví tự tính qua bảng Transaction).
+    // KHÔNG sửa trực tiếp Wallet.balance — đó là số dư đầu kỳ; sửa sẽ làm lệch số dư lũy kế lịch sử.
+    let resolvedCategoryId = categoryId;
+    if (!resolvedCategoryId) {
+      const created = await tx.orm.public.Category.create({
+        name: isBill ? "Hóa đơn định kỳ" : "Thu nhập định kỳ",
         type: targetTxType,
-        note:
-          parsed.data.note?.trim() ||
-          (isBill ? `Thanh toán hóa đơn định kỳ: ${source.name}` : `Thu từ dòng tiền: ${source.name}`),
-        recordedAt: toInstant(receivedDate),
-        walletId: wallet.id,
-        categoryId,
+        color: isBill ? "#be123c" : "#047857",
+        icon: isBill ? "🧾" : "💰",
         userId,
       });
-    } else {
-      await tx.orm.public.Wallet.where({ id: wallet.id, userId }).update({
-        balance: String(newBalance),
-      });
+      resolvedCategoryId = created.id;
     }
+
+    await tx.orm.public.Transaction.create({
+      amount: String(actualAmount),
+      type: targetTxType,
+      note:
+        parsed.data.note?.trim() ||
+        (isBill ? `Thanh toán hóa đơn định kỳ: ${source.name}` : `Thu từ dòng tiền: ${source.name}`),
+      recordedAt: toInstant(receivedDate),
+      walletId: wallet.id,
+      categoryId: resolvedCategoryId,
+      userId,
+    });
 
     // 3. Cập nhật ngày dự kiến kế tiếp cho CashFlowSource
     if (isCompleted) {

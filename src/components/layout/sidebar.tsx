@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
-import { logout } from "@/actions/auth";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarTimeFilter } from "./SidebarTimeFilter";
 import { SidebarWalletSelector, WalletItem } from "./SidebarWalletSelector";
@@ -19,22 +18,17 @@ import {
   HandCoins,
   Target,
   Settings,
-  LogOut,
   X,
-  Sparkles,
+  FileUp,
   Landmark,
-  PanelLeftClose,
-  PanelLeft,
-  Layers,
 } from "lucide-react";
 
 export const NAV_GROUPS = [
   {
-    title: "Tổng quan",
+    title: "Chung",
     items: [
       { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
       { href: "/reports", label: "Báo cáo & AI", icon: BarChart3 },
-      { href: "/assets", label: "Tổng tài sản", icon: Layers },
     ],
   },
   {
@@ -43,7 +37,7 @@ export const NAV_GROUPS = [
       { href: "/transactions", label: "Sổ giao dịch", icon: ArrowLeftRight },
       { href: "/income", label: "Dòng tiền định kỳ", icon: Banknote },
       { href: "/budget", label: "Ngân sách", icon: Wallet },
-      { href: "/import", label: "Import", icon: Sparkles },
+      { href: "/import", label: "Import sao kê", icon: FileUp },
     ],
   },
   {
@@ -69,7 +63,6 @@ interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   isCollapsed?: boolean;
-  onToggleCollapse?: () => void;
   wallets?: WalletItem[];
   sidebarWidth?: number;
   onWidthChange?: (width: number) => void;
@@ -82,7 +75,6 @@ export function Sidebar({
   isOpen,
   onClose,
   isCollapsed = false,
-  onToggleCollapse,
   wallets = [],
   sidebarWidth = 260,
   onWidthChange,
@@ -228,7 +220,7 @@ export function Sidebar({
               {NAV_GROUPS.map((group) => (
                 <div key={group.title}>
                   <div className={cn("px-2.5 mb-1.5 transition-all", isCollapsed && "lg:hidden")}>
-                    <span className="text-[10px] font-bold text-slate-400/75 uppercase tracking-wider">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                       {group.title}
                     </span>
                   </div>
@@ -248,7 +240,7 @@ export function Sidebar({
                           onClick={() => onClose?.()}
                           title={item.label}
                           className={cn(
-                            "flex items-center rounded-xl text-sm font-medium transition-all duration-150 group relative",
+                            "flex items-center rounded-xl text-sm font-semibold transition-all duration-150 group relative",
                             isCollapsed
                               ? "px-3 py-2 lg:justify-center lg:px-0 lg:py-2"
                               : "gap-3 px-3 py-2",
@@ -291,40 +283,6 @@ export function Sidebar({
             </div>
           </div>
         </ScrollArea>
-
-        {/* Footer with Toggle & Logout (Sticky at bottom) */}
-        <div className="p-2.5 border-t border-white/10 bg-slate-950/40 shrink-0 space-y-1 z-10">
-          {/* Desktop Collapse Toggle Button at bottom */}
-          {onToggleCollapse && (
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              title={isCollapsed ? "Mở rộng thanh bên" : "Thu gọn thanh bên"}
-              className="hidden lg:flex items-center justify-center rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10 transition-all cursor-pointer w-full py-2"
-            >
-              <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0 text-slate-400 group-hover:text-white">
-                {isCollapsed ? <PanelLeft size={14} /> : <PanelLeftClose size={14} />}
-              </div>
-            </button>
-          )}
-
-          {/* Logout button */}
-          <form action={logout}>
-            <button
-              type="submit"
-              title="Đăng xuất"
-              className={cn(
-                "w-full flex items-center rounded-xl text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer py-2",
-                isCollapsed ? "justify-center px-0 lg:py-2" : "gap-2.5 px-3"
-              )}
-            >
-              <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0 text-slate-400 group-hover:text-rose-400">
-                <LogOut size={14} />
-              </div>
-              <span className={cn("truncate", isCollapsed && "lg:hidden")}>Đăng xuất</span>
-            </button>
-          </form>
-        </div>
 
         {/* Resize Handle on Right Edge (Desktop only & when not collapsed) */}
         {!isCollapsed && onWidthChange && (

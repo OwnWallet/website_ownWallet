@@ -171,12 +171,12 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
             <div className="flex items-center gap-2.5 min-w-0">
               <div
                 className={cn(
-                  "w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-[10px] border shadow-2xs shrink-0",
+                  "w-9 h-9 rounded-lg flex items-center justify-center font-extrabold text-xs border shadow-2xs shrink-0",
                   activeBadge.bg
                 )}
               >
                 {selectedWalletId === "ALL" ? (
-                  <Wallet size={15} />
+                  <Wallet size={16} />
                 ) : (
                   <span>{activeBadge.label}</span>
                 )}
@@ -184,11 +184,11 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
 
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-bold text-slate-100 truncate leading-tight">
+                  <p className="text-sm font-bold text-slate-100 truncate leading-tight">
                     {selectedWallet ? selectedWallet.name : "Tất cả tài khoản"}
                   </p>
                 </div>
-                <p className="text-[10px] text-slate-300 truncate leading-tight mt-0.5">
+                <p className="text-xs text-slate-300 truncate leading-tight mt-0.5 font-medium">
                   {selectedWallet?.accountNumber
                     ? `STK: ${maskAccountNumber(selectedWallet.accountNumber)}`
                     : selectedWallet
@@ -207,11 +207,11 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
         <DropdownMenuContent
           align={isCollapsed ? "start" : "start"}
           side={isCollapsed ? "right" : "bottom"}
-          className="w-68 p-1.5 shadow-xl border-border bg-card"
+          className="w-72 p-1.5 shadow-xl border-border bg-card"
         >
           <DropdownMenuLabel className="font-semibold text-xs px-2 py-1.5 text-foreground flex items-center justify-between">
             <span>Chọn tài khoản / thẻ</span>
-            <span className="text-[10px] font-normal text-muted-foreground">
+            <span className="text-xs font-normal text-muted-foreground">
               {wallets.length} tài khoản
             </span>
           </DropdownMenuLabel>
@@ -226,12 +226,12 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
             )}
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-orange-100 border border-orange-200 text-orange-700 flex items-center justify-center shrink-0">
-                <Wallet size={14} />
+              <div className="w-8 h-8 rounded-lg bg-orange-100 border border-orange-200 text-orange-700 flex items-center justify-center shrink-0">
+                <Wallet size={15} />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold truncate leading-tight">Tất cả tài khoản</p>
-                <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                <p className="text-sm font-bold truncate leading-tight">Tất cả tài khoản</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">
                   Xem toàn bộ dòng tiền tổng hợp
                 </p>
               </div>
@@ -262,17 +262,17 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div
                       className={cn(
-                        "w-7 h-7 rounded-lg flex items-center justify-center font-extrabold text-[10px] border shadow-2xs shrink-0",
+                        "w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-xs border shadow-2xs shrink-0",
                         badge.bg
                       )}
                     >
                       {badge.label}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-foreground truncate leading-tight">
+                      <p className="text-sm font-bold text-foreground truncate leading-tight">
                         {wallet.name}
                       </p>
-                      <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
                         {wallet.accountNumber ? `STK: ${maskAccountNumber(wallet.accountNumber)}` : "Tài khoản"}
                         {balance !== undefined && ` · ${formatCurrencyCompact(balance)}`}
                       </p>
@@ -294,14 +294,14 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
               )}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center shrink-0 text-[10px] font-bold">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center shrink-0 text-xs font-bold">
                   ?
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-foreground truncate leading-tight">
+                  <p className="text-sm font-semibold text-foreground truncate leading-tight">
                     Chưa gán tài khoản
                   </p>
-                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">
                     Các giao dịch chưa liên kết ví
                   </p>
                 </div>

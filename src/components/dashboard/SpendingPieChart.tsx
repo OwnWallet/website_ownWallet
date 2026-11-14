@@ -24,7 +24,7 @@ function CustomLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }: an
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
   return (
-    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={700}>
+    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={800}>
       {`${(percent * 100).toFixed(0)}%`}
     </text>
   );
@@ -34,11 +34,11 @@ function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="bg-card border border-border rounded-xl shadow-lg px-3 py-2 text-xs">
+    <div className="bg-card border border-border rounded-xl shadow-lg px-3.5 py-2.5 text-xs sm:text-sm">
       <p className="font-bold text-foreground mb-1">
         {d.icon} {d.name}
       </p>
-      <p className="text-muted-foreground">{formatCurrency(d.value)}</p>
+      <p className="text-muted-foreground tabular-nums font-semibold">{formatCurrency(d.value)}</p>
     </div>
   );
 }
@@ -83,19 +83,19 @@ export function SpendingPieChart({ data, totalExpense }: SpendingPieChartProps) 
       </div>
 
       {/* Legend list */}
-      <div className="space-y-1.5 max-h-[140px] overflow-y-auto">
+      <div className="space-y-2 max-h-[160px] overflow-y-auto">
         {sorted.map((item) => {
           const pct = totalExpense > 0 ? ((item.value / totalExpense) * 100).toFixed(1) : "0";
           return (
-            <div key={item.name} className="flex items-center justify-between gap-2 text-xs">
+            <div key={item.name} className="flex items-center justify-between gap-2 text-xs sm:text-sm">
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                <span className="text-foreground font-medium truncate">
+                <span className="text-foreground font-semibold truncate">
                   {item.icon} {item.name}
                 </span>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-muted-foreground">{pct}%</span>
+              <div className="flex items-center gap-2.5 shrink-0 tabular-nums">
+                <span className="text-muted-foreground font-medium">{pct}%</span>
                 <span className="font-bold text-foreground">{formatCurrencyCompact(item.value)}</span>
               </div>
             </div>

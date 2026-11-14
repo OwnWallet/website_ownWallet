@@ -27,6 +27,16 @@ import {
 import { deleteTransaction } from "@/actions/transactions";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 
 const emptySubscribe = () => () => {};
 function useMounted() {
@@ -96,6 +106,7 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeleteTxId, setPendingDeleteTxId] = useState<string | null>(null);
   const [bulkDismissing, setBulkDismissing] = useState(false);
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -235,10 +246,15 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
     }
   };
 
-  const handleDeleteTx = async (txId: string) => {
-    if (!window.confirm("Bạn có chắc chắn muốn XÓA vĩnh viễn giao dịch này? Dữ liệu ví và thống kê sẽ được cập nhật lại.")) {
-      return;
-    }
+  // Opens the confirm dialog; the actual delete runs in confirmDeleteTx.
+  const handleDeleteTx = (txId: string) => {
+    setPendingDeleteTxId(txId);
+  };
+
+  const confirmDeleteTx = async () => {
+    const txId = pendingDeleteTxId;
+    setPendingDeleteTxId(null);
+    if (!txId) return;
     setDeletingId(txId);
     try {
       const res = await deleteTransaction(txId);
@@ -898,6 +914,32 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
         </div>,
         document.body
       )}
+
+      {/* Delete confirmation — z-index raised above the sync modal (z-[100]) */}
+      <AlertDialog
+        open={pendingDeleteTxId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteTxId(null);
+        }}
+      >
+        <AlertDialogContent className="z-[120]" overlayClassName="z-[110] bg-black/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa vĩnh viễn giao dịch này?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Giao dịch sẽ bị xóa khỏi sổ. Số dư ví và thống kê sẽ được tính lại. Không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteTx}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Xóa giao dịch
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

@@ -162,12 +162,12 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
         </div>
 
         {/* Quick Presets */}
-        <div className="grid grid-cols-3 gap-1 pt-0.5">
+        <div className="grid grid-cols-3 gap-1.5 pt-1">
           <button
             type="button"
             onClick={() => applyPeriod(thisMonth, thisYear)}
             className={cn(
-              "py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center",
+              "py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer text-center",
               currentMonth === thisMonth && currentYear === thisYear
                 ? "bg-orange-500 text-white shadow-2xs font-bold"
                 : variant === "dark"
@@ -182,7 +182,7 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
             type="button"
             onClick={() => applyPeriod(lastMonthNum, lastMonthYear)}
             className={cn(
-              "py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center",
+              "py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer text-center",
               currentMonth === lastMonthNum && currentYear === lastMonthYear
                 ? "bg-orange-500 text-white shadow-2xs font-bold"
                 : variant === "dark"
@@ -197,7 +197,7 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
             type="button"
             onClick={() => applyPeriod("ALL", thisYear)}
             className={cn(
-              "py-1 px-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer text-center",
+              "py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer text-center",
               currentMonth === "ALL" && currentYear === thisYear
                 ? "bg-orange-500 text-white shadow-2xs font-bold"
                 : variant === "dark"
@@ -217,13 +217,13 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
       {/* Title */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5 text-slate-300">
-          <Calendar size={13} className="text-orange-400" />
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
+          <Calendar size={14} className="text-orange-400" />
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
             Thời gian dữ liệu
           </span>
         </div>
         {isPending && (
-          <span className="text-[10px] text-orange-400 font-medium animate-pulse">
+          <span className="text-xs text-orange-400 font-medium animate-pulse">
             Đang tải...
           </span>
         )}
@@ -244,9 +244,9 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
             isPending && "opacity-70 animate-pulse"
           )}
         >
-          <div className="w-9 h-9 rounded-lg flex flex-col items-center justify-center font-extrabold text-[10px] border shadow-2xs bg-orange-500/20 text-orange-400 border-orange-500/30 group-hover:scale-105 transition-transform">
-            <Calendar size={13} />
-            <span className="text-[9px] font-black leading-none mt-0.5">
+          <div className="w-9 h-9 rounded-lg flex flex-col items-center justify-center font-extrabold text-xs border shadow-2xs bg-orange-500/20 text-orange-400 border-orange-500/30 group-hover:scale-105 transition-transform">
+            <Calendar size={14} />
+            <span className="text-[10px] font-black leading-none mt-0.5">
               {currentMonth === "ALL" ? "NĂM" : `T${currentMonth}`}
             </span>
           </div>
@@ -262,7 +262,7 @@ export function SidebarTimeFilter({ isCollapsed = false, onClose }: Props) {
               <Calendar size={14} className="text-orange-600" />
               <span>Thời gian dữ liệu</span>
             </span>
-            <span className="text-[10px] font-normal text-muted-foreground">
+            <span className="text-xs font-normal text-muted-foreground">
               {currentMonth === "ALL" ? `Năm ${currentYear}` : `T${currentMonth}/${currentYear}`}
             </span>
           </DropdownMenuLabel>

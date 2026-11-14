@@ -370,6 +370,31 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
         </div>
       </div>
 
+      {/* ─── Empty state (no wallets are auto-created) ───────────── */}
+      {wallets.length === 0 && (
+        <div className="card p-8 text-center space-y-3">
+          <div className="w-12 h-12 mx-auto rounded-xl bg-orange-50 border border-orange-200 text-orange-700 flex items-center justify-center">
+            <Landmark size={22} />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-foreground">Tạo ví đầu tiên</h2>
+            <p className="text-sm text-slate-600">
+              Thêm tài khoản ngân hàng hoặc ví tiền mặt để theo dõi số dư. Giao dịch hiện có sẽ nằm ở mục &quot;Chưa gán tài khoản&quot;.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setCreateType("BANK");
+              setIsCreateOpen(true);
+            }}
+            className="btn-primary inline-flex"
+          >
+            <Plus size={16} /> Thêm tài khoản / ví
+          </button>
+        </div>
+      )}
+
       {/* ─── Grid of Cards (Bank & Cash) ───────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-5">
         {wallets.map((wallet) => {

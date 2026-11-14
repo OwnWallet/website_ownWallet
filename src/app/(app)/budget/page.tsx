@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
-import { formatCurrency, calcPercent, formatMetric, getFilterDateRange, serializeData } from "@/lib/utils";
+import { formatCurrency, formatMetric, getFilterDateRange, serializeData } from "@/lib/utils";
+import { percentOf } from "@/lib/finance";
 import { getAutoRolloverBudgets, EnrichedBudgetItem } from "@/actions/budgets";
 import { BudgetListClient } from "./budget-list-client";
 import { PiggyBank, TrendingDown, AlertCircle, Wallet, Sparkles } from "lucide-react";
@@ -57,7 +58,7 @@ export default async function BudgetPage({ searchParams }: BudgetPageProps) {
     );
   }
 
-  const overallPercent = calcPercent(totalSpent, totalLimit);
+  const overallPercent = percentOf(totalSpent, totalLimit);
   const remaining = totalLimit - totalSpent;
 
   const prevMonthLabel =

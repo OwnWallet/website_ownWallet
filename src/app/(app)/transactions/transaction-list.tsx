@@ -24,6 +24,7 @@ import {
  getVNDateParts,
  toDate,
 } from "@/lib/utils";
+import { isTransfer } from "@/lib/finance";
 import { deleteTransaction, deleteTransactions } from "@/actions/transactions";
 import { BulkActionBar } from "@/components/ui/bulk-action-bar";
 import {
@@ -249,7 +250,7 @@ export function TransactionList({
   const isSearchingTransfer = search.toLowerCase().includes("chuyển") || search.toLowerCase().includes("transfer");
 
   filtered.forEach((tx) => {
-    const isInternalTransfer = isAllWallets && !isSearchingTransfer && String(tx.note || "").startsWith("[TRANSFER]");
+    const isInternalTransfer = isAllWallets && !isSearchingTransfer && isTransfer(tx);
     if (isInternalTransfer) return;
 
     const amt = Number(tx.amount);
@@ -452,93 +453,90 @@ export function TransactionList({
  <div className="space-y-6">
  {/* ─── 1. TOP SUMMARY KPI CARDS ────────────────────────────────── */}
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
- {/* Thu nhập */}
- <div className="card p-4 flex flex-col justify-between border-emerald-500/20 bg-emerald-500/5">
- <div className="flex items-center justify-between text-muted">
- <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 ">
- Tổng thu nhập
- </span>
- <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-600">
- <TrendingUp size={16} />
- </div>
- </div>
- <div className="mt-2">
- <p className="text-lg md:text-2xl font-extrabold text-emerald-600 truncate">
- +{formatCurrency(summary.income)}
- </p>
- <p className="text-[11px] text-muted-foreground mt-0.5">
- {filtered.filter((t) => t.type === "INCOME").length} giao dịch thu
- </p>
- </div>
- </div>
+        {/* Thu nhập */}
+        <div className="card p-4 sm:p-5 flex flex-col justify-between border-emerald-500/20 bg-emerald-500/5">
+          <div className="flex items-center justify-between text-muted">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+              Tổng thu nhập
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-600 shadow-2xs">
+              <TrendingUp size={18} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-xl sm:text-2xl xl:text-3xl font-black text-emerald-700 truncate tabular-nums tracking-tight">
+              +{formatCurrency(summary.income)}
+            </p>
+            <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
+              {filtered.filter((t) => t.type === "INCOME").length} giao dịch thu
+            </p>
+          </div>
+        </div>
 
- {/* Chi tiêu */}
- <div className="card p-4 flex flex-col justify-between border-rose-500/20 bg-rose-500/5">
- <div className="flex items-center justify-between text-muted">
- <span className="text-xs font-semibold uppercase tracking-wider text-rose-700 ">
- Tổng chi tiêu
- </span>
- <div className="w-8 h-8 rounded-lg bg-rose-500/15 flex items-center justify-center text-rose-600">
- <TrendingDown size={16} />
- </div>
- </div>
- <div className="mt-2">
- <p className="text-lg md:text-2xl font-extrabold text-rose-600 truncate">
- -{formatCurrency(summary.expense)}
- </p>
- <p className="text-[11px] text-muted-foreground mt-0.5">
- {filtered.filter((t) => t.type === "EXPENSE").length} giao dịch chi
- </p>
- </div>
- </div>
+        {/* Chi tiêu */}
+        <div className="card p-4 sm:p-5 flex flex-col justify-between border-rose-500/20 bg-rose-500/5">
+          <div className="flex items-center justify-between text-muted">
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-700">
+              Tổng chi tiêu
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-rose-500/15 flex items-center justify-center text-rose-600 shadow-2xs">
+              <TrendingDown size={18} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-xl sm:text-2xl xl:text-3xl font-black text-rose-700 truncate tabular-nums tracking-tight">
+              -{formatCurrency(summary.expense)}
+            </p>
+            <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
+              {filtered.filter((t) => t.type === "EXPENSE").length} giao dịch chi
+            </p>
+          </div>
+        </div>
 
- {/* Số dư lũy kế (Đầu kỳ + Ròng kỳ này) */}
- <div className="card p-4 flex flex-col justify-between border-amber-500/20 bg-amber-500/5">
- <div className="flex items-center justify-between text-muted">
- <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 ">
- Số dư lũy kế ({summary.currLabel})
- </span>
- <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-600">
- <CreditCard size={16} />
- </div>
- </div>
- <div className="mt-2">
- <p
- className={`text-lg md:text-2xl font-extrabold truncate ${
- summary.closingCumulativeBalance >= 0 ? "text-amber-600 " : "text-rose-600"
- }`}
- >
- {summary.closingCumulativeBalance > 0 ? "+" : ""}
- {formatCurrency(summary.closingCumulativeBalance)}
- </p>
- <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
- Đầu kỳ (hết {summary.prevLabel}): {summary.openingCumulativeBalance >= 0 ? "+" : "-"}{formatCurrencyCompact(Math.abs(summary.openingCumulativeBalance))} · {summary.currLabel}: {summary.net >= 0 ? "+" : "-"}{formatCurrencyCompact(Math.abs(summary.net))}
- </p>
- <p className="text-[10px] text-amber-800/90 font-semibold mt-0.5 truncate">
- Riêng {summary.prevLabel}: {summary.prevNet >= 0 ? "+" : "-"}{formatCurrency(Math.abs(summary.prevNet))}
- </p>
- </div>
- </div>
+        {/* Số dư lũy kế (Đầu kỳ + Ròng kỳ này) */}
+        <div className="card p-4 sm:p-5 flex flex-col justify-between border-amber-500/20 bg-amber-500/5">
+          <div className="flex items-center justify-between text-muted">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
+              Số dư lũy kế ({summary.currLabel})
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-600 shadow-2xs">
+              <CreditCard size={18} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p
+              className={`text-xl sm:text-2xl xl:text-3xl font-black truncate tabular-nums tracking-tight ${
+                summary.closingCumulativeBalance >= 0 ? "text-amber-700" : "text-rose-700"
+              }`}
+            >
+              {summary.closingCumulativeBalance > 0 ? "+" : ""}
+              {formatCurrency(summary.closingCumulativeBalance)}
+            </p>
+            <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1 truncate">
+              Đầu kỳ: {summary.openingCumulativeBalance >= 0 ? "+" : "-"}{formatCurrencyCompact(Math.abs(summary.openingCumulativeBalance))} · Trong kỳ: {summary.net >= 0 ? "+" : "-"}{formatCurrencyCompact(Math.abs(summary.net))}
+            </p>
+          </div>
+        </div>
 
- {/* TB Chi tiêu / Ngày */}
- <div className="card p-4 flex flex-col justify-between border-primary/20 bg-primary/5">
- <div className="flex items-center justify-between text-muted">
- <span className="text-xs font-semibold uppercase tracking-wider text-primary">
- TB Chi tiêu / Ngày
- </span>
- <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center text-primary">
- <Clock size={16} />
- </div>
- </div>
- <div className="mt-2">
- <p className="text-lg md:text-2xl font-extrabold text-primary truncate">
- {formatCurrency(summary.dailyAvgExpense)}
- </p>
- <p className="text-[11px] text-muted-foreground mt-0.5">
- Tính trên {summary.activeDaysCount} ngày có chi tiêu
- </p>
- </div>
- </div>
+        {/* TB Chi tiêu / Ngày */}
+        <div className="card p-4 sm:p-5 flex flex-col justify-between border-primary/20 bg-primary/5">
+          <div className="flex items-center justify-between text-muted">
+            <span className="text-xs font-bold uppercase tracking-wider text-primary">
+              TB Chi tiêu / Ngày
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center text-primary shadow-2xs">
+              <Clock size={18} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-xl sm:text-2xl xl:text-3xl font-black text-primary truncate tabular-nums tracking-tight">
+              {formatCurrency(summary.dailyAvgExpense)}
+            </p>
+            <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
+              Tính trên {summary.activeDaysCount} ngày có chi tiêu
+            </p>
+          </div>
+        </div>
  </div>
 
       {/* ─── 2. TABLE CONTROLS ─────────────────── */}

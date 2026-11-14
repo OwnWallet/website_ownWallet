@@ -44,14 +44,14 @@ function ScoreGauge({ score }: { score: number }) {
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-black" style={{ color }}>
+          <span className="text-3xl font-black tabular-nums" style={{ color }}>
             {score}
           </span>
-          <span className="text-[10px] text-muted-foreground font-semibold">/100</span>
+          <span className="text-xs text-muted-foreground font-semibold">/100</span>
         </div>
       </div>
       <div
-        className="text-xs font-bold px-3 py-1 rounded-full"
+        className="text-xs sm:text-sm font-bold px-3.5 py-1 rounded-full"
         style={{ backgroundColor: `${color}18`, color }}
       >
         {label}
@@ -73,23 +73,23 @@ interface MetricBarProps {
 function MetricBar({ label, value, max, color, description, icon }: MetricBarProps) {
   const clamped = Math.min(100, (value / max) * 100);
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between gap-2 text-xs">
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-xs sm:text-sm">
         <div className="flex items-center gap-1.5">
           <span className="text-muted-foreground">{icon}</span>
           <span className="font-semibold text-foreground">{label}</span>
         </div>
-        <span className="font-bold" style={{ color }}>
+        <span className="font-bold tabular-nums" style={{ color }}>
           {value.toFixed(0)}%
         </span>
       </div>
-      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-700"
           style={{ width: `${clamped}%`, backgroundColor: color }}
         />
       </div>
-      <p className="text-[10px] text-muted-foreground">{description}</p>
+      <p className="text-xs text-slate-600 font-medium">{description}</p>
     </div>
   );
 }
@@ -150,29 +150,29 @@ export function FinancialHealthScore({
       <div className="flex flex-col sm:flex-row items-center gap-5">
         <div className="flex flex-col items-center">
           <ScoreGauge score={metrics.total} />
-          <p className="text-[10px] text-muted-foreground mt-1 text-center">Chỉ số Sức khỏe Tài chính</p>
+          <p className="text-xs text-muted-foreground mt-1.5 text-center font-medium">Chỉ số Sức khỏe Tài chính</p>
         </div>
 
-        <div className="flex-1 grid grid-cols-1 gap-2.5 w-full">
+        <div className="flex-1 grid grid-cols-1 gap-3 w-full">
           {/* Net worth card */}
-          <div className={`rounded-xl px-3.5 py-2.5 border ${netWorth >= 0 ? "bg-emerald-50/60 border-emerald-200/60" : "bg-rose-50/60 border-rose-200/60"}`}>
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Tài sản ròng</p>
-            <p className={`text-xl font-black mt-0.5 ${netWorth >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+          <div className={`rounded-xl p-3.5 border ${netWorth >= 0 ? "bg-emerald-50/60 border-emerald-200/60" : "bg-rose-50/60 border-rose-200/60"}`}>
+            <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Tài sản ròng</p>
+            <p className={`text-xl sm:text-2xl font-black mt-0.5 tabular-nums ${netWorth >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
               {netWorth >= 0 ? "+" : ""}{formatCurrencyCompact(netWorth)}
             </p>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-slate-600 mt-1 font-medium">
               Ví: {formatCurrencyCompact(totalWalletBalance)} + ĐT: {formatCurrencyCompact(totalInvestmentValue)}
               {totalReceivable > 0 ? ` + Phải thu: ${formatCurrencyCompact(totalReceivable)}` : ""} − Nợ: {formatCurrencyCompact(totalDebt)}
             </p>
           </div>
 
           {/* Runway */}
-          <div className="rounded-xl px-3.5 py-2.5 border bg-slate-50/60 border-slate-200/60">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Dự phòng khẩn cấp</p>
-            <p className={`text-xl font-black mt-0.5`} style={{ color: metrics.runwayColor }}>
+          <div className="rounded-xl p-3.5 border bg-slate-50/60 border-slate-200/60">
+            <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Dự phòng khẩn cấp</p>
+            <p className={`text-xl sm:text-2xl font-black mt-0.5 tabular-nums`} style={{ color: metrics.runwayColor }}>
               {metrics.runwayMonths} tháng
             </p>
-            <p className="text-[10px] text-muted-foreground">Số tháng sống được với chi tiêu hiện tại</p>
+            <p className="text-xs text-slate-600 mt-1 font-medium">Số tháng sống được với chi tiêu hiện tại</p>
           </div>
         </div>
       </div>

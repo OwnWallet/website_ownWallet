@@ -11,11 +11,13 @@ import {
   Plus,
   PanelLeftClose,
   PanelLeft,
-  Sparkles,
+  FileUp,
+  Landmark,
   SlidersHorizontal,
   Check,
 } from "lucide-react";
 import Link from "next/link";
+import { ActiveWalletChip } from "./ActiveWalletChip";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { logout } from "@/actions/auth";
 import { cn } from "@/lib/utils";
@@ -29,6 +31,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export type LayoutWidth = "adaptive" | "full" | "standard";
+
+const LAYOUT_OPTIONS: { value: LayoutWidth; label: string }[] = [
+  { value: "adaptive", label: "Tự động (khuyên dùng)" },
+  { value: "full", label: "Toàn màn hình" },
+  { value: "standard", label: "Cân đối (1400px)" },
+];
 
 export const MIN_SIDEBAR_WIDTH = 210;
 export const MAX_SIDEBAR_WIDTH = 400;
@@ -144,7 +152,6 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
         isOpen={mobileSidebarOpen}
         onClose={() => setMobileSidebarOpen(false)}
         isCollapsed={isCollapsed}
-        onToggleCollapse={toggleCollapse}
         wallets={wallets}
         sidebarWidth={sidebarWidth}
         onWidthChange={handleWidthChange}
@@ -207,86 +214,8 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
               )}
             </button>
 
-            {/* Layout Width Customizer Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                title={
-                  layoutWidth === "full"
-                    ? "Độ rộng giao diện: Toàn màn hình"
-                    : layoutWidth === "standard"
-                    ? "Độ rộng giao diện: Tiêu chuẩn (1400px)"
-                    : "Độ rộng giao diện: Rộng thích ứng"
-                }
-                className="hidden sm:inline-flex items-center justify-center p-2 rounded-xl border border-border bg-card hover:bg-muted/80 text-muted-foreground hover:text-foreground shadow-2xs transition-all cursor-pointer outline-none"
-              >
-                <SlidersHorizontal size={15} className="text-orange-600" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64 p-1.5 shadow-lg border-border bg-card">
-                <DropdownMenuLabel className="font-semibold text-xs px-2 py-1 text-foreground">
-                  Tùy biến độ rộng giao diện
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem
-                  onClick={() => changeLayoutWidth("adaptive")}
-                  className={cn(
-                    "flex items-start gap-2.5 p-2 rounded-lg cursor-pointer",
-                    layoutWidth === "adaptive" ? "bg-orange-50/80 text-orange-900" : ""
-                  )}
-                >
-                  <div className="mt-0.5 w-4 h-4 flex items-center justify-center text-orange-600 shrink-0">
-                    {layoutWidth === "adaptive" && <Check size={14} className="font-bold" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <span>⚡ Tự động thích ứng</span>
-                      <span className="text-[9px] font-semibold bg-orange-100 text-orange-700 px-1 rounded">
-                        Khuyên dùng
-                      </span>
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                      Bung rộng tối đa khi tắt thanh bên; rộng thoáng khi bật thanh bên.
-                    </p>
-                  </div>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  onClick={() => changeLayoutWidth("full")}
-                  className={cn(
-                    "flex items-start gap-2.5 p-2 rounded-lg cursor-pointer",
-                    layoutWidth === "full" ? "bg-orange-50/80 text-orange-900" : ""
-                  )}
-                >
-                  <div className="mt-0.5 w-4 h-4 flex items-center justify-center text-orange-600 shrink-0">
-                    {layoutWidth === "full" && <Check size={14} className="font-bold" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-foreground">🖥️ Toàn màn hình (100% Fluid)</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                      Luôn tràn 100% chiều ngang màn hình không giới hạn max-width.
-                    </p>
-                  </div>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  onClick={() => changeLayoutWidth("standard")}
-                  className={cn(
-                    "flex items-start gap-2.5 p-2 rounded-lg cursor-pointer",
-                    layoutWidth === "standard" ? "bg-orange-50/80 text-orange-900" : ""
-                  )}
-                >
-                  <div className="mt-0.5 w-4 h-4 flex items-center justify-center text-orange-600 shrink-0">
-                    {layoutWidth === "standard" && <Check size={14} className="font-bold" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-foreground">📐 Cân đối (1400px)</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                      Cố định độ rộng vừa phải ở giữa màn hình cho các màn hình siêu lớn.
-                    </p>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Persisted wallet filter, visible on every page */}
+            <ActiveWalletChip wallets={wallets} />
           </div>
 
           {/* Right: Quick actions & User Dropdown Menu */}
@@ -303,10 +232,12 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
             {/* Quick Import Button */}
             <Link
               href="/import"
-              className="hidden sm:inline-flex items-center justify-center p-2 rounded-xl border border-border bg-card hover:bg-muted/70 text-muted-foreground hover:text-foreground shadow-2xs transition-all"
+              className="hidden sm:inline-flex items-center justify-center gap-1.5 p-2 lg:px-3 lg:py-1.5 rounded-xl border border-border bg-card hover:bg-muted/70 text-slate-700 hover:text-foreground text-xs font-semibold shadow-2xs transition-all"
               title="Import sao kê"
+              aria-label="Import sao kê"
             >
-              <Sparkles size={15} className="text-amber-500" />
+              <FileUp size={15} className="text-orange-600" />
+              <span className="hidden lg:inline">Import</span>
             </Link>
 
             {/* User Dropdown Menu */}
@@ -334,7 +265,7 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
 
                 <DropdownMenuItem className="p-0">
                   <Link href="/wallets" className="flex items-center gap-2 text-xs w-full px-2 py-1.5 cursor-pointer">
-                    <span className="text-sm">💳</span>
+                    <Landmark size={14} className="text-muted-foreground" />
                     <span>Quản lý Tài khoản</span>
                   </Link>
                 </DropdownMenuItem>
@@ -345,6 +276,30 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
                     <span>Cài đặt hệ thống</span>
                   </Link>
                 </DropdownMenuItem>
+
+                {/* Layout width (desktop-only preference, moved out of the header) */}
+                <div className="hidden lg:block">
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 px-2 py-1">
+                    <SlidersHorizontal size={12} />
+                    Độ rộng nội dung
+                  </DropdownMenuLabel>
+                  {LAYOUT_OPTIONS.map((opt) => (
+                    <DropdownMenuItem
+                      key={opt.value}
+                      onClick={() => changeLayoutWidth(opt.value)}
+                      className={cn(
+                        "flex items-center gap-2 text-xs px-2 py-1.5 cursor-pointer",
+                        layoutWidth === opt.value && "font-semibold text-orange-900"
+                      )}
+                    >
+                      <span className="w-3.5 flex justify-center text-orange-600 shrink-0">
+                        {layoutWidth === opt.value && <Check size={13} />}
+                      </span>
+                      <span>{opt.label}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </div>
 
                 <DropdownMenuSeparator />
 

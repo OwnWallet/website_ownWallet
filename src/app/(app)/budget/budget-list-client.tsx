@@ -124,7 +124,13 @@ export function BudgetListClient({
         </div>
       ) : (
         <>
-          {/* Selection toolbar */}
+          {/* Selection toolbar — month view only. Year-view cards are aggregates of
+              several monthly budgets, so editing/deleting them would hit the wrong record. */}
+          {isMonthAll ? (
+            <p className="px-1 text-xs font-medium text-slate-600">
+              Đang xem tổng hợp cả năm {filterYear}. Chọn một tháng cụ thể ở thanh bên để chỉnh sửa hoặc xóa hạn mức.
+            </p>
+          ) : (
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
               <input
@@ -139,6 +145,7 @@ export function BudgetListClient({
               </label>
             </div>
           </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
             {budgets.map((b) => {
@@ -170,13 +177,15 @@ export function BudgetListClient({
 
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 rounded border-border-strong text-primary focus:ring-primary/30 cursor-pointer accent-primary shrink-0"
-                        checked={isSelected}
-                        onChange={() => toggleSelectOne(b.id)}
-                        title="Chọn ngân sách này"
-                      />
+                      {!isMonthAll && (
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-border-strong text-primary focus:ring-primary/30 cursor-pointer accent-primary shrink-0"
+                          checked={isSelected}
+                          onChange={() => toggleSelectOne(b.id)}
+                          title="Chọn ngân sách này"
+                        />
+                      )}
                       <div
                         className="w-10 h-10 rounded-xl flex items-center justify-center text-xl border shrink-0"
                         style={{
@@ -190,7 +199,7 @@ export function BudgetListClient({
                         <span className="font-bold text-base block truncate">{b.categoryName}</span>
                         {isMonthAll && (
                           <span className="text-xs font-medium text-muted-foreground">
-                            Tháng {b.month}/{b.year}
+                            Tổng cả năm {b.year}
                           </span>
                         )}
                         {hasRollover && (
@@ -207,24 +216,28 @@ export function BudgetListClient({
                           {statusBadge.text}
                         </span>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => handleEditBudget(b)}
-                        title="Điều chỉnh hạn mức"
-                        aria-label={`Điều chỉnh hạn mức ${b.categoryName}`}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-orange-600 hover:bg-orange-50 transition-colors cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteSingleTarget(b)}
-                        title="Xóa ngân sách"
-                        aria-label={`Xóa ngân sách ${b.categoryName}`}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      {!isMonthAll && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleEditBudget(b)}
+                            title="Điều chỉnh hạn mức"
+                            aria-label={`Điều chỉnh hạn mức ${b.categoryName}`}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-orange-600 hover:bg-orange-50 transition-colors cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteSingleTarget(b)}
+                            title="Xóa ngân sách"
+                            aria-label={`Xóa ngân sách ${b.categoryName}`}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
