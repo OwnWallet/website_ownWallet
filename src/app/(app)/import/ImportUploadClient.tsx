@@ -3,6 +3,8 @@
 import { useState, useRef, useCallback, useEffect, useSyncExternalStore } from "react";
 import type { ParsedTransaction } from "@/schemas/ai-import";
 import ImportReview from "./ImportReview";
+import { AiStatusBadge } from "./AiStatusBadge";
+import { DEFAULT_GEMINI_MODEL, LOCAL_PARSER_MODEL, SUGGESTED_GEMINI_MODELS } from "@/lib/ai/models";
 import { Upload, FileText, Table, FileSpreadsheet, AlertTriangle, Lightbulb, Brain, Square, Clock } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,6 +21,7 @@ type UploadState =
       totalFound: number;
       skipped: number;
       duplicateCount: number;
+      ruleAppliedCount?: number;
       modeUsed?: "local" | "ai-fallback-local" | "ai";
       fallbackReason?: string;
       detectedBank?: string;
@@ -85,7 +88,7 @@ const FORMAT_CHIPS = [
 export default function ImportUploadClient({
   wallets = [],
   categories = [],
-  defaultModel = "gemini-3.8-flash",
+  defaultModel = DEFAULT_GEMINI_MODEL,
 }: ImportUploadClientProps) {
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [selectedModel, setSelectedModel] = useState<string>(defaultModel);
@@ -206,6 +209,7 @@ export default function ImportUploadClient({
         totalFound: data.totalFound,
         skipped: data.skipped,
         duplicateCount: data.duplicateCount ?? 0,
+        ruleAppliedCount: data.ruleAppliedCount ?? 0,
         modeUsed: data.modeUsed,
         fallbackReason: data.fallbackReason,
         detectedBank: data.detectedBank,
@@ -283,6 +287,7 @@ export default function ImportUploadClient({
         totalFound={state.totalFound}
         skipped={state.skipped}
         duplicateCount={state.duplicateCount}
+        ruleAppliedCount={state.ruleAppliedCount}
         modeUsed={state.modeUsed}
         fallbackReason={state.fallbackReason}
         detectedBank={state.detectedBank}
@@ -348,10 +353,21 @@ export default function ImportUploadClient({
                 onChange={(e) => setSelectedModel(e.target.value)}
                 className="bg-slate-50 border border-slate-300 hover:border-orange-400 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 cursor-pointer transition-colors shadow-2xs"
               >
-                <option value="local-parser">⚡ Đọc trực tiếp Sao kê (Không cần AI - Siêu tốc &lt; 1s)</option>
-                <option value="gemini-3.8-flash">🤖 gemini-3.8-flash (Mới nhất - Tự động dự phòng)</option>
+                <option value={LOCAL_PARSER_MODEL}>⚡ Đọc trực tiếp Sao kê (Không cần AI - Siêu tốc &lt; 1s)</option>
+                {SUGGESTED_GEMINI_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>🤖 {m.label}</option>
+                ))}
+                {selectedModel !== LOCAL_PARSER_MODEL &&
+                  !SUGGESTED_GEMINI_MODELS.some((m) => m.id === selectedModel) && (
+                    <option value={selectedModel}>🤖 {selectedModel} (theo Cài đặt)</option>
+                  )}
               </select>
             </div>
+          </div>
+
+          {/* Trạng thái AI thực tế của model đang chọn */}
+          <div className="flex justify-end -mt-3">
+            <AiStatusBadge model={selectedModel} />
           </div>
 
           {/* Thông báo đã dừng thủ công */}

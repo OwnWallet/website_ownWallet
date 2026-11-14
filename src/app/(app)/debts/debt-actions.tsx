@@ -34,7 +34,12 @@ export function DebtActions({
   debt?: any;
   inline?: boolean;
   mode?: "add" | "record";
-  wallets?: { id: string; name: string; balance: string | number | { toString: () => string } }[];
+  wallets?: {
+    id: string;
+    name: string;
+    balance: string | number | { toString: () => string };
+    currentBalance?: number;
+  }[];
   existingDebts?: any[];
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -251,7 +256,7 @@ export function DebtActions({
                   <option value="">-- Không hạch toán qua ví --</option>
                   {wallets.map((w) => (
                     <option key={w.id} value={w.id}>
-                      {w.name} ({formatCurrency(Number(w.balance))})
+                      {w.name} ({formatCurrency(Number(w.currentBalance ?? w.balance))})
                     </option>
                   ))}
                 </select>
@@ -792,7 +797,7 @@ export function DebtActions({
                   <option value="">-- Không hạch toán qua ví --</option>
                   {wallets.map((w) => (
                     <option key={w.id} value={w.id}>
-                      {w.name} ({formatCurrency(Number(w.balance))})
+                      {w.name} ({formatCurrency(Number(w.currentBalance ?? w.balance))})
                     </option>
                   ))}
                 </select>

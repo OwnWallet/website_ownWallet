@@ -1,7 +1,10 @@
 "use client";
 
+import { DEFAULT_GEMINI_MODEL, SUGGESTED_GEMINI_MODELS } from "@/lib/ai/models";
+import { CategoryRulesSection } from "./CategoryRulesSection";
+
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import {
@@ -31,6 +34,7 @@ import {
   type CreateCategoryInput,
 } from "@/schemas/settings";
 import { CATEGORY_TYPE_COLORS, CATEGORY_TYPE_LABELS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import {
   User,
   KeyRound,
@@ -74,14 +78,14 @@ interface Props {
 export function SettingsClient({ user, categories, initialAiConfig }: Props) {
   // AI Config Form
   const [aiConfig, setAiConfig] = useState(
-    initialAiConfig || { isConfigured: false, maskedKey: "", model: "gemini-3.8-flash" }
+    initialAiConfig || { isConfigured: false, maskedKey: "", model: DEFAULT_GEMINI_MODEL }
   );
   const [apiKeyInput, setApiKeyInput] = useState("");
-  const [modelInput, setModelInput] = useState(aiConfig.model || "gemini-3.8-flash");
+  const [modelInput, setModelInput] = useState(aiConfig.model || DEFAULT_GEMINI_MODEL);
   const [showApiKey, setShowApiKey] = useState(false);
   const [isSavingAi, setIsSavingAi] = useState(false);
   const [isTestingAi, setIsTestingAi] = useState(false);
-  const [aiTestResult, setAiTestResult] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [aiTestResult, setAiTestResult] = useState<{ success?: boolean; warning?: boolean; message?: string } | null>(null);
   const [aiSaveSuccess, setAiSaveSuccess] = useState(false);
   const [aiSaveError, setAiSaveError] = useState<string | null>(null);
 
@@ -130,7 +134,7 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
     setIsTestingAi(false);
 
     if (res?.success) {
-      setAiTestResult({ success: true, message: res.message });
+      setAiTestResult({ success: true, warning: Boolean((res as any).warning), message: res.message });
     } else {
       setAiTestResult({ success: false, message: res.error });
     }
@@ -175,6 +179,8 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
     register: regCat,
     handleSubmit: handleCat,
     reset: resetCat,
+    setValue: setCatValue,
+    control: catControl,
     formState: { errors: catErrors, isSubmitting: isSubmittingCat },
   } = useForm<CreateCategoryInput>({
     resolver: zodResolver(CreateCategorySchema) as any,
@@ -185,6 +191,13 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
       icon: "🍜",
     },
   });
+
+  const watchedCatColor = useWatch({ control: catControl, name: "color" });
+  const selectedCatColor = watchedCatColor || "#ea580c";
+  const PRESET_COLORS = [
+    "#ea580c", "#059669", "#2563eb", "#d97706", "#7c3aed",
+    "#e11d48", "#0891b2", "#4f46e5", "#0d9488", "#475569"
+  ];
 
   async function onUpdateProfile(data: UpdateProfileInput) {
     setProfileError(null);
@@ -454,7 +467,7 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
 
         <div className="card space-y-4 p-5">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            API Key được sử dụng cho tính năng <strong>AI Import</strong> tự động trích xuất sao kê ngân hàng (PDF, Excel, hóa đơn hình ảnh) và phân loại thu chi thông minh.
+            API Key được sử dụng cho tính năng <strong>Import</strong> tự động trích xuất sao kê ngân hàng (PDF, Excel, hóa đơn hình ảnh) và phân loại thu chi thông minh.
           </p>
 
           <form onSubmit={handleSaveAiKey} className="space-y-4">
@@ -497,7 +510,12 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
                   onChange={(e) => setModelInput(e.target.value)}
                   className="w-full bg-elevated border border-border-strong rounded-lg px-2.5 py-2 text-xs outline-none focus:border-primary text-foreground cursor-pointer"
                 >
-                  <option value="gemini-3.8-flash">gemini-3.8-flash (Mới nhất - Khuyến nghị)</option>
+                  {SUGGESTED_GEMINI_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                  {!SUGGESTED_GEMINI_MODELS.some((m) => m.id === modelInput) && modelInput && (
+                    <option value={modelInput}>{modelInput} (đang dùng)</option>
+                  )}
                 </select>
               </div>
             </div>
@@ -519,12 +537,14 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
             {aiTestResult && (
               <div
                 className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
-                  aiTestResult.success
+                  aiTestResult.success && aiTestResult.warning
+                    ? "bg-amber-50 text-amber-800 border border-amber-200"
+                    : aiTestResult.success
                     ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                     : "bg-rose-50 text-rose-800 border border-rose-200"
                 }`}
               >
-                {aiTestResult.success ? <Check size={14} /> : <AlertCircle size={14} />}
+                {aiTestResult.success && !aiTestResult.warning ? <Check size={14} /> : <AlertCircle size={14} />}
                 <span>{aiTestResult.message}</span>
               </div>
             )}
@@ -566,6 +586,9 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
         </div>
       </section>
 
+      {/* ── 3b. Quy tắc phân loại tự học (Import) ── */}
+      <CategoryRulesSection />
+
       {/* ── 4. Categories Management ── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -584,17 +607,17 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
 
         {/* Add Category Form */}
         {categoryOpen && (
-          <div className="card bg-elevated border-border-strong animate-fade-in p-5 space-y-4">
+          <div className="card bg-white border border-slate-300 shadow-sm animate-fade-in p-5 space-y-4">
             <h3 className="text-sm font-bold text-foreground">Tạo danh mục tùy chỉnh</h3>
-            <form onSubmit={handleCat(onCreateCategory)} className="space-y-3">
+            <form onSubmit={handleCat(onCreateCategory)} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs text-muted mb-1">Tên danh mục *</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tên danh mục *</label>
                   <input
                     {...regCat("name")}
                     type="text"
                     placeholder="VD: Nuôi thú cưng, Cafe..."
-                    className="w-full bg-background border border-border-strong rounded-lg px-3 py-2 text-xs outline-none focus:border-primary text-foreground"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-primary text-slate-900 placeholder:text-slate-500 font-medium"
                   />
                   {catErrors.name && (
                     <p className="text-[11px] text-danger mt-1">{catErrors.name.message}</p>
@@ -602,10 +625,10 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
                 </div>
 
                 <div>
-                  <label className="block text-xs text-muted mb-1">Loại danh mục *</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Loại danh mục *</label>
                   <select
                     {...regCat("type")}
-                    className="w-full bg-background border border-border-strong rounded-lg px-3 py-2 text-xs outline-none focus:border-primary text-foreground"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-primary text-slate-900 font-semibold"
                   >
                     <option value="EXPENSE">Chi tiêu (EXPENSE)</option>
                     <option value="INCOME">Thu nhập (INCOME)</option>
@@ -615,23 +638,53 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
                   </select>
                 </div>
 
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label className="block text-xs text-muted mb-1">Icon / Emoji</label>
-                    <input
-                      {...regCat("icon")}
-                      type="text"
-                      placeholder="🐱"
-                      className="w-full bg-background border border-border-strong rounded-lg px-3 py-2 text-xs outline-none focus:border-primary text-foreground text-center"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-muted mb-1">Màu sắc</label>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Icon / Emoji</label>
+                  <input
+                    {...regCat("icon")}
+                    type="text"
+                    placeholder="🐱"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-primary text-slate-900 text-center text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Curated Color Swatches & Native Picker */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Màu sắc nhận diện
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {PRESET_COLORS.map((hex) => {
+                    const isSelected = selectedCatColor.toLowerCase() === hex.toLowerCase();
+                    return (
+                      <button
+                        key={hex}
+                        type="button"
+                        onClick={() => setCatValue("color", hex, { shouldValidate: true })}
+                        className={cn(
+                          "w-7 h-7 rounded-lg transition-transform flex items-center justify-center cursor-pointer border shadow-2xs relative",
+                          isSelected
+                            ? "ring-2 ring-orange-500 ring-offset-2 scale-110 z-10 border-white"
+                            : "hover:scale-105 border-slate-200"
+                        )}
+                        style={{ backgroundColor: hex }}
+                        title={hex}
+                      >
+                        {isSelected && <Check size={14} className="text-white drop-shadow-sm font-bold" />}
+                      </button>
+                    );
+                  })}
+                  <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200">
                     <input
                       {...regCat("color")}
                       type="color"
-                      className="w-10 h-9 p-0.5 bg-background border border-border-strong rounded-lg cursor-pointer"
+                      className="w-7 h-7 p-0.5 bg-white border border-slate-300 rounded-lg cursor-pointer shrink-0"
+                      title="Chọn mã màu tùy biến"
                     />
+                    <span className="text-[11px] font-mono font-semibold text-slate-600 uppercase">
+                      {selectedCatColor}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -708,7 +761,7 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
           <h2 className="text-lg font-bold">Hệ thống OwnWallet</h2>
         </div>
 
-        <div className="card text-xs space-y-2.5 text-muted">
+        <div className="card text-xs space-y-2.5 text-slate-600 bg-white border border-slate-200">
           <div className="flex justify-between py-1 border-b border-border">
             <span>Phiên bản ứng dụng</span>
             <span className="font-semibold text-foreground">v1.2.0 (Next.js 16 + React 19)</span>

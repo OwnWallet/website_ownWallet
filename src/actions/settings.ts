@@ -7,7 +7,8 @@ import bcrypt from "bcryptjs";
 import fs from "fs/promises";
 import path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { resetGeminiClient } from "@/lib/ai/gemini";
+import { resetGeminiClient, buildGenerationConfig, classifyAiError, describeAiError } from "@/lib/ai/gemini";
+import { DEFAULT_GEMINI_MODEL, SLOW_MODEL_WARNING_MS } from "@/lib/ai/models";
 import { getSystemSetting, setSystemSetting } from "@/lib/system-settings";
 import {
   ChangePasswordSchema,
@@ -149,7 +150,7 @@ export async function deleteCategory(id: string) {
 export async function getAiConfig() {
   await getUserId();
   const apiKey = (await getSystemSetting("GEMINI_API_KEY", process.env.GEMINI_API_KEY || "")).trim();
-  const model = (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.8-flash")).trim();
+  const model = (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL)).trim();
   const isConfigured = Boolean(apiKey && apiKey.length > 10);
 
   let maskedKey = "";
@@ -171,7 +172,7 @@ export async function getAiConfig() {
 export async function updateAiApiKey(formData: FormData) {
   await getUserId();
   const rawApiKey = (formData.get("apiKey") as string)?.trim() || "";
-  const rawModel = ((formData.get("model") as string)?.trim()) || "gemini-3.8-flash";
+  const rawModel = ((formData.get("model") as string)?.trim()) || DEFAULT_GEMINI_MODEL;
 
   if (!rawApiKey) {
     return { error: "API Key không được để trống" };
@@ -253,37 +254,32 @@ export async function testAiApiKey(apiKeyToTest?: string, modelToTest?: string) 
 
   const modelName =
     modelToTest?.trim() ||
-    (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.8-flash")).trim();
+    (await getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL)).trim();
 
+  // Kiểm tra sức khỏe thực tế: gọi model với timeout, đo độ trễ và cảnh báo nếu quá chậm cho Import
+  const t0 = Date.now();
   try {
     const ai = new GoogleGenerativeAI(key);
-    const model = ai.getGenerativeModel({ model: modelName });
+    const model = ai.getGenerativeModel(
+      { model: modelName, generationConfig: buildGenerationConfig(modelName) },
+      { timeout: 30_000 }
+    );
     const result = await model.generateContent("Ping. Trả lời đúng một từ: PONG");
-    const text = result.response.text();
-    if (text) {
-      return { success: true, message: `Kết nối thành công với ${modelName}!` };
+    result.response.text();
+    const ms = Date.now() - t0;
+    const seconds = (ms / 1000).toFixed(1);
+    if (ms > SLOW_MODEL_WARNING_MS) {
+      return {
+        success: true,
+        latencyMs: ms,
+        warning: true,
+        message: `API Key hợp lệ nhưng model ${modelName} phản hồi rất chậm (${seconds} giây) — Import có thể bị quá thời gian. Nên chọn ${DEFAULT_GEMINI_MODEL}.`,
+      };
     }
-    return { success: true, message: "Kết nối thành công!" };
+    return { success: true, latencyMs: ms, message: `Kết nối thành công với ${modelName} (${seconds} giây).` };
   } catch (err: any) {
-    console.error("Test Gemini API Key failed:", err);
-    let msg = err?.message || "Không thể kết nối tới Google Gemini";
-    if (msg.includes("API_KEY_INVALID")) {
-      msg = "API Key không hợp lệ. Vui lòng kiểm tra lại trên Google AI Studio.";
-    } else if (
-      msg.includes("503") ||
-      msg.toLowerCase().includes("high demand") ||
-      msg.toLowerCase().includes("unavailable")
-    ) {
-      msg = `Máy chủ Google cho model ${modelName} đang quá tải (Lỗi 503 Service Unavailable). Vui lòng thử lại sau giây lát hoặc chọn model khác (ví dụ: gemini-3.8-flash).`;
-    } else if (
-      msg.includes("429") ||
-      msg.toLowerCase().includes("resource exhausted") ||
-      msg.toLowerCase().includes("quota")
-    ) {
-      msg = `Tài khoản của bạn đã đạt hạn ngạch lượt yêu cầu (Lỗi 429 Rate Limit / Quota Exceeded). Vui lòng đợi một lát hoặc đổi sang model khác.`;
-    } else if (msg.includes("404")) {
-      msg = `Model "${modelName}" không tồn tại hoặc tài khoản chưa có quyền truy cập.`;
-    }
-    return { success: false, error: msg };
+    console.error("Test Gemini API Key failed:", err?.message);
+    const kind = classifyAiError(err);
+    return { success: false, latencyMs: Date.now() - t0, error: describeAiError(kind, modelName) };
   }
 }

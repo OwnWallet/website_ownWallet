@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { ReportClient } from "./report-client";
 import { getWallets } from "@/actions/wallets";
 import { toInstant, toDate, getFilterDateRange, getVNDateParts } from "@/lib/utils";
+import { isTransfer } from "@/lib/finance";
 
 interface ReportsPageProps {
   searchParams: Promise<{
@@ -95,9 +96,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     const isAllWallets = !walletId || walletId === "ALL";
 
     txs.forEach((tx: any) => {
-      const isInternalTransfer =
-        typeof tx.note === "string" && tx.note.startsWith("[TRANSFER]");
-      if (isAllWallets && isInternalTransfer) return;
+      if (isAllWallets && isTransfer(tx)) return;
+      // Only INCOME/EXPENSE are cash flows; anything else must not be counted as expense.
+      if (tx.type !== "INCOME" && tx.type !== "EXPENSE") return;
 
       const recDate = toDate(tx.recordedAt);
       const recMs = recDate.getTime();

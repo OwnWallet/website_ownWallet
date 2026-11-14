@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { serializeData, toInstant } from "@/lib/utils";
+import { isTransfer, TRANSFER_CATEGORY_NAME } from "@/lib/finance";
 
 const WalletSchema = z.object({
   name: z.string().min(1, "Tên tài khoản không được để trống").max(50),
@@ -22,72 +23,18 @@ async function getUserId(): Promise<string> {
   return session.user.id;
 }
 
-/**
- * Tự động tạo 3 tài khoản mặc định (2 TPBank, 1 Techcombank) nếu user chưa có ví nào
- * Đồng thời tự động liên kết các giao dịch cũ (nếu có) vào TPBank - TK 1
- */
-export async function ensureDefaultWallets(userId: string) {
-  const existingWallets = await db.orm.public.Wallet
-    .where((w) => w.userId.eq(userId))
-    .all();
-
-  if (existingWallets.length > 0) {
-    return existingWallets;
-  }
-
-  // Tạo 3 tài khoản mặc định
-  const defaultWallets = [
-    {
-      name: "TPBank - TK 1",
-      bankName: "TPBank",
-      accountNumber: "",
-      balance: "0",
-      color: "#7c3aed", // Tím TPBank
-      icon: "Landmark",
-      isDefault: true,
-      userId,
-    },
-    {
-      name: "TPBank - TK 2",
-      bankName: "TPBank",
-      accountNumber: "",
-      balance: "0",
-      color: "#a855f7", // Tím nhạt TPBank
-      icon: "CreditCard",
-      isDefault: false,
-      userId,
-    },
-    {
-      name: "Techcombank",
-      bankName: "Techcombank",
-      accountNumber: "",
-      balance: "0",
-      color: "#ef4444", // Đỏ Techcombank
-      icon: "Building2",
-      isDefault: false,
-      userId,
-    },
-  ];
-
-  const createdWallets = [];
-  for (const w of defaultWallets) {
-    const created = await db.orm.public.Wallet.create(w);
-    createdWallets.push(created);
-  }
-
-  // Tự động gán các giao dịch chưa có walletId vào TPBank - TK 1 (vì trích xuất từ sao kê TPBank)
-  if (createdWallets[0]?.id) {
-    const primaryId = createdWallets[0].id;
-    const unassigned = await db.orm.public.Transaction
-      .where({ userId, walletId: null })
-      .all();
-
-    for (const tx of unassigned) {
-      await db.orm.public.Transaction.where({ id: tx.id }).update({ walletId: primaryId });
-    }
-  }
-
-  return createdWallets;
+async function getOrCreateTransferCategory(tx: any, userId: string, type: "EXPENSE" | "INCOME") {
+  const existing = await tx.orm.public.Category
+    .where({ userId, type, name: TRANSFER_CATEGORY_NAME })
+    .first();
+  if (existing) return existing;
+  return tx.orm.public.Category.create({
+    name: TRANSFER_CATEGORY_NAME,
+    type,
+    color: "#64748b",
+    icon: "🔁",
+    userId,
+  });
 }
 
 export async function getWallets() {
@@ -98,40 +45,48 @@ export async function getWallets() {
       .orderBy((w) => w.createdAt.asc())
       .all(),
     db.orm.public.Transaction
-      .select("amount", "type", "walletId")
+      .select("amount", "type", "walletId", "note")
       .where((t) => t.userId.eq(userId))
       .all(),
   ]);
 
-  let wallets = rawWallets;
-  if (wallets.length === 0) {
-    wallets = await ensureDefaultWallets(userId);
-  }
+  // No auto-seeding: a user with no wallets sees an empty state, and
+  // unassigned transactions stay unassigned.
+  const wallets = rawWallets;
 
-  const walletStats = new Map<string, { income: number; expense: number; txCount: number }>();
+  // income/expense are REAL flows (transfers excluded). Transfers are tracked
+  // separately because they still move this wallet's balance.
+  type Stat = { income: number; expense: number; transferIn: number; transferOut: number; txCount: number };
+  const emptyStat = (): Stat => ({ income: 0, expense: 0, transferIn: 0, transferOut: 0, txCount: 0 });
+  const walletStats = new Map<string, Stat>();
   for (const t of txs) {
     const wId = t.walletId || "UNASSIGNED";
-    if (!walletStats.has(wId)) {
-      walletStats.set(wId, { income: 0, expense: 0, txCount: 0 });
-    }
+    if (!walletStats.has(wId)) walletStats.set(wId, emptyStat());
     const stat = walletStats.get(wId)!;
     stat.txCount++;
+    const amt = Number(t.amount);
+    const transfer = isTransfer(t);
     if (t.type === "INCOME") {
-      stat.income += Number(t.amount);
-    } else {
-      stat.expense += Number(t.amount);
+      if (transfer) stat.transferIn += amt;
+      else stat.income += amt;
+    } else if (t.type === "EXPENSE") {
+      if (transfer) stat.transferOut += amt;
+      else stat.expense += amt;
     }
   }
 
   const walletsWithStats = wallets.map((w: any) => {
-    const stat = walletStats.get(w.id) || { income: 0, expense: 0, txCount: 0 };
-    const currentBalance = Number(w.balance) + stat.income - stat.expense;
+    const stat = walletStats.get(w.id) || emptyStat();
+    const currentBalance =
+      Number(w.balance) + stat.income - stat.expense + stat.transferIn - stat.transferOut;
     return {
       ...w,
       balance: Number(w.balance),
       currentBalance,
       income: stat.income,
       expense: stat.expense,
+      transferIn: stat.transferIn,
+      transferOut: stat.transferOut,
       txCount: stat.txCount,
     };
   });
@@ -171,9 +126,8 @@ export async function createWallet(formData: FormData) {
     userId,
   });
 
-  revalidatePath("/wallets");
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
+  // Wallet balances feed every finance page (dashboard, reports, budget, income...).
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -209,9 +163,8 @@ export async function updateWallet(id: string, formData: FormData) {
       isDefault: data.isDefault,
     });
 
-  revalidatePath("/wallets");
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
+  // Wallet balances feed every finance page (dashboard, reports, budget, income...).
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -240,10 +193,8 @@ export async function deleteWallet(id: string) {
     await tx.orm.public.Wallet.where({ id, userId }).delete();
   });
 
-  revalidatePath("/wallets");
-  revalidatePath("/transactions");
-  revalidatePath("/income");
-  revalidatePath("/dashboard");
+  // Wallet balances feed every finance page (dashboard, reports, budget, income...).
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -266,9 +217,8 @@ export async function reassignTransactions(fromWalletId: string | "UNASSIGNED", 
     }
   });
 
-  revalidatePath("/wallets");
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
+  // Wallet balances feed every finance page (dashboard, reports, budget, income...).
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -307,24 +257,16 @@ export async function transferBetweenWallets(formData: FormData) {
   const customNote = note?.trim() ? ` - ${note.trim()}` : "";
 
   await db.transaction(async (tx: any) => {
-    // Tìm hoặc tạo danh mục Chuyển khoản nội bộ
-    const expenseCat = await tx.orm.public.Category
-      .where({ userId, type: "EXPENSE" })
-      .first();
-    const incomeCat = await tx.orm.public.Category
-      .where({ userId, type: "INCOME" })
-      .first();
-    const fallbackCat = expenseCat || incomeCat || (await tx.orm.public.Category.where({ userId }).first());
-
-    if (!fallbackCat) {
-      throw new Error("Không tìm thấy danh mục giao dịch");
-    }
+    // Dedicated "Chuyển khoản nội bộ" categories (one per type) so transfers never
+    // land in a real spending/income category (e.g. "Ăn uống") and skew budgets.
+    const transferOutCat = await getOrCreateTransferCategory(tx, userId, "EXPENSE");
+    const transferInCat = await getOrCreateTransferCategory(tx, userId, "INCOME");
 
     // 1. Ghi giảm Ví nguồn (EXPENSE)
     await tx.orm.public.Transaction.create({
       amount: String(amount),
       type: "EXPENSE",
-      categoryId: (expenseCat || fallbackCat).id,
+      categoryId: transferOutCat.id,
       note: `[TRANSFER] Chuyển tiền sang ${toWallet.name}${customNote}`,
       walletId: fromWallet.id,
       userId,
@@ -335,7 +277,7 @@ export async function transferBetweenWallets(formData: FormData) {
     await tx.orm.public.Transaction.create({
       amount: String(amount),
       type: "INCOME",
-      categoryId: (incomeCat || fallbackCat).id,
+      categoryId: transferInCat.id,
       note: `[TRANSFER] Nhận tiền từ ${fromWallet.name}${customNote}`,
       walletId: toWallet.id,
       userId,
@@ -344,10 +286,17 @@ export async function transferBetweenWallets(formData: FormData) {
 
     // 3. Nếu có phí chuyển khoản, ghi 1 khoản chi phí thực tế ở Ví nguồn
     if (fee > 0) {
+      // The fee is real spending: book it under a regular EXPENSE category
+      // (not the transfer one, which is excluded from totals).
+      const expenseCats = (await tx.orm.public.Category
+        .where({ userId, type: "EXPENSE" })
+        .orderBy((c: any) => c.createdAt.asc())
+        .all()) as any[];
+      const feeCat = expenseCats.find((c) => c.name !== TRANSFER_CATEGORY_NAME) ?? transferOutCat;
       await tx.orm.public.Transaction.create({
         amount: String(fee),
         type: "EXPENSE",
-        categoryId: (expenseCat || fallbackCat).id,
+        categoryId: feeCat.id,
         note: `Phí chuyển khoản từ ${fromWallet.name} sang ${toWallet.name}`,
         walletId: fromWallet.id,
         userId,
@@ -356,10 +305,8 @@ export async function transferBetweenWallets(formData: FormData) {
     }
   });
 
-  revalidatePath("/wallets");
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
-  revalidatePath("/reports");
+  // Wallet balances feed every finance page (dashboard, reports, budget, income...).
+  revalidatePath("/", "layout");
   return {
     success: true,
     fromName: fromWallet.name,

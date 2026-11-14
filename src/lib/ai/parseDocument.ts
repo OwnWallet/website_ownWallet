@@ -4,7 +4,7 @@
  * nhận về mảng giao dịch đã được phân tích.
  */
 
-import { getGeminiModel } from "@/lib/ai/gemini";
+import { generateWithFallback, DEFAULT_GEMINI_MODEL } from "@/lib/ai/gemini";
 import { parseExcelToText, isExcelOrCsv, isPdf } from "@/lib/ai/excelParser";
 import { extractTextFromPdfBuffer } from "@/lib/ai/pdfTextExtractor";
 import {
@@ -125,65 +125,18 @@ function tryLocalParse(
   return null;
 }
 
-async function generateContentWithFallback(
-  contentParts: any[],
-  customModel?: string
-): Promise<string> {
-  const primaryModel = await getGeminiModel(customModel);
-  const candidateFallbacks = [
-    "gemini-3.8-flash",
-  ].filter((m) => m !== customModel);
-
-  try {
-    const result = await primaryModel.generateContent(contentParts);
-    return result.response.text();
-  } catch (err: any) {
-    const errMsg = err?.message || "";
-    const is503 =
-      errMsg.includes("503") ||
-      errMsg.toLowerCase().includes("high demand") ||
-      errMsg.toLowerCase().includes("unavailable");
-
-    if (!is503) {
-      if (
-        errMsg.includes("429") ||
-        errMsg.toLowerCase().includes("resource exhausted") ||
-        errMsg.toLowerCase().includes("quota")
-      ) {
-        throw new Error(
-          "Tài khoản Google Gemini đã đạt giới hạn yêu cầu (Lỗi 429 Quota Exceeded). Vui lòng đợi vài phút hoặc chuyển sang model khác."
-        );
-      }
-      throw err;
-    }
-
-    console.warn(
-      `[AI Import] Model ${customModel || "mặc định"} gặp lỗi 503 (High Demand). Đang tự động chuyển sang model dự phòng...`
-    );
-
-    // Thử lần lượt các fallback model
-    for (const fallbackModelName of candidateFallbacks) {
-      try {
-        console.log(`[AI Import] Thử với model dự phòng: ${fallbackModelName}...`);
-        const fallbackModel = await getGeminiModel(fallbackModelName);
-        const result = await fallbackModel.generateContent(contentParts);
-        const text = result.response.text();
-        if (text) {
-          console.log(`[AI Import] Thành công với model dự phòng: ${fallbackModelName}`);
-          return text;
-        }
-      } catch (fallbackErr: any) {
-        console.warn(
-          `[AI Import] Fallback model ${fallbackModelName} thất bại:`,
-          fallbackErr?.message
-        );
-      }
-    }
-
-    throw new Error(
-      "Máy chủ Google Gemini hiện đang quá tải toàn cầu (Lỗi 503 Service Unavailable). Hệ thống đã thử các model dự phòng nhưng chưa thể kết nối. Vui lòng thử lại sau giây lát hoặc đổi API Key khác."
-    );
-  }
+/**
+ * Gọi Gemini có timeout cho từng lần gọi + chuỗi model dự phòng (xem lib/ai/gemini.ts).
+ * Tổng thời gian được giới hạn để route /api/ai/import (maxDuration 60s) luôn kịp trả kết quả
+ * hoặc chuyển sang bộ đọc nội bộ.
+ */
+async function generateContentWithFallback(contentParts: any[], customModel?: string): Promise<string> {
+  const { text } = await generateWithFallback(contentParts, {
+    preferredModel: customModel,
+    json: true,
+    deadlineMs: 45_000,
+  });
+  return text;
 }
 
 export async function parseDocument(
@@ -218,7 +171,7 @@ export async function parseDocument(
       };
     }
     throw new Error(
-      "File này là bản scan ảnh hoặc không có lớp văn bản bảng chuẩn để đọc trực tiếp. Vui lòng chọn một Model AI (như gemini-3.8-flash) để dùng nhận diện hình ảnh (Vision)."
+      "File này là bản scan ảnh hoặc không có lớp văn bản bảng chuẩn để đọc trực tiếp. Vui lòng chọn một Model AI (như " + DEFAULT_GEMINI_MODEL + ") để dùng nhận diện hình ảnh (Vision)."
     );
   }
 
@@ -378,14 +331,14 @@ export async function parseDocument(
     const aiErrMessage =
       aiErr instanceof Error ? aiErr.message : "Không thể kết nối AI API";
     console.warn(
-      "[AI Import] Gặp lỗi khi gọi AI API, đang tự động thử bóc tách bằng bộ đọc Sao kê nội bộ:",
+      "[Import] Gặp lỗi khi gọi AI API, đang tự động thử bóc tách bằng bộ đọc Sao kê nội bộ:",
       aiErrMessage
     );
 
     const localFallback = tryLocalParse(buffer, filename, availableCategories);
     if (localFallback && localFallback.transactions.length > 0) {
       console.log(
-        `[AI Import] Tự động dự phòng thành công! Đã trích xuất ${localFallback.transactions.length} giao dịch bằng bộ đọc nội bộ.`
+        `[Import] Tự động dự phòng thành công! Đã trích xuất ${localFallback.transactions.length} giao dịch bằng bộ đọc nội bộ.`
       );
       return {
         ...localFallback,

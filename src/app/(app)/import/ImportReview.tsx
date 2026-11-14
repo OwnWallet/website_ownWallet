@@ -6,6 +6,7 @@ import { confirmAiImport } from "@/actions/ai-import";
 import { useRouter } from "next/navigation";
 import { maskAccountNumber } from "@/lib/utils";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
+import { extractMerchantKey } from "@/lib/category-rules";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -21,6 +22,7 @@ interface ImportReviewProps {
   totalFound: number;
   skipped: number;
   duplicateCount?: number;
+  ruleAppliedCount?: number;
   modeUsed?: "local" | "ai-fallback-local" | "ai";
   fallbackReason?: string;
   detectedBank?: string;
@@ -66,6 +68,7 @@ export default function ImportReview({
   totalFound,
   skipped,
   duplicateCount: _duplicateCount,
+  ruleAppliedCount = 0,
   modeUsed,
   fallbackReason,
   detectedBank,
@@ -113,6 +116,7 @@ export default function ImportReview({
   const [importResult, setImportResult] = useState<{
     success: boolean;
     imported?: number;
+    learnedRules?: number;
     error?: string;
   } | null>(null);
 
@@ -120,6 +124,14 @@ export default function ImportReview({
   const totalDuplicates = rows.filter((r) => r.duplicateInfo?.isDuplicate).length;
   const totalValid = rows.length - totalDuplicates;
   const selectedCount = rows.filter((r) => r._selected).length;
+
+  // Dòng đã sửa danh mục so với gợi ý (và có từ khóa người bán) → sẽ được học thành quy tắc
+  const isCorrected = (r: ReviewRow) =>
+    r.suggestedCategoryName !== undefined &&
+    Boolean(r.categoryName) &&
+    r.categoryName.trim().toLowerCase() !== r.suggestedCategoryName.trim().toLowerCase() &&
+    extractMerchantKey(r.note) !== null;
+  const pendingLearnCount = rows.filter((r) => r._selected && isCorrected(r)).length;
 
   // Lọc danh sách theo filterMode
   const visibleRows = rows.filter((r) => {
@@ -179,13 +191,17 @@ export default function ImportReview({
     startTransition(async () => {
       const result = await confirmAiImport({
         walletId: selectedWalletId || null,
-        transactions: selected.map(({ amount, type, categoryName, note, recordedAt }) => ({
-          amount,
-          type,
-          categoryName,
-          note,
-          recordedAt,
-        })),
+        transactions: selected.map(
+          ({ amount, type, categoryName, note, recordedAt, suggestedCategoryName, ruleKeyword }) => ({
+            amount,
+            type,
+            categoryName,
+            note,
+            recordedAt,
+            suggestedCategoryName,
+            ruleKeyword,
+          })
+        ),
       });
 
       setImportResult(result);
@@ -212,6 +228,11 @@ export default function ImportReview({
         <p className="text-muted">
           Đã thêm <strong className="text-income">{importResult.imported} giao dịch</strong> vào OwnWallet.
         </p>
+        {Boolean(importResult.learnedRules) && (
+          <p className="text-sm mt-2">
+            📌 Đã ghi nhớ <strong>{importResult.learnedRules} quy tắc phân loại</strong> từ các danh mục bạn sửa — lần import sau sẽ tự áp dụng.
+          </p>
+        )}
         <p className="text-subtle text-sm mt-1">Đang chuyển hướng về Giao dịch…</p>
       </div>
     );
@@ -239,6 +260,25 @@ export default function ImportReview({
           <span>
             Đã bóc tách siêu tốc bằng <strong>Bộ đọc Sao kê Nội bộ (Không dùng AI)</strong> — Độ chính xác số liệu 100%, tự động gợi ý danh mục theo từ khóa.
           </span>
+        </div>
+      )}
+
+      {(ruleAppliedCount > 0 || pendingLearnCount > 0) && (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-violet-50 border border-violet-200 text-violet-900 text-xs leading-relaxed">
+          <span className="text-base leading-none shrink-0">📌</span>
+          <div>
+            {ruleAppliedCount > 0 && (
+              <span className="block">
+                Đã tự phân loại <strong>{ruleAppliedCount} giao dịch</strong> theo quy tắc bạn từng dạy.
+              </span>
+            )}
+            {pendingLearnCount > 0 && (
+              <span className="block">
+                Bạn đã sửa danh mục <strong>{pendingLearnCount} dòng</strong> — các lựa chọn này sẽ được ghi nhớ khi bạn xác nhận import.
+              </span>
+            )}
+            <span className="block text-[11px] text-violet-700 mt-0.5">Xem / xóa quy tắc tại Cài đặt → Quy tắc phân loại.</span>
+          </div>
         </div>
       )}
 
@@ -473,6 +513,19 @@ export default function ImportReview({
                         </optgroup>
                       )}
                     </select>
+                    {row.categorySource === "rule" && row.categoryName === row.suggestedCategoryName && (
+                      <div
+                        className="mt-1 text-[10px] font-semibold text-violet-700"
+                        title={row.ruleKeyword ? `Theo quy tắc: "${row.ruleKeyword}"` : undefined}
+                      >
+                        📌 Quy tắc{row.ruleKeyword ? `: ${row.ruleKeyword}` : ""}
+                      </div>
+                    )}
+                    {isCorrected(row) && (
+                      <div className="mt-1 text-[10px] font-semibold text-emerald-700">
+                        ✏️ Sẽ ghi nhớ: {extractMerchantKey(row.note)}
+                      </div>
+                    )}
                   </td>
 
                   {/* Note & Duplicate Info */}

@@ -2,7 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { toInstant, toDate, serializeData } from "@/lib/utils";
+import { toInstant, toDate, serializeData } from "@/lib/utils";
+import { sumIncomeExpense } from "@/lib/finance";
 import { getWallets } from "@/actions/wallets";
 import { getAutoRolloverBudgets } from "@/actions/budgets";
 
@@ -102,7 +103,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
 
     // Giao dịch 90 ngày gần đây (chỉ cần amount và type để tính burn rate)
     db.orm.public.Transaction
-      .select("amount", "type")
+      .select("amount", "type", "note")
       .where((t) => t.userId.eq(userId))
       .where((t) => t.recordedAt.gte(ninetyDaysInstant))
       .all(),
@@ -204,17 +205,10 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   );
 
   // 5. Tính Burn Rate & Thu nhập TB hàng tháng từ 90 ngày gần nhất
-  let total90dIncome = 0;
-  let total90dExpense = 0;
-
-  for (const tx of recentTransactions as any[]) {
-    const amt = Number(tx.amount);
-    if (tx.type === "INCOME") {
-      total90dIncome += amt;
-    } else if (tx.type === "EXPENSE") {
-      total90dExpense += amt;
-    }
-  }
+  // Internal transfers are excluded: they move money between wallets, not in/out.
+  const { income: total90dIncome, expense: total90dExpense } = sumIncomeExpense(
+    recentTransactions as any[]
+  );
 
   // Chia 3 tháng (nếu chưa đủ 90 ngày thì tối thiểu tính 1 tháng)
   const averageMonthlyIncome = Math.round(total90dIncome / 3);

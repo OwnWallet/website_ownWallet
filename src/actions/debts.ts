@@ -170,39 +170,36 @@ export async function recordPayment(id: string, formData: FormData) {
       const wallet = await tx.orm.public.Wallet.where({ id: walletId, userId }).first();
       if (wallet) {
         walletName = wallet.name;
-        const currentBal = Number(wallet.balance ?? 0);
         const isOwe = debt.direction === "OWE";
-        const newBal = isOwe ? currentBal - cappedPayment : currentBal + cappedPayment;
 
-        // Tìm danh mục nợ tương ứng (có fallback sang type DEBT hoặc EXPENSE/INCOME)
+        // Tìm danh mục nợ tương ứng (fallback sang type DEBT). Nếu chưa có thì tạo mới —
+        // KHÔNG bao giờ sửa trực tiếp Wallet.balance (đó là số dư đầu kỳ, sửa sẽ làm lệch
+        // toàn bộ số dư lũy kế lịch sử). Mọi biến động số dư phải đi qua Transaction.
         const catName = isOwe ? "Nợ phải trả" : "Nợ phải thu";
         let category = await tx.orm.public.Category.where({ userId, name: catName }).first();
         if (!category) {
           category = await tx.orm.public.Category.where({ userId, type: "DEBT" }).first();
         }
         if (!category) {
-          category = await tx.orm.public.Category
-            .where({ userId, type: isOwe ? "EXPENSE" : "INCOME" })
-            .first();
-        }
-
-        if (category) {
-          const createdTx = await tx.orm.public.Transaction.create({
-            amount: String(cappedPayment),
-            type: isOwe ? "EXPENSE" : "INCOME",
-            note: parsed.data.note?.trim() || `${isOwe ? "Trả nợ cho" : "Thu nợ từ"} ${debt.person}`,
-            recordedAt: paidAt,
-            categoryId: category.id,
-            walletId,
+          category = await tx.orm.public.Category.create({
+            name: catName,
+            type: "DEBT",
+            color: isOwe ? "#b45309" : "#047857",
+            icon: "🤝",
             userId,
           });
-          linkedTxId = createdTx.id;
-        } else {
-          // Chỉ cập nhật trực tiếp balance nếu chưa tạo được bản ghi Transaction
-          await tx.orm.public.Wallet.where({ id: walletId, userId }).update({
-            balance: String(newBal),
-          });
         }
+
+        const createdTx = await tx.orm.public.Transaction.create({
+          amount: String(cappedPayment),
+          type: isOwe ? "EXPENSE" : "INCOME",
+          note: parsed.data.note?.trim() || `${isOwe ? "Trả nợ cho" : "Thu nợ từ"} ${debt.person}`,
+          recordedAt: paidAt,
+          categoryId: category.id,
+          walletId,
+          userId,
+        });
+        linkedTxId = createdTx.id;
       }
     }
 

@@ -2,8 +2,7 @@ import { auth } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { serializeData } from "@/lib/utils";
-import { Plus, ArrowLeftRight } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeftRight } from "lucide-react";
 import { TransactionList } from "./transaction-list";
 
 interface TransactionsPageProps {
@@ -88,13 +87,12 @@ export default async function TransactionsPage({ searchParams }: TransactionsPag
           <div>
             <h1 className="page-header-title">Lịch sử giao dịch</h1>
             <p className="page-header-subtitle">
-              Tổng cộng {transactions.length} giao dịch gần nhất
+              {transactions.length >= 2000
+                ? "Đang hiển thị 2.000 giao dịch gần nhất"
+                : `Tổng cộng ${transactions.length} giao dịch`}
             </p>
           </div>
         </div>
-        <Link href="/transactions/new" className="btn-primary">
-          <Plus size={16} /> Thêm giao dịch mới
-        </Link>
       </div>
 
       {/* Transaction List with filters, search, edit & delete */}

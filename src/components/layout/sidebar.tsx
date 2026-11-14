@@ -1,9 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
-import { logout } from "@/actions/auth";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarTimeFilter } from "./SidebarTimeFilter";
 import { SidebarWalletSelector, WalletItem } from "./SidebarWalletSelector";
@@ -18,22 +18,17 @@ import {
   HandCoins,
   Target,
   Settings,
-  LogOut,
   X,
-  Sparkles,
+  FileUp,
   Landmark,
-  PanelLeftClose,
-  PanelLeft,
-  Layers,
 } from "lucide-react";
 
 export const NAV_GROUPS = [
   {
-    title: "Tổng quan",
+    title: "Chung",
     items: [
       { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
       { href: "/reports", label: "Báo cáo & AI", icon: BarChart3 },
-      { href: "/assets", label: "Tổng tài sản", icon: Layers },
     ],
   },
   {
@@ -42,7 +37,7 @@ export const NAV_GROUPS = [
       { href: "/transactions", label: "Sổ giao dịch", icon: ArrowLeftRight },
       { href: "/income", label: "Dòng tiền định kỳ", icon: Banknote },
       { href: "/budget", label: "Ngân sách", icon: Wallet },
-      { href: "/import", label: "AI Import", icon: Sparkles },
+      { href: "/import", label: "Import sao kê", icon: FileUp },
     ],
   },
   {
@@ -68,20 +63,68 @@ interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   isCollapsed?: boolean;
-  onToggleCollapse?: () => void;
   wallets?: WalletItem[];
+  sidebarWidth?: number;
+  onWidthChange?: (width: number) => void;
+  onResetWidth?: () => void;
+  isResizing?: boolean;
+  setIsResizing?: (resizing: boolean) => void;
 }
 
 export function Sidebar({
   isOpen,
   onClose,
   isCollapsed = false,
-  onToggleCollapse,
   wallets = [],
+  sidebarWidth = 260,
+  onWidthChange,
+  onResetWidth,
+  isResizing = false,
+  setIsResizing,
 }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchStr = searchParams ? searchParams.toString() : "";
+
+  // Close mobile sidebar on Escape key
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && isOpen) {
+        onClose?.();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Drag resizing logic on desktop
+  useEffect(() => {
+    if (!isResizing) return;
+
+    function handleMouseMove(e: MouseEvent) {
+      if (onWidthChange) {
+        onWidthChange(e.clientX);
+      }
+    }
+
+    function handleMouseUp(e: MouseEvent) {
+      setIsResizing?.(false);
+      try {
+        const finalWidth = Math.min(Math.max(e.clientX, 210), 400);
+        localStorage.setItem("ownwallet_sidebar_width", String(finalWidth));
+      } catch {
+        // Ignore
+      }
+    }
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing, onWidthChange, setIsResizing]);
 
   return (
     <>
@@ -89,18 +132,20 @@ export function Sidebar({
       {isOpen && (
         <div
           onClick={onClose}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 lg:hidden animate-fade-in"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-40 lg:hidden animate-fade-in"
+          aria-hidden="true"
         />
       )}
 
       {/* Main Sidebar Element */}
       <aside
         className={cn(
-          "fixed top-0 left-0 bottom-0 h-dvh max-h-screen bg-slate-900/90 backdrop-blur-2xl border-r border-white/10 flex flex-col z-50 shadow-2xl transition-all duration-300 ease-in-out overflow-hidden text-slate-200",
-          // Mobile state
+          "fixed top-0 left-0 bottom-0 h-dvh max-h-screen bg-slate-900/95 backdrop-blur-2xl border-r border-white/10 flex flex-col z-50 shadow-2xl overflow-hidden text-slate-200",
+          // Mobile state: slide in/out
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
-          // Desktop width: 72px when collapsed, 250px when expanded
-          isCollapsed ? "w-[250px] lg:w-[72px]" : "w-[250px]"
+          // Mobile width is always a comfortable 280px drawer; Desktop uses dynamic .sidebar-desktop-width
+          "w-[280px] sidebar-desktop-width",
+          isResizing ? "transition-none select-none" : "transition-all duration-300 ease-in-out"
         )}
       >
         {/* Brand Header (Sticky at top) */}
@@ -175,7 +220,7 @@ export function Sidebar({
               {NAV_GROUPS.map((group) => (
                 <div key={group.title}>
                   <div className={cn("px-2.5 mb-1.5 transition-all", isCollapsed && "lg:hidden")}>
-                    <span className="text-[10px] font-bold text-slate-400/75 uppercase tracking-wider">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                       {group.title}
                     </span>
                   </div>
@@ -195,7 +240,7 @@ export function Sidebar({
                           onClick={() => onClose?.()}
                           title={item.label}
                           className={cn(
-                            "flex items-center rounded-xl text-sm font-medium transition-all duration-150 group relative",
+                            "flex items-center rounded-xl text-sm font-semibold transition-all duration-150 group relative",
                             isCollapsed
                               ? "px-3 py-2 lg:justify-center lg:px-0 lg:py-2"
                               : "gap-3 px-3 py-2",
@@ -239,39 +284,20 @@ export function Sidebar({
           </div>
         </ScrollArea>
 
-        {/* Footer with Toggle & Logout (Sticky at bottom) */}
-        <div className="p-2.5 border-t border-white/10 bg-slate-950/40 shrink-0 space-y-1 z-10">
-          {/* Desktop Collapse Toggle Button at bottom */}
-          {onToggleCollapse && (
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              title={isCollapsed ? "Mở rộng thanh bên" : "Thu gọn thanh bên"}
-              className="hidden lg:flex items-center justify-center rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10 transition-all cursor-pointer w-full py-2"
-            >
-              <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0 text-slate-400 group-hover:text-white">
-                {isCollapsed ? <PanelLeft size={14} /> : <PanelLeftClose size={14} />}
-              </div>
-            </button>
-          )}
-
-          {/* Logout button */}
-          <form action={logout}>
-            <button
-              type="submit"
-              title="Đăng xuất"
-              className={cn(
-                "w-full flex items-center rounded-xl text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer py-2",
-                isCollapsed ? "justify-center px-0 lg:py-2" : "gap-2.5 px-3"
-              )}
-            >
-              <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0 text-slate-400 group-hover:text-rose-400">
-                <LogOut size={14} />
-              </div>
-              <span className={cn("truncate", isCollapsed && "lg:hidden")}>Đăng xuất</span>
-            </button>
-          </form>
-        </div>
+        {/* Resize Handle on Right Edge (Desktop only & when not collapsed) */}
+        {!isCollapsed && onWidthChange && (
+          <div
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setIsResizing?.(true);
+            }}
+            onDoubleClick={onResetWidth}
+            className="hidden lg:flex absolute top-0 right-0 w-2 h-full cursor-col-resize items-center justify-center hover:bg-orange-500/30 active:bg-orange-500/50 transition-colors z-50 group select-none"
+            title={`Kéo để chỉnh độ rộng (${sidebarWidth}px) • Click đúp để đặt lại mặc định (260px)`}
+          >
+            <div className="w-0.5 h-8 rounded-full bg-white/20 group-hover:bg-orange-400 group-hover:h-12 transition-all shadow-xs" />
+          </div>
+        )}
       </aside>
     </>
   );

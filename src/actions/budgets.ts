@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { BudgetSchema } from "@/schemas/budget";
+import { isTransfer, percentOf } from "@/lib/finance";
 
 async function getUserId() {
   const session = await auth();
@@ -51,29 +52,47 @@ export async function upsertBudget(formData: FormData) {
   return { success: true };
 }
 
-export async function deleteBudget(id: string) {
-  const userId = await getUserId();
+/**
+ * Resolve a budget id (real, or an inherited "virtual_<categoryId>_<year>_<month>" one)
+ * to its category and period. Returns null if it can't be resolved.
+ */
+async function resolveBudgetTarget(orm: any, userId: string, id: string) {
   if (id.startsWith("virtual_")) {
-    const parts = id.split("_");
-    const categoryId = parts[1];
-    if (categoryId) {
-      await db.orm.public.Budget.where({ userId, categoryId }).delete();
-    }
-  } else {
-    const target = await db.orm.public.Budget.where({ id, userId }).first();
-    if (target) {
-      // Xóa ngân sách của danh mục này ở kỳ hiện tại và các kỳ trước để không bị tự động kế thừa lại sau khi xóa
-      const allForCat = await db.orm.public.Budget
-        .where({ userId, categoryId: target.categoryId })
-        .all();
-      const targetYM = target.year * 12 + target.month;
-      for (const item of allForCat) {
-        if (item.year * 12 + item.month <= targetYM) {
-          await db.orm.public.Budget.where({ id: item.id, userId }).delete();
-        }
-      }
+    const [, categoryId, y, m] = id.split("_");
+    const year = Number(y);
+    const month = Number(m);
+    if (!categoryId || !Number.isInteger(year) || !Number.isInteger(month)) return null;
+    return { categoryId, ym: year * 12 + month };
+  }
+  const target = await orm.public.Budget.where({ id, userId }).first();
+  if (!target) return null;
+  return { categoryId: target.categoryId as string, ym: target.year * 12 + target.month };
+}
+
+/**
+ * Delete the category's budget for this period and every earlier period, so it
+ * is no longer inherited from this month on. Later explicit budgets are kept.
+ * (Previously a virtual id wiped the category's budgets for ALL periods.)
+ */
+async function deleteBudgetUpTo(orm: any, userId: string, id: string): Promise<boolean> {
+  const target = await resolveBudgetTarget(orm, userId, id);
+  if (!target) return false;
+  const allForCat = await orm.public.Budget
+    .where({ userId, categoryId: target.categoryId })
+    .all();
+  for (const item of allForCat) {
+    if (item.year * 12 + item.month <= target.ym) {
+      await orm.public.Budget.where({ id: item.id, userId }).delete();
     }
   }
+  return true;
+}
+
+export async function deleteBudget(id: string) {
+  const userId = await getUserId();
+  await db.transaction(async (t: any) => {
+    await deleteBudgetUpTo(t.orm, userId, id);
+  });
   revalidatePath("/budget");
   revalidatePath("/dashboard");
   return { success: true };
@@ -86,27 +105,7 @@ export async function deleteBudgets(ids: string[]) {
   let count = 0;
   await db.transaction(async (t: any) => {
     for (const id of ids) {
-      if (id.startsWith("virtual_")) {
-        const parts = id.split("_");
-        const categoryId = parts[1];
-        if (categoryId) {
-          await t.orm.public.Budget.where({ userId, categoryId }).delete();
-          count++;
-        }
-        continue;
-      }
-      const b = await t.orm.public.Budget.where({ id, userId }).first();
-      if (!b) continue;
-      const allForCat = await t.orm.public.Budget
-        .where({ userId, categoryId: b.categoryId })
-        .all();
-      const targetYM = b.year * 12 + b.month;
-      for (const item of allForCat) {
-        if (item.year * 12 + item.month <= targetYM) {
-          await t.orm.public.Budget.where({ id: item.id, userId }).delete();
-        }
-      }
-      count++;
+      if (await deleteBudgetUpTo(t.orm, userId, id)) count++;
     }
   });
 
@@ -155,7 +154,7 @@ export async function getAutoRolloverBudgets(
   totalEffectiveLimit: number;
   totalSpent: number;
 }> {
-  const { toInstant, getVNDateParts, calcPercent, serializeData } = await import("@/lib/utils");
+  const { toInstant, getVNDateParts, serializeData } = await import("@/lib/utils");
 
   const { year: realYear, month: realMonth } = getVNDateParts(new Date());
 
@@ -205,7 +204,7 @@ export async function getAutoRolloverBudgets(
   const rangeTo = new Date(Date.UTC(maxYear, maxMonth, 0, 23, 59, 59, 999) - VN_OFFSET_MINUTES * 60_000);
 
   let expenseQuery = db.orm.public.Transaction
-    .select("amount", "categoryId", "recordedAt")
+    .select("amount", "categoryId", "recordedAt", "note")
     .where((t) => t.userId.eq(userId))
     .where((t) => t.type.eq("EXPENSE"))
     .where((t) => t.recordedAt.gte(toInstant(rangeFrom)))
@@ -225,6 +224,8 @@ export async function getAutoRolloverBudgets(
   const spentCatMonthMap = new Map<string, number>();
 
   for (const tx of expenseTxs) {
+    // Internal wallet transfers move money, they are not spending.
+    if (isTransfer(tx)) continue;
     const { year: y, month: m } = getVNDateParts(tx.recordedAt);
     const amt = Number(tx.amount);
     const key = `${tx.categoryId}_${y}_${m}`;
@@ -272,7 +273,7 @@ export async function getAutoRolloverBudgets(
       const effectiveLimit = baseLimit + rolloverAmount;
       const spent = spentCatMonthMap.get(`${catId}_${y}_${m}`) ?? 0;
       const remaining = effectiveLimit - spent;
-      const percent = calcPercent(spent, effectiveLimit);
+      const percent = percentOf(spent, effectiveLimit);
 
       const prevMonth = m === 1 ? 12 : m - 1;
       const prevYear = m === 1 ? y - 1 : y;
@@ -341,7 +342,7 @@ export async function getAutoRolloverBudgets(
     const yearEffectiveLimit = yearBaseLimit + yearRolloverAmount;
     const yearSpent = items.reduce((s, x) => s + x.spent, 0);
     const remaining = yearEffectiveLimit - yearSpent;
-    const percent = calcPercent(yearSpent, yearEffectiveLimit);
+    const percent = percentOf(yearSpent, yearEffectiveLimit);
 
     aggregatedYearBudgets.push({
       id: lastItem.id,

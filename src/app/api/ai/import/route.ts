@@ -3,10 +3,12 @@ import { auth } from "@/lib/auth";
 import { parseDocument } from "@/lib/ai/parseDocument";
 import { reconcileTransactionsWithDb } from "@/lib/ai/reconcile";
 import { db } from "@/lib/db";
+import { applyCategoryRules } from "@/lib/category-rules";
+import { getCategoryRules } from "@/lib/category-rules-db";
 
 export const runtime = "nodejs"; // cần nodejs runtime để đọc Buffer
 
-// Giới hạn body size — Next.js mặc định 4MB, tăng lên 12MB
+// Mỗi lần gọi AI có timeout riêng (AI_CALL_TIMEOUT_MS) và tổng ≤ 45s để luôn trả kết quả trước 60s
 export const maxDuration = 60; // giây
 
 export async function POST(request: NextRequest) {
@@ -43,11 +45,12 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(arrayBuffer);
 
   // ── Lấy danh sách category của user để inject vào prompt ──
-  const categories = await db.orm.public.Category
-    .select("name")
-    .where({ userId })
-    .all();
+  const [categories, rules] = await Promise.all([
+    db.orm.public.Category.select("id", "name").where({ userId }).all(),
+    getCategoryRules(userId),
+  ]);
   const categoryNames = categories.map((c: any) => c.name);
+  const categoryNameById = new Map<string, string>(categories.map((c: any) => [c.id, c.name]));
 
   // ── Gọi AI ──
   try {
@@ -67,11 +70,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Đối chiếu với database để phát hiện trùng lặp ──
-    const reconciledTransactions = await reconcileTransactionsWithDb(
-      result.transactions,
-      userId
+    // ── Áp dụng quy tắc phân loại người dùng đã dạy (ưu tiên hơn gợi ý của AI / bộ đọc) ──
+    const sourceTag: "ai" | "local" = result.modeUsed === "ai" ? "ai" : "local";
+    const { transactions: ruledTransactions, appliedCount: ruleAppliedCount } = applyCategoryRules(
+      result.transactions.map((t) => ({ ...t, categorySource: sourceTag })),
+      rules,
+      categoryNameById
     );
+
+    // ── Đối chiếu với database để phát hiện trùng lặp ──
+    const reconciledTransactions = await reconcileTransactionsWithDb(ruledTransactions, userId);
 
     const duplicateCount = reconciledTransactions.filter(
       (t) => t.duplicateInfo?.isDuplicate
@@ -83,31 +91,16 @@ export async function POST(request: NextRequest) {
       totalFound: result.totalFound,
       skipped: result.skipped,
       duplicateCount,
+      ruleAppliedCount,
       modeUsed: result.modeUsed ?? "ai",
       fallbackReason: result.fallbackReason,
       detectedBank: result.detectedBank,
       detectedAccountNumber: result.detectedAccountNumber,
     });
   } catch (err: unknown) {
-    let message =
-      err instanceof Error ? err.message : "Lỗi không xác định từ AI.";
-
-    if (
-      message.includes("503") ||
-      message.toLowerCase().includes("high demand") ||
-      message.toLowerCase().includes("service unavailable")
-    ) {
-      message =
-        "Máy chủ Google Gemini đang quá tải toàn cầu (Lỗi 503). Vui lòng thử lại sau giây lát hoặc kiểm tra cấu hình model (gemini-3.8-flash) trong Cài đặt.";
-    } else if (
-      message.includes("429") ||
-      message.toLowerCase().includes("resource exhausted") ||
-      message.toLowerCase().includes("quota")
-    ) {
-      message =
-        "Tài khoản Google Gemini đã hết hạn ngạch yêu cầu trong ngày (Lỗi 429 Quota Exceeded). Vui lòng đợi Google làm mới hạn ngạch hoặc nâng cấp tài khoản.";
-    }
-
+    // Thông báo lỗi đã được chuẩn hóa trong lib/ai/gemini.ts (timeout / 503 / 429 / API key / model)
+    const message = err instanceof Error ? err.message : "Lỗi không xác định khi phân tích file.";
+    console.error("[Import] Phân tích thất bại:", message);
     return NextResponse.json({ error: message }, { status: 422 });
   }
 }
