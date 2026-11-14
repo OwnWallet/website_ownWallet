@@ -6,9 +6,15 @@ import { createDebt, recordPayment, mergeDebt } from "@/actions/debts";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
-import { encodeDebtMetadata, calculateDebtAmortization } from "@/lib/debt-schedule";
+import { encodeDebtMetadata, parseDebtMetadata, calculateDebtAmortization } from "@/lib/debt-schedule";
 
 const emptySubscribe = () => () => {};
+/** Ngày hôm nay (giờ địa phương) dạng YYYY-MM-DD cho input type="date" */
+function getTodayISO() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 function useMounted() {
   return useSyncExternalStore(
     emptySubscribe,
@@ -33,6 +39,7 @@ export function DebtActions({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [todayISO] = useState(getTodayISO);
   const [hasDueDate, setHasDueDate] = useState(false);
   const [paidAmountVal, setPaidAmountVal] = useState<number>(0);
   const [addAmountVal, setAddAmountVal] = useState<number>(0);
@@ -251,6 +258,21 @@ export function DebtActions({
               </div>
             )}
 
+            {/* Ngày thanh toán thực tế */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Ngày thanh toán
+              </label>
+              <input
+                type="date"
+                name="recordedAt"
+                defaultValue={todayISO}
+                max={todayISO}
+                disabled={isBusy}
+                className="w-full sm:w-64 bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm focus:outline-none border border-slate-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+              />
+            </div>
+
             {/* Ghi chú thanh toán */}
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -393,7 +415,8 @@ export function DebtActions({
               try {
                 const res: any = await createDebt(fd);
                 if (res?.error) {
-                  toast.error("Không thể tạo khoản nợ. Vui lòng kiểm tra lại thông tin.");
+                  const msg = typeof res.error === "string" ? res.error : Object.values(res.error).flat()[0];
+                  toast.error(String(msg || "Không thể tạo khoản nợ. Vui lòng kiểm tra lại thông tin."));
                 } else {
                   toast.success(`Đã thêm khoản nợ với ${person} thành công!`);
                   setIsOpen(false);
@@ -464,6 +487,20 @@ export function DebtActions({
                 placeholder="VD: 1,000,000"
                 showQuickButtons={true}
                 onChangeValue={(val) => setAddAmountVal(val)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Ngày phát sinh
+              </label>
+              <input
+                type="date"
+                name="occurredAt"
+                defaultValue={todayISO}
+                max={todayISO}
+                disabled={isBusy}
+                className="w-full bg-background rounded-xl px-3.5 py-2.5 text-foreground font-medium text-sm focus:outline-none border border-slate-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
               />
             </div>
 
@@ -774,13 +811,14 @@ export function DebtActions({
                 onClick={async () => {
                   setLoading(true);
                   try {
-                    const note = duplicatePrompt.fd.get("note")?.toString();
+                    const note = parseDebtMetadata(duplicatePrompt.fd.get("note")?.toString()).cleanNote;
                     const targetId = mergeTargetDebtId || duplicatePrompt.match.id;
                     const res: any = await mergeDebt(
                       targetId,
                       duplicatePrompt.newAmount,
-                      note,
-                      mergeWalletId || undefined
+                      note || undefined,
+                      mergeWalletId || undefined,
+                      duplicatePrompt.fd.get("occurredAt")?.toString() || undefined
                     );
                     if (res?.error) {
                       toast.error(res.error);

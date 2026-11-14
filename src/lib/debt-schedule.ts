@@ -1,3 +1,5 @@
+import { stripDebtSystemNotes } from "./debt-sync";
+
 export interface DebtScheduleConfig {
   hasInterest?: boolean;
   rate?: number; // Lãi suất %
@@ -25,16 +27,16 @@ export function parseDebtMetadata(note?: string | null): ParsedDebtMeta {
 
   const match = note.match(SCHEDULE_TAG_REGEX);
   if (!match) {
-    return { cleanNote: note.trim() };
+    return { cleanNote: stripDebtSystemNotes(note) };
   }
 
   try {
     const jsonStr = match[1];
     const schedule = JSON.parse(jsonStr) as DebtScheduleConfig;
-    const cleanNote = note.replace(SCHEDULE_TAG_REGEX, "").trim();
+    const cleanNote = stripDebtSystemNotes(note.replace(SCHEDULE_TAG_REGEX, ""));
     return { schedule, cleanNote };
   } catch {
-    return { cleanNote: note.trim() };
+    return { cleanNote: stripDebtSystemNotes(note) };
   }
 }
 

@@ -13,7 +13,19 @@ export const TransactionSchema = z.object({
   walletId: z.string().optional().nullable(),
   evidenceUrl: z.string().optional().nullable(),
   debtPerson: z.string().max(100).optional().nullable(),
-  syncToDebt: z.coerce.boolean().optional().nullable(),
+  // z.coerce.boolean() biến chuỗi "false" thành true → parse tường minh
+  syncToDebt: z
+    .preprocess((v) => v === true || v === "true" || v === "on" || v === "1", z.boolean())
+    .optional(),
+  // Gộp nợ là tùy chọn: mặc định tạo khoản nợ mới
+  debtMode: z.preprocess(
+    (v) => (v === "MERGE" ? "MERGE" : "NEW"),
+    z.enum(["NEW", "MERGE"] as const)
+  ).optional(),
+  targetDebtId: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined || v === "NONE" ? undefined : String(v)),
+    z.string().optional()
+  ),
 });
 
 export type TransactionInput = z.infer<typeof TransactionSchema>;
