@@ -5,10 +5,14 @@ import { db } from "@/lib/db";
 import { toInstant } from "@/lib/utils";
 import { ConfirmImportSchema } from "@/schemas/ai-import";
 import { revalidatePath } from "next/cache";
+import { collectCorrections } from "@/lib/category-rules";
+import { upsertCategoryRules, reinforceCategoryRules } from "@/lib/category-rules-db";
 
 export interface ImportResult {
   success: boolean;
   imported: number;
+  /** Số quy tắc phân loại mới học được từ các lần sửa danh mục */
+  learnedRules?: number;
   error?: string;
 }
 
@@ -153,7 +157,31 @@ export async function confirmAiImport(
     revalidatePath("/budget");
     revalidatePath("/reports");
 
-    return { success: true, imported: transactionData.length };
+    // ── Học quy tắc phân loại từ các dòng người dùng đã sửa danh mục ──
+    // (không làm hỏng kết quả import nếu bước học gặp lỗi)
+    let learnedRules = 0;
+    try {
+      const corrections = collectCorrections(transactions);
+      learnedRules = await upsertCategoryRules(
+        userId,
+        corrections
+          .map((c) => ({ ...c, categoryId: categoryMap.get(c.categoryName.toLowerCase()) ?? "" }))
+          .filter((c) => c.categoryId)
+      );
+
+      // Quy tắc được áp dụng và người dùng giữ nguyên → tăng độ tin cậy
+      const kept = transactions
+        .filter((t) => t.ruleKeyword && t.categoryName === t.suggestedCategoryName)
+        .map((t) => ({ keyword: t.ruleKeyword!, txType: t.type }));
+      const uniqueKept = [...new Map(kept.map((k) => [`${k.keyword}|${k.txType}`, k])).values()]
+        // Bỏ các từ khóa vừa được ghi đè ở trên
+        .filter((k) => !corrections.some((c) => c.keyword === k.keyword && c.txType === k.txType));
+      await reinforceCategoryRules(userId, uniqueKept);
+    } catch (learnErr) {
+      console.error("[Import] Không thể lưu quy tắc phân loại:", (learnErr as Error)?.message);
+    }
+
+    return { success: true, imported: transactionData.length, learnedRules };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Lỗi không xác định";
     return { success: false, imported: 0, error: message };

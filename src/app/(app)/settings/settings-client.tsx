@@ -1,6 +1,7 @@
 "use client";
 
 import { DEFAULT_GEMINI_MODEL, SUGGESTED_GEMINI_MODELS } from "@/lib/ai/models";
+import { CategoryRulesSection } from "./CategoryRulesSection";
 
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -584,6 +585,9 @@ export function SettingsClient({ user, categories, initialAiConfig }: Props) {
           </form>
         </div>
       </section>
+
+      {/* ── 3b. Quy tắc phân loại tự học (Import) ── */}
+      <CategoryRulesSection />
 
       {/* ── 4. Categories Management ── */}
       <section className="space-y-3">

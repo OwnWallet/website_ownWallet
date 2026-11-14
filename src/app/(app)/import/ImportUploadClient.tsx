@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useSyncExternalStore } from "react";
 import type { ParsedTransaction } from "@/schemas/ai-import";
 import ImportReview from "./ImportReview";
+import { AiStatusBadge } from "./AiStatusBadge";
 import { DEFAULT_GEMINI_MODEL, LOCAL_PARSER_MODEL, SUGGESTED_GEMINI_MODELS } from "@/lib/ai/models";
 import { Upload, FileText, Table, FileSpreadsheet, AlertTriangle, Lightbulb, Brain, Square, Clock } from "lucide-react";
 
@@ -20,6 +21,7 @@ type UploadState =
       totalFound: number;
       skipped: number;
       duplicateCount: number;
+      ruleAppliedCount?: number;
       modeUsed?: "local" | "ai-fallback-local" | "ai";
       fallbackReason?: string;
       detectedBank?: string;
@@ -207,6 +209,7 @@ export default function ImportUploadClient({
         totalFound: data.totalFound,
         skipped: data.skipped,
         duplicateCount: data.duplicateCount ?? 0,
+        ruleAppliedCount: data.ruleAppliedCount ?? 0,
         modeUsed: data.modeUsed,
         fallbackReason: data.fallbackReason,
         detectedBank: data.detectedBank,
@@ -284,6 +287,7 @@ export default function ImportUploadClient({
         totalFound={state.totalFound}
         skipped={state.skipped}
         duplicateCount={state.duplicateCount}
+        ruleAppliedCount={state.ruleAppliedCount}
         modeUsed={state.modeUsed}
         fallbackReason={state.fallbackReason}
         detectedBank={state.detectedBank}
@@ -359,6 +363,11 @@ export default function ImportUploadClient({
                   )}
               </select>
             </div>
+          </div>
+
+          {/* Trạng thái AI thực tế của model đang chọn */}
+          <div className="flex justify-end -mt-3">
+            <AiStatusBadge model={selectedModel} />
           </div>
 
           {/* Thông báo đã dừng thủ công */}
