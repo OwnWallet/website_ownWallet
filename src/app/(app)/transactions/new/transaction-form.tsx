@@ -4,13 +4,14 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, Calendar, HandCoins } from "lucide-react";
+import { Loader2, ArrowLeft, Calendar, HandCoins, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { createTransaction } from "@/actions/transactions";
 import { TransactionSchema, type TransactionInput } from "@/schemas/transaction";
 import { EvidenceUpload } from "@/components/ui/evidence-upload";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 import { isDebtCategory, analyzeDebtTransaction } from "@/lib/debt-sync";
+import { getCategoryTags } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export interface OpenDebtOption {
@@ -89,6 +90,25 @@ export function NewTransactionForm({ categories, wallets = [], openDebts = [] }:
     }
     return false;
   });
+
+  const availableTags = selectedCat ? getCategoryTags(selectedCat.name) : [];
+
+  const handleToggleTag = (tag: string) => {
+    const current = (descriptionVal || "").trim();
+    if (!current) {
+      setValue("description", tag, { shouldValidate: true });
+      return;
+    }
+    if (current.toLowerCase().includes(tag.toLowerCase())) {
+      const regex = new RegExp(`(^|\\s*·\\s*|,\\s*|\\s+)${tag}($|\\s*·\\s*|,\\s*|\\s+)`, "gi");
+      let next = current.replace(regex, " ").replace(/\s{2,}/g, " ").trim();
+      if (next.startsWith("·")) next = next.replace(/^·\s*/, "");
+      if (next.endsWith("·")) next = next.replace(/\s*·$/, "");
+      setValue("description", next, { shouldValidate: true });
+    } else {
+      setValue("description", `${current} · ${tag}`, { shouldValidate: true });
+    }
+  };
 
   async function onSubmit(data: TransactionInput) {
     if (isDebt && (data.syncToDebt ?? true) && debtMode === "MERGE" && !debtAnalysis?.isRepayment && !targetDebtId) {
@@ -480,22 +500,52 @@ export function NewTransactionForm({ categories, wallets = [], openDebts = [] }:
             />
           </div>
 
-          {/* Description */}
+          {/* Description & Quick Tags */}
           <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: "13px",
-                fontWeight: 500,
-                color: "var(--foreground-muted)",
-                marginBottom: "6px",
-              }}
-            >
-              Ghi chú / Mô tả
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  color: "var(--foreground-muted)",
+                }}
+              >
+                Ghi chú / Mô tả
+              </label>
+              {availableTags.length > 0 && (
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1 font-medium">
+                  <Tag size={11} className="text-primary" /> Tag gợi ý theo danh mục
+                </span>
+              )}
+            </div>
+
+            {/* Quick Tag Chips */}
+            {availableTags.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                {availableTags.map((tag) => {
+                  const currentDesc = (descriptionVal || "").trim();
+                  const isSelected = currentDesc.toLowerCase().includes(tag.toLowerCase());
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => handleToggleTag(tag)}
+                      className={`text-xs px-2.5 py-1 rounded-lg border font-medium cursor-pointer transition-all duration-150 flex items-center gap-1 ${
+                        isSelected
+                          ? "bg-primary text-white border-primary shadow-xs"
+                          : "bg-card text-foreground hover:bg-muted/70 hover:border-slate-400 border-border"
+                      }`}
+                    >
+                      <span>{tag}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <input
               {...register("description")}
-              placeholder="VD: Ăn trưa với đồng nghiệp..."
+              placeholder={availableTags.length > 0 ? `VD: ${availableTags[0]}...` : "VD: Ăn trưa với đồng nghiệp..."}
               style={inputStyle}
             />
           </div>
