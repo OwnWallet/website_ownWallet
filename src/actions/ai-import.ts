@@ -29,10 +29,25 @@ export async function confirmAiImport(
   // ── Validate payload ──
   const parsed = ConfirmImportSchema.safeParse(rawPayload);
   if (!parsed.success) {
+    // Thông báo dễ hiểu thay vì JSON lỗi thô của Zod
+    const rows = new Set<number>();
+    let missingCategory = 0;
+    for (const issue of parsed.error.issues) {
+      if (issue.path[0] === "transactions" && typeof issue.path[1] === "number") {
+        rows.add(issue.path[1] + 1);
+        if (issue.path[2] === "categoryName") missingCategory++;
+      }
+    }
+    const rowList = [...rows].slice(0, 5).join(", ") + (rows.size > 5 ? "…" : "");
     return {
       success: false,
       imported: 0,
-      error: "Dữ liệu không hợp lệ: " + parsed.error.message,
+      error:
+        missingCategory > 0
+          ? `Có ${missingCategory} giao dịch chưa chọn danh mục (dòng ${rowList}). Vui lòng chọn danh mục rồi thử lại.`
+          : rows.size > 0
+          ? `Dữ liệu giao dịch không hợp lệ ở dòng ${rowList}.`
+          : parsed.error.issues[0]?.message || "Dữ liệu không hợp lệ.",
     };
   }
 
@@ -73,12 +88,15 @@ export async function confirmAiImport(
       const firstUse = transactions.find(
         (t) => t.categoryName.toLowerCase() === name
       );
-      const isDebt = name.includes("nợ") || name.includes("vay") || name.includes("mượn");
+      const isDebt = /(^|\s)(nợ|vay|mượn)(\s|$)/.test(name);
       const catType = isDebt ? "DEBT" : firstUse?.type === "INCOME" ? "INCOME" : "EXPENSE";
+      // Giữ nguyên cách viết gốc (VD: "GrabFood"), chỉ viết hoa chữ cái đầu
+      const original = firstUse?.categoryName.trim() || name;
+      const displayName = original.charAt(0).toUpperCase() + original.slice(1);
 
       try {
         const newCat = await db.orm.public.Category.create({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
+          name: displayName,
           type: catType,
           color: isDebt ? "#f59e0b" : "#94a3b8",
           icon: isDebt ? "🤝" : "📦",
@@ -88,9 +106,8 @@ export async function confirmAiImport(
         categoryMap.set(name, newCat.id);
       } catch {
         // Category đã tồn tại (race condition) — tìm lại đúng theo tên thay vì lấy ngẫu nhiên
-        const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
         const existing = await db.orm.public.Category
-          .where({ userId, name: formattedName })
+          .where({ userId, name: displayName })
           .first();
         if (existing) {
           categoryMap.set(name, existing.id);

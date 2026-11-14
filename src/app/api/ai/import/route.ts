@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 
 export const runtime = "nodejs"; // cần nodejs runtime để đọc Buffer
 
-// Giới hạn body size — Next.js mặc định 4MB, tăng lên 12MB
+// Mỗi lần gọi AI có timeout riêng (AI_CALL_TIMEOUT_MS) và tổng ≤ 45s để luôn trả kết quả trước 60s
 export const maxDuration = 60; // giây
 
 export async function POST(request: NextRequest) {
@@ -89,25 +89,9 @@ export async function POST(request: NextRequest) {
       detectedAccountNumber: result.detectedAccountNumber,
     });
   } catch (err: unknown) {
-    let message =
-      err instanceof Error ? err.message : "Lỗi không xác định từ AI.";
-
-    if (
-      message.includes("503") ||
-      message.toLowerCase().includes("high demand") ||
-      message.toLowerCase().includes("service unavailable")
-    ) {
-      message =
-        "Máy chủ Google Gemini đang quá tải toàn cầu (Lỗi 503). Vui lòng thử lại sau giây lát hoặc kiểm tra cấu hình model (gemini-3.8-flash) trong Cài đặt.";
-    } else if (
-      message.includes("429") ||
-      message.toLowerCase().includes("resource exhausted") ||
-      message.toLowerCase().includes("quota")
-    ) {
-      message =
-        "Tài khoản Google Gemini đã hết hạn ngạch yêu cầu trong ngày (Lỗi 429 Quota Exceeded). Vui lòng đợi Google làm mới hạn ngạch hoặc nâng cấp tài khoản.";
-    }
-
+    // Thông báo lỗi đã được chuẩn hóa trong lib/ai/gemini.ts (timeout / 503 / 429 / API key / model)
+    const message = err instanceof Error ? err.message : "Lỗi không xác định khi phân tích file.";
+    console.error("[Import] Phân tích thất bại:", message);
     return NextResponse.json({ error: message }, { status: 422 });
   }
 }

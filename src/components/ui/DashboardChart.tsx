@@ -68,15 +68,16 @@ export function DashboardChart({ transactions }: Props) {
             dataKey="date" 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fill: "#64748b", fontSize: 12 }} 
+            tick={{ fill: "#475569", fontSize: 11 }}
+            interval="preserveStartEnd"
             dy={8}
           />
           <YAxis 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fill: "#64748b", fontSize: 12 }}
+            tick={{ fill: "#475569", fontSize: 11 }}
             tickFormatter={(value) => `${(value / 1000).toLocaleString("vi-VN")}k`}
-            width={60}
+            width={52}
           />
           <Tooltip 
             contentStyle={{

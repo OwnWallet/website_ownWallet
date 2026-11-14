@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -42,7 +43,7 @@ export const NAV_GROUPS = [
       { href: "/transactions", label: "Sổ giao dịch", icon: ArrowLeftRight },
       { href: "/income", label: "Dòng tiền định kỳ", icon: Banknote },
       { href: "/budget", label: "Ngân sách", icon: Wallet },
-      { href: "/import", label: "AI Import", icon: Sparkles },
+      { href: "/import", label: "Import", icon: Sparkles },
     ],
   },
   {
@@ -70,6 +71,11 @@ interface SidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   wallets?: WalletItem[];
+  sidebarWidth?: number;
+  onWidthChange?: (width: number) => void;
+  onResetWidth?: () => void;
+  isResizing?: boolean;
+  setIsResizing?: (resizing: boolean) => void;
 }
 
 export function Sidebar({
@@ -78,10 +84,55 @@ export function Sidebar({
   isCollapsed = false,
   onToggleCollapse,
   wallets = [],
+  sidebarWidth = 260,
+  onWidthChange,
+  onResetWidth,
+  isResizing = false,
+  setIsResizing,
 }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchStr = searchParams ? searchParams.toString() : "";
+
+  // Close mobile sidebar on Escape key
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && isOpen) {
+        onClose?.();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Drag resizing logic on desktop
+  useEffect(() => {
+    if (!isResizing) return;
+
+    function handleMouseMove(e: MouseEvent) {
+      if (onWidthChange) {
+        onWidthChange(e.clientX);
+      }
+    }
+
+    function handleMouseUp(e: MouseEvent) {
+      setIsResizing?.(false);
+      try {
+        const finalWidth = Math.min(Math.max(e.clientX, 210), 400);
+        localStorage.setItem("ownwallet_sidebar_width", String(finalWidth));
+      } catch {
+        // Ignore
+      }
+    }
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing, onWidthChange, setIsResizing]);
 
   return (
     <>
@@ -89,18 +140,20 @@ export function Sidebar({
       {isOpen && (
         <div
           onClick={onClose}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 lg:hidden animate-fade-in"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-40 lg:hidden animate-fade-in"
+          aria-hidden="true"
         />
       )}
 
       {/* Main Sidebar Element */}
       <aside
         className={cn(
-          "fixed top-0 left-0 bottom-0 h-dvh max-h-screen bg-slate-900/90 backdrop-blur-2xl border-r border-white/10 flex flex-col z-50 shadow-2xl transition-all duration-300 ease-in-out overflow-hidden text-slate-200",
-          // Mobile state
+          "fixed top-0 left-0 bottom-0 h-dvh max-h-screen bg-slate-900/95 backdrop-blur-2xl border-r border-white/10 flex flex-col z-50 shadow-2xl overflow-hidden text-slate-200",
+          // Mobile state: slide in/out
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
-          // Desktop width: 72px when collapsed, 250px when expanded
-          isCollapsed ? "w-[250px] lg:w-[72px]" : "w-[250px]"
+          // Mobile width is always a comfortable 280px drawer; Desktop uses dynamic .sidebar-desktop-width
+          "w-[280px] sidebar-desktop-width",
+          isResizing ? "transition-none select-none" : "transition-all duration-300 ease-in-out"
         )}
       >
         {/* Brand Header (Sticky at top) */}
@@ -272,6 +325,21 @@ export function Sidebar({
             </button>
           </form>
         </div>
+
+        {/* Resize Handle on Right Edge (Desktop only & when not collapsed) */}
+        {!isCollapsed && onWidthChange && (
+          <div
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setIsResizing?.(true);
+            }}
+            onDoubleClick={onResetWidth}
+            className="hidden lg:flex absolute top-0 right-0 w-2 h-full cursor-col-resize items-center justify-center hover:bg-orange-500/30 active:bg-orange-500/50 transition-colors z-50 group select-none"
+            title={`Kéo để chỉnh độ rộng (${sidebarWidth}px) • Click đúp để đặt lại mặc định (260px)`}
+          >
+            <div className="w-0.5 h-8 rounded-full bg-white/20 group-hover:bg-orange-400 group-hover:h-12 transition-all shadow-xs" />
+          </div>
+        )}
       </aside>
     </>
   );

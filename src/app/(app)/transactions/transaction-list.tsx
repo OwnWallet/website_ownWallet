@@ -556,7 +556,7 @@ export function TransactionList({
  setSearch(e.target.value);
  setPage(1);
  }}
- className="w-full pl-9 pr-8 py-2 bg-elevated border border-border-strong rounded-lg text-sm outline-none focus:border-primary text-foreground"
+ className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-primary text-slate-900 placeholder:text-slate-500"
  />
  {search && (
  <button

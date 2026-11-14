@@ -425,33 +425,33 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     <div className="space-y-6">
       {/* Page header */}
       <div className="page-header">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shadow-sm">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shadow-sm shrink-0">
             <TrendingUp size={20} />
           </div>
-          <div>
-            <h1 className="page-header-title">Tổng quan tài chính</h1>
-            <p className="page-header-subtitle">{monthLabel}</p>
+          <div className="min-w-0">
+            <h1 className="page-header-title truncate">Tổng quan tài chính</h1>
+            <p className="page-header-subtitle truncate">{monthLabel}</p>
           </div>
         </div>
-        <Link href="/transactions/new" className="btn-primary">
+        <Link href="/transactions/new" className="btn-primary w-full sm:w-auto text-center justify-center">
           <Plus size={16} />
-          Thêm giao dịch
+          <span>Thêm giao dịch</span>
         </Link>
       </div>
 
       {/* Active Account Filter Badge */}
       {activeWallet && (
-        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-orange-50/80 border border-orange-200/70 animate-scale-in">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center justify-between gap-2.5 sm:gap-3 p-3 rounded-xl bg-orange-50/90 border border-orange-200/80 animate-scale-in">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className="w-7 h-7 rounded-lg bg-orange-100 border border-orange-200 text-orange-700 flex items-center justify-center shrink-0 text-xs font-bold">
               {activeWallet.bankName === "CASH" || (activeWallet.name || "").toLowerCase().includes("tiền mặt") ? "💵" : "💳"}
             </div>
-            <p className="text-xs font-semibold text-orange-900 truncate">
+            <p className="text-xs font-semibold text-slate-900 truncate">
               Đang lọc:{" "}
               <span className="font-bold text-orange-700">{activeWallet.name}</span>
               {activeWallet.accountNumber && activeWallet.bankName !== "CASH" && (
-                <span className="text-muted-foreground font-normal ml-1">(STK: {maskAccountNumber(activeWallet.accountNumber)})</span>
+                <span className="text-slate-600 font-normal ml-1 hidden xs:inline">(STK: {maskAccountNumber(activeWallet.accountNumber)})</span>
               )}
             </p>
           </div>
@@ -471,34 +471,34 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       )}
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         {kpiCards.map((card, i) => (
           <div
             key={card.label}
-            className={`rounded-2xl p-5 border shadow-xs transition-all hover:shadow-md hover:-translate-y-0.5 animate-fade-in ${card.bgCard}`}
+            className={`rounded-2xl p-4 sm:p-5 border shadow-xs transition-all hover:shadow-md hover:-translate-y-0.5 animate-fade-in ${card.bgCard}`}
             style={{ animationDelay: `${i * 50}ms` }}
           >
             {/* Icon & Label */}
-            <div className="flex items-center justify-between mb-3">
-              <div className={`w-10 h-10 rounded-xl ${card.bgIcon} flex items-center justify-center ${card.iconColor} shadow-2xs`}>
-                <card.icon size={20} />
+            <div className="flex items-center justify-between mb-2.5 sm:mb-3">
+              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${card.bgIcon} flex items-center justify-center ${card.iconColor} shadow-2xs`}>
+                <card.icon size={18} />
               </div>
-              <span className={`text-xs font-black uppercase tracking-wider ${card.color}`}>
+              <span className={`text-xs font-bold uppercase tracking-wider ${card.color}`}>
                 {card.label}
               </span>
             </div>
 
             {/* Value */}
             <div className="space-y-1">
-              <p className={`text-3xl font-black tracking-tight ${card.color}`}>
+              <p className={`text-2xl sm:text-3xl font-black tabular-nums tracking-tight ${card.color}`}>
                 {card.prefix}{formatCurrencyCompact(Math.abs(card.value))}
               </p>
-              <p className="text-xs text-slate-700 font-semibold">
+              <p className="text-xs text-slate-700 font-semibold tabular-nums">
                 {card.prefix}{formatCurrency(Math.abs(card.value))}
               </p>
-              <p className="text-[11px] text-muted-foreground font-medium">{card.desc}</p>
+              <p className="text-[11px] text-slate-600 font-medium">{card.desc}</p>
               {card.extraDesc && (
-                <p className="text-[10px] text-amber-800/90 font-semibold pt-0.5">{card.extraDesc}</p>
+                <p className="text-[10px] text-amber-800 font-semibold pt-0.5">{card.extraDesc}</p>
               )}
             </div>
           </div>
@@ -618,29 +618,29 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <p className="text-sm font-semibold text-foreground truncate">
                       {tx.note || tx.description || tx.category?.name || "Giao dịch"}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
-                      <span>{tx.category?.name}</span>
+                    <p className="text-xs text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <span className="font-medium">{tx.category?.name}</span>
                       {tx.wallet && (
-                        <span className="font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.2 rounded border border-orange-200/60 text-[10px]">
+                        <span className="font-semibold text-orange-700 bg-orange-100/70 px-1.5 py-0.2 rounded border border-orange-200 text-[10px]">
                           {tx.wallet.name}
                         </span>
                       )}
                       <span>·</span>
-                      <span>{formatDateTime(tx.recordedAt)}</span>
+                      <span className="tabular-nums">{formatDateTime(tx.recordedAt)}</span>
                     </p>
                   </div>
 
                   {/* Amount */}
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 pl-2">
                     <div
-                      className={`w-5 h-5 rounded-md flex items-center justify-center ${
+                      className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
                         tx.type === "INCOME" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
                       }`}
                     >
                       {tx.type === "INCOME" ? <ArrowUpRight size={12} /> : <ArrowDownLeft size={12} />}
                     </div>
                     <span
-                      className={`text-sm font-bold ${
+                      className={`text-xs sm:text-sm font-bold tabular-nums ${
                         tx.type === "INCOME" ? "text-emerald-700" : "text-rose-700"
                       }`}
                     >

@@ -9,15 +9,10 @@ interface TransactionRowProps {
 export function TransactionRow({ children, isLast, borderColor }: TransactionRowProps) {
   return (
     <div
+      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_1fr_1fr_1fr] px-3 sm:px-5 py-3 sm:py-3.5 items-center gap-2 sm:gap-4 transition-colors cursor-default hover:bg-slate-50/80"
       style={{
-        display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr",
-        padding: "14px 20px", alignItems: "center",
         borderBottom: !isLast ? `1px solid ${borderColor}` : "none",
-        transition: "background-color 0.15s",
-        cursor: "default",
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-elevated)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
     >
       {children}
     </div>

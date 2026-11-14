@@ -14,10 +14,12 @@
   --bg-input:            #ffffff; /* White input */
   --bg-sidebar:          rgba(15, 23, 42, 0.88); /* Slate 900 Glass */
 
-  /* === Foreground / Text === */
-  --fg:                  #0f172a; /* Slate 900 */
-  --fg-muted:            #64748b; /* Slate 500 */
-  --fg-subtle:           #94a3b8; /* Slate 400 */
+  /* === Foreground / Text — High Contrast (WCAG AAA/AA) === */
+  --fg:                  #090d16; /* Deep Onyx */
+  --fg-muted:            #334155; /* Slate 700 - AAA on white (9.5:1) */
+  --fg-subtle:           #475569; /* Slate 600 - AA on white (6.1:1) */
+  --placeholder:         #64748b; /* Slate 500 - AA on white (4.6:1) */
+  --border-input:        #cbd5e1; /* Slate 300 */
 
   /* === Orange Brand Palette === */
   --brand:               #ea580c; /* Orange 600 */
@@ -68,22 +70,22 @@
 
   /* === Shadcn Standard Tokens === */
   --background:          oklch(0.985 0.002 247.8);
-  --foreground:          oklch(0.145 0.02 260);
+  --foreground:          oklch(0.12 0.02 260); /* Deep Onyx */
   --card:                oklch(1 0 0);
-  --card-foreground:     oklch(0.145 0.02 260);
+  --card-foreground:     oklch(0.12 0.02 260);
   --popover:             oklch(1 0 0);
-  --popover-foreground:  oklch(0.145 0.02 260);
+  --popover-foreground:  oklch(0.12 0.02 260);
   --primary:             oklch(0.52 0.2 38); /* Orange — darkened for WCAG AA */
   --primary-foreground:  oklch(1 0 0);
   --secondary:           oklch(0.96 0.005 240);
   --secondary-foreground:oklch(0.2 0.02 260);
   --muted:               oklch(0.96 0.005 240);
-  --muted-foreground:    oklch(0.48 0.02 260);
+  --muted-foreground:    oklch(0.32 0.02 260); /* Slate 700 - AAA Contrast */
   --accent:              oklch(0.96 0.02 40);
   --accent-foreground:   oklch(0.45 0.18 38);
   --destructive:         oklch(0.55 0.22 25);
   --destructive-foreground: oklch(1 0 0);
-  --input:               oklch(0.91 0.005 240);
+  --input:               oklch(0.85 0.008 240); /* Crisp Slate 300 equivalent */
   --ring:                oklch(0.52 0.2 38);
   --radius:              0.625rem;
 
@@ -254,7 +256,22 @@ body {
   box-shadow: 0 0 0 3px var(--brand-glow);
 }
 .form-input::placeholder {
-  color: var(--fg-subtle);
+  color: var(--placeholder);
+  opacity: 1;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--placeholder) !important;
+  opacity: 1;
+}
+/* Ensure native select options have high-contrast background and text */
+select option {
+  background-color: #ffffff;
+  color: #090d16;
+}
+/* Tabular figures for financial numbers */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 .form-label {
   display: block;
@@ -303,8 +320,8 @@ body {
 .text-invest    { color: var(--invest); }
 .text-debt      { color: var(--debt); }
 .text-savings   { color: var(--savings); }
-.text-muted     { color: var(--fg-muted); }
-.text-subtle    { color: var(--fg-subtle); }
+.text-muted     { color: var(--fg-muted) !important; }
+.text-subtle    { color: var(--fg-subtle) !important; }
 .text-danger    { color: var(--danger); }
 .text-warning   { color: var(--warning); }
 .text-foreground{ color: var(--fg); }
@@ -867,5 +884,17 @@ body {
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* ─────────────────────────────────────────────────────
+   Dynamic Resizable Sidebar (Desktop only)
+───────────────────────────────────────────────────── */
+@media (min-width: 1024px) {
+  .sidebar-desktop-width {
+    width: var(--sidebar-desktop-width, 260px) !important;
+  }
+  .sidebar-desktop-offset {
+    padding-left: var(--sidebar-desktop-width, 260px) !important;
   }
 }

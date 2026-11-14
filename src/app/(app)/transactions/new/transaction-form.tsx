@@ -133,12 +133,20 @@ export function NewTransactionForm({ categories, wallets = [], openDebts = [] }:
     width: "100%",
     padding: "10px 14px",
     borderRadius: "8px",
-    backgroundColor: "var(--background-elevated)",
-    border: "1px solid var(--border-strong)",
-    color: "var(--foreground)",
+    backgroundColor: "#ffffff",
+    border: "1px solid #cbd5e1",
+    color: "#090d16",
     fontSize: "14px",
     outline: "none",
     boxSizing: "border-box",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "#334155",
+    marginBottom: "6px",
   };
 
   const now = new Date();
@@ -270,25 +278,17 @@ export function NewTransactionForm({ categories, wallets = [], openDebts = [] }:
           {/* Wallet if available */}
           {wallets.length > 0 && (
             <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  color: "var(--foreground-muted)",
-                  marginBottom: "6px",
-                }}
-              >
+              <label style={labelStyle}>
                 Ví tiền
               </label>
               <select
                 {...register("walletId")}
                 style={{
                   ...inputStyle,
-                  borderColor: errors.walletId ? "var(--color-danger)" : "var(--border-strong)",
+                  borderColor: errors.walletId ? "var(--color-danger)" : "#cbd5e1",
                 }}
               >
-                <option value="">-- Không gắn ví (Tiền ngoài sổ) --</option>
+                <option value="" style={{ color: "#64748b" }}>-- Không gắn ví (Tiền ngoài sổ) --</option>
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.bankName === "CASH" ? "💵" : "💳"} {w.name}{w.isDefault ? " (Mặc định)" : ""}
@@ -300,25 +300,19 @@ export function NewTransactionForm({ categories, wallets = [], openDebts = [] }:
 
           {/* Category */}
           <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: "13px",
-                fontWeight: 500,
-                color: "var(--foreground-muted)",
-                marginBottom: "6px",
-              }}
-            >
+            <label style={labelStyle}>
               Danh mục *
             </label>
             <select
               {...register("categoryId")}
               style={{
                 ...inputStyle,
-                borderColor: errors.categoryId ? "var(--color-danger)" : "var(--border-strong)",
+                color: selectedCatId ? "#090d16" : "#64748b",
+                fontWeight: selectedCatId ? 600 : 400,
+                borderColor: errors.categoryId ? "var(--color-danger)" : "#cbd5e1",
               }}
             >
-              <option value="">-- Chọn danh mục --</option>
+              <option value="" style={{ color: "#64748b" }}>-- Chọn danh mục --</option>
               {filteredCats.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.icon} {c.name}

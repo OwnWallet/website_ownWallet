@@ -133,7 +133,7 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
     : { label: "TẤT CẢ", bg: "bg-orange-100 text-orange-700 border-orange-200", icon: Wallet };
 
   return (
-    <div className={cn("transition-all duration-200", isCollapsed ? "px-2 mb-2" : "mx-3 mb-2")}>
+    <div className={cn("transition-all duration-200", isCollapsed ? "mx-3 mb-2 lg:mx-0 lg:px-2" : "mx-3 mb-2")}>
       <DropdownMenu>
         <DropdownMenuTrigger
           title={
@@ -144,17 +144,17 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
           className={cn(
             "w-full rounded-xl border transition-all cursor-pointer outline-none group text-left",
             isCollapsed
-              ? "p-2 flex items-center justify-center border-white/10 bg-white/5 hover:border-orange-400/50 hover:bg-white/10"
+              ? "p-2.5 flex items-center justify-between gap-2.5 lg:p-2 lg:justify-center border-white/10 bg-white/5 hover:border-orange-400/50 hover:bg-white/10"
               : "p-2.5 flex items-center justify-between gap-2.5 bg-white/5 border-white/10 shadow-2xs hover:border-orange-400/50 hover:bg-white/10",
             selectedWalletId !== "ALL" && !isCollapsed && "border-orange-400/50 bg-orange-500/15",
             isPending && "opacity-70 animate-pulse"
           )}
         >
-          {/* Collapsed view: Icon Only */}
-          {isCollapsed ? (
+          {/* Desktop Collapsed view: Icon Only */}
+          {isCollapsed && (
             <div
               className={cn(
-                "w-9 h-9 rounded-lg flex items-center justify-center font-extrabold text-[11px] border shadow-2xs transition-transform group-hover:scale-105",
+                "hidden lg:flex w-9 h-9 rounded-lg items-center justify-center font-extrabold text-[11px] border shadow-2xs transition-transform group-hover:scale-105",
                 activeBadge.bg
               )}
             >
@@ -164,44 +164,44 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
                 <span>{activeBadge.label}</span>
               )}
             </div>
-          ) : (
-            /* Expanded view: Full Account info */
-            <>
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div
-                  className={cn(
-                    "w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-[10px] border shadow-2xs shrink-0",
-                    activeBadge.bg
-                  )}
-                >
-                  {selectedWalletId === "ALL" ? (
-                    <Wallet size={15} />
-                  ) : (
-                    <span>{activeBadge.label}</span>
-                  )}
-                </div>
+          )}
 
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-bold text-slate-100 truncate leading-tight">
-                      {selectedWallet ? selectedWallet.name : "Tất cả tài khoản"}
-                    </p>
-                  </div>
-                  <p className="text-[10px] text-slate-400 truncate leading-tight mt-0.5">
-                    {selectedWallet?.accountNumber
-                      ? `STK: ${maskAccountNumber(selectedWallet.accountNumber)}`
-                      : selectedWallet
-                      ? "Tài khoản riêng lẻ"
-                      : `${wallets.length} tài khoản liên kết`}
+          {/* Full Account info (Always shown on mobile, and on desktop when not collapsed) */}
+          <div className={cn("items-center justify-between gap-2.5 w-full", isCollapsed ? "flex lg:hidden" : "flex")}>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className={cn(
+                  "w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-[10px] border shadow-2xs shrink-0",
+                  activeBadge.bg
+                )}
+              >
+                {selectedWalletId === "ALL" ? (
+                  <Wallet size={15} />
+                ) : (
+                  <span>{activeBadge.label}</span>
+                )}
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-slate-100 truncate leading-tight">
+                    {selectedWallet ? selectedWallet.name : "Tất cả tài khoản"}
                   </p>
                 </div>
+                <p className="text-[10px] text-slate-300 truncate leading-tight mt-0.5">
+                  {selectedWallet?.accountNumber
+                    ? `STK: ${maskAccountNumber(selectedWallet.accountNumber)}`
+                    : selectedWallet
+                    ? "Tài khoản riêng lẻ"
+                    : `${wallets.length} tài khoản liên kết`}
+                </p>
               </div>
+            </div>
 
-              <div className="shrink-0 text-slate-400 group-hover:text-slate-200 transition-colors">
-                <ChevronsUpDown size={14} />
-              </div>
-            </>
-          )}
+            <div className="shrink-0 text-slate-400 group-hover:text-slate-200 transition-colors">
+              <ChevronsUpDown size={14} />
+            </div>
+          </div>
         </DropdownMenuTrigger>
 
         <DropdownMenuContent

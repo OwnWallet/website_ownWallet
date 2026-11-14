@@ -5,17 +5,19 @@ import { db } from "@/lib/db";
 import { serializeData } from "@/lib/utils";
 import { getSystemSetting } from "@/lib/system-settings";
 import { Sparkles } from "lucide-react";
+import { DEFAULT_GEMINI_MODEL } from "@/lib/ai/models";
 
 export const metadata: Metadata = {
+  title: "Import",
   description:
-    "Upload sao kê ngân hàng PDF hoặc bảng Excel/CSV để AI tự động phân tích và nhập giao dịch vào OwnWallet.",
+    "Upload sao kê ngân hàng PDF hoặc bảng Excel/CSV để tự động phân tích và nhập giao dịch vào OwnWallet.",
 };
 
 export default async function ImportPage() {
   const session = await auth();
   let wallets: any[] = [];
   let categories: any[] = [];
-  let defaultModel = "gemini-3.8-flash";
+  let defaultModel = DEFAULT_GEMINI_MODEL;
 
   if (session?.user?.id) {
     try {
@@ -28,11 +30,11 @@ export default async function ImportPage() {
           .where((c) => c.userId.eq(session.user.id))
           .orderBy((c) => c.name.asc())
           .all(),
-        getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || "gemini-3.8-flash"),
+        getSystemSetting("GEMINI_MODEL", process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL),
       ]);
       wallets = serializeData(rawWallets);
       categories = serializeData(rawCategories);
-      defaultModel = settingModel.trim() || "gemini-3.8-flash";
+      defaultModel = settingModel.trim() || DEFAULT_GEMINI_MODEL;
     } catch (err) {
       console.error("Failed to load wallets or categories for import:", err);
     }
@@ -48,7 +50,7 @@ export default async function ImportPage() {
               <Sparkles size={20} />
             </div>
             <div>
-              <h1 className="page-header-title">AI Import Giao Dịch</h1>
+              <h1 className="page-header-title">Import Giao Dịch</h1>
               <p className="page-header-subtitle">
                 Tự động trích xuất giao dịch từ sao kê ngân hàng hoặc bảng tính Excel/CSV
               </p>

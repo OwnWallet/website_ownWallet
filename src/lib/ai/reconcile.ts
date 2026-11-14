@@ -1,5 +1,11 @@
 import { db } from "@/lib/db";
-import { toInstant, toDate } from "@/lib/utils";
+import { toInstant, toDate, getVNDateParts } from "@/lib/utils";
+
+/** Ngày theo múi giờ Việt Nam (YYYY-MM-DD) — tránh lệch ngày khi so sánh bằng UTC */
+function vnDayKey(d: Date): string {
+  const { year, month, day } = getVNDateParts(d);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
 import type { ParsedTransaction, DuplicateInfo } from "@/schemas/ai-import";
 
 /**
@@ -46,7 +52,7 @@ export async function reconcileTransactionsWithDb(
 
   return transactions.map((tx) => {
     const txDate = new Date(tx.recordedAt);
-    const txDateStr = txDate.toISOString().slice(0, 10);
+    const txDateStr = vnDayKey(txDate);
     const txAmount = Math.round(tx.amount);
 
     let bestMatch: {
@@ -64,7 +70,7 @@ export async function reconcileTransactionsWithDb(
       }
 
       const exDate = toDate(ex.recordedAt);
-      const exDateStr = exDate.toISOString().slice(0, 10);
+      const exDateStr = vnDayKey(exDate);
       const diffDays = Math.abs(exDate.getTime() - txDate.getTime()) / (86400 * 1000);
 
       // Cùng ngày và cùng số tiền, cùng loại

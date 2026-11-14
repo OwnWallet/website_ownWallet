@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
-import { getGeminiModel } from "@/lib/ai/gemini";
+import { generateWithFallback } from "@/lib/ai/gemini";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -128,7 +128,7 @@ export async function generateAiFinancialReport(
   await getUserId();
 
   try {
-    const model = await getGeminiModel();
+
     const topCatText =
       input.topCategories
         .slice(0, 5)
@@ -149,8 +149,8 @@ Trả về đúng cấu trúc JSON:
   "actionableTips": ["Hành động cụ thể 1", "Hành động cụ thể 2", "Hành động cụ thể 3"]
 }`;
 
-    const result = await model.generateContent(prompt);
-    const rawText = result.response.text().trim();
+    const { text } = await generateWithFallback([{ text: prompt }], { json: true, deadlineMs: 30_000 });
+    const rawText = text.trim();
     const cleaned = rawText
       .replace(/^```json\s*/i, "")
       .replace(/^```\s*/i, "")

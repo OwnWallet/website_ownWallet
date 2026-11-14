@@ -30,6 +30,10 @@ import {
 
 export type LayoutWidth = "adaptive" | "full" | "standard";
 
+export const MIN_SIDEBAR_WIDTH = 210;
+export const MAX_SIDEBAR_WIDTH = 400;
+export const DEFAULT_SIDEBAR_WIDTH = 260;
+
 interface Props {
   email: string;
   initials: string;
@@ -41,6 +45,8 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [layoutWidth, setLayoutWidth] = useState<LayoutWidth>("adaptive");
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
+  const [isResizing, setIsResizing] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -52,6 +58,13 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
         const savedWidth = (localStorage.getItem("ownwallet_layout_width") ?? localStorage.getItem("wnwallet_layout_width")) as LayoutWidth;
         if (savedWidth && ["adaptive", "full", "standard"].includes(savedWidth)) {
           setLayoutWidth(savedWidth);
+        }
+        const savedCustomWidth = localStorage.getItem("ownwallet_sidebar_width");
+        if (savedCustomWidth) {
+          const parsed = parseInt(savedCustomWidth, 10);
+          if (!isNaN(parsed) && parsed >= MIN_SIDEBAR_WIDTH && parsed <= MAX_SIDEBAR_WIDTH) {
+            setSidebarWidth(parsed);
+          }
         }
       } catch {
         // Ignore
@@ -70,6 +83,20 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
       }
       return next;
     });
+  }
+
+  function handleWidthChange(newWidth: number) {
+    const clamped = Math.min(Math.max(newWidth, MIN_SIDEBAR_WIDTH), MAX_SIDEBAR_WIDTH);
+    setSidebarWidth(clamped);
+  }
+
+  function resetSidebarWidth() {
+    setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+    try {
+      localStorage.setItem("ownwallet_sidebar_width", String(DEFAULT_SIDEBAR_WIDTH));
+    } catch {
+      // Ignore
+    }
   }
 
   function changeLayoutWidth(width: LayoutWidth) {
@@ -106,7 +133,12 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
   }, [mobileSidebarOpen]);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] text-foreground flex flex-col">
+    <div
+      className="min-h-screen bg-[var(--bg-page)] text-foreground flex flex-col"
+      style={{
+        ["--sidebar-desktop-width" as any]: isCollapsed ? "72px" : `${sidebarWidth}px`,
+      }}
+    >
       {/* Responsive Collapsible Sidebar */}
       <Sidebar
         isOpen={mobileSidebarOpen}
@@ -114,24 +146,29 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
         isCollapsed={isCollapsed}
         onToggleCollapse={toggleCollapse}
         wallets={wallets}
+        sidebarWidth={sidebarWidth}
+        onWidthChange={handleWidthChange}
+        onResetWidth={resetSidebarWidth}
+        isResizing={isResizing}
+        setIsResizing={setIsResizing}
       />
 
-      {/* Main Area Offset on Desktop (smooth transition 250px <-> 72px) */}
+      {/* Main Area Offset on Desktop (dynamically tracks sidebar width) */}
       <div
         className={cn(
-          "min-h-screen flex flex-col transition-all duration-300 ease-in-out",
-          isCollapsed ? "lg:pl-[72px]" : "lg:pl-[250px]"
+          "min-h-screen flex flex-col sidebar-desktop-offset",
+          isResizing ? "transition-none select-none" : "transition-all duration-300 ease-in-out"
         )}
       >
         {/* Sticky Top Header */}
         <header
           className={cn(
-            "h-16 sticky top-0 z-30 bg-card/85 backdrop-blur-md border-b border-border flex items-center justify-between shadow-2xs transition-all duration-300",
+            "h-16 sticky top-0 z-30 bg-card/90 backdrop-blur-md border-b border-border flex items-center justify-between shadow-2xs transition-all duration-300",
             layoutWidth === "full"
-              ? "px-4 sm:px-6 lg:px-8 xl:px-10"
+              ? "px-3 sm:px-6 lg:px-8 xl:px-10"
               : isCollapsed
-              ? "px-4 sm:px-8 lg:px-10 xl:px-12"
-              : "px-4 sm:px-6 lg:px-8 xl:px-10"
+              ? "px-3 sm:px-8 lg:px-10 xl:px-12"
+              : "px-3 sm:px-6 lg:px-8 xl:px-10"
           )}
         >
           {/* Left: Mobile hamburger & Desktop collapse toggle */}
@@ -140,7 +177,7 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
             <button
               type="button"
               onClick={() => setMobileSidebarOpen(true)}
-              className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted lg:hidden transition-colors cursor-pointer"
+              className="p-2 sm:p-2.5 rounded-xl border border-border bg-card text-slate-700 hover:text-foreground hover:bg-muted lg:hidden transition-colors cursor-pointer flex items-center justify-center shrink-0"
               aria-label="Mở menu điều hướng"
             >
               <Menu size={18} />
@@ -263,11 +300,11 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
               <span>Giao dịch mới</span>
             </Link>
 
-            {/* Quick AI Import Button */}
+            {/* Quick Import Button */}
             <Link
               href="/import"
               className="hidden sm:inline-flex items-center justify-center p-2 rounded-xl border border-border bg-card hover:bg-muted/70 text-muted-foreground hover:text-foreground shadow-2xs transition-all"
-              title="Import sao kê tự động (AI)"
+              title="Import sao kê"
             >
               <Sparkles size={15} className="text-amber-500" />
             </Link>
@@ -329,12 +366,12 @@ export function AppShell({ email, initials, wallets = [], children }: Props) {
           className={cn(
             "flex-1 w-full mx-auto transition-all duration-300 ease-in-out",
             layoutWidth === "full"
-              ? "max-w-none px-4 sm:px-6 lg:px-8 xl:px-10 py-6"
+              ? "max-w-none px-3 sm:px-6 lg:px-8 xl:px-10 pt-4 pb-24 md:py-6"
               : layoutWidth === "standard"
-              ? "max-w-[1400px] px-4 sm:px-6 lg:px-8 py-6"
+              ? "max-w-[1400px] px-3 sm:px-6 lg:px-8 pt-4 pb-24 md:py-6"
               : isCollapsed
-              ? "max-w-[1920px] 2xl:max-w-full px-4 sm:px-8 lg:px-10 xl:px-12 2xl:px-14 py-6"
-              : "max-w-[1600px] 2xl:max-w-[1720px] px-4 sm:px-6 lg:px-8 xl:px-10 py-6"
+              ? "max-w-[1920px] 2xl:max-w-full px-3 sm:px-8 lg:px-10 xl:px-12 2xl:px-14 pt-4 pb-24 md:py-6"
+              : "max-w-[1600px] 2xl:max-w-[1720px] px-3 sm:px-6 lg:px-8 xl:px-10 pt-4 pb-24 md:py-6"
           )}
         >
           <PageWrapper>{children}</PageWrapper>

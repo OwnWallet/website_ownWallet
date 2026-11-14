@@ -68,7 +68,7 @@ export const NAV_ITEMS = [
   { href: "/dashboard",    label: "Tổng quan",   icon: "LayoutDashboard" },
   { href: "/income",       label: "Dòng tiền",   icon: "Banknote"        },
   { href: "/transactions", label: "Giao dịch",   icon: "ArrowLeftRight"  },
-  { href: "/import",       label: "AI Import",   icon: "Sparkles"        },
+  { href: "/import",       label: "Import",      icon: "Sparkles"        },
   { href: "/reports",      label: "Báo cáo",     icon: "BarChart3"       },
   { href: "/budget",       label: "Ngân sách",   icon: "Wallet"          },
   { href: "/investments",  label: "Đầu tư",      icon: "TrendingUp"      },
