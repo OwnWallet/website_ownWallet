@@ -50,7 +50,7 @@ import {
 import { WalletBadge } from "@/components/ui/wallet-badge";
 import { EvidenceModal } from "@/components/ui/evidence-modal";
 import { isDebtCategory, extractDebtPerson } from "@/lib/debt-sync";
-import { extractTagFromNote } from "@/lib/constants";
+import { parseTransactionNote } from "@/lib/constants";
 
 interface Category {
  id: string;
@@ -803,7 +803,7 @@ export function TransactionList({
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
  <p className="font-bold text-sm text-foreground truncate">
- {tx.note || tx.description || tx.category?.name || "Giao dịch"}
+ {parseTransactionNote(tx.note || tx.description, tx.category?.name).description || tx.category?.name || "Giao dịch"}
  </p>
  {/* Type indicator badge */}
  <span
@@ -833,7 +833,7 @@ export function TransactionList({
 
                         {/* Detected Detailed Tag */}
                         {(() => {
-                          const detectedTag = extractTagFromNote(tx.note || tx.description, tx.category?.name);
+                          const detectedTag = parseTransactionNote(tx.note || tx.description, tx.category?.name).tag;
                           if (!detectedTag) return null;
                           return (
                             <button
@@ -1015,7 +1015,7 @@ export function TransactionList({
             </div>
             <div className="min-w-0">
               <p className="font-bold text-foreground truncate">
-                {tx.note || tx.description || tx.category?.name}
+                {parseTransactionNote(tx.note || tx.description, tx.category?.name).description || tx.category?.name || "Giao dịch"}
               </p>
               <p className="text-xs text-muted-foreground truncate md:hidden">
                 {formatDate(tx.recordedAt)} · {formatTime(tx.recordedAt)}
@@ -1036,7 +1036,7 @@ export function TransactionList({
               {tx.category?.name}
             </span>
             {(() => {
-              const detectedTag = extractTagFromNote(tx.note || tx.description, tx.category?.name);
+              const detectedTag = parseTransactionNote(tx.note || tx.description, tx.category?.name).tag;
               if (!detectedTag) return null;
               return (
                 <button

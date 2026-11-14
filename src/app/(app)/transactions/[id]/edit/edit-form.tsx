@@ -11,8 +11,8 @@ import { TransactionSchema, type TransactionInput } from "@/schemas/transaction"
 import { toDate } from "@/lib/utils";
 import { EvidenceUpload } from "@/components/ui/evidence-upload";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
-import { isDebtCategory, extractDebtPerson } from "@/lib/debt-sync";
-import { getCategoryTags } from "@/lib/constants";
+import { isDebtCategory } from "@/lib/debt-sync";
+import { getCategoryTags, parseTransactionNote } from "@/lib/constants";
 
 interface Props {
   transaction: {
@@ -48,8 +48,14 @@ export function EditTransactionForm({
     .toISOString()
     .slice(0, 16);
 
-  const { person: initialDebtPerson, cleanNote: initialCleanNote } = extractDebtPerson(
-    transaction.note || transaction.description
+  const initialCatObj = categories.find((c) => c.id === transaction.categoryId);
+  const {
+    tag: initialTag,
+    description: initialCleanDesc,
+    debtPerson: parsedDebtPerson,
+  } = parseTransactionNote(
+    transaction.note || transaction.description,
+    initialCatObj?.name
   );
 
   const {
@@ -64,9 +70,10 @@ export function EditTransactionForm({
       amount: Number(transaction.amount),
       type: transaction.type,
       categoryId: transaction.categoryId,
+      tag: initialTag || undefined,
       walletId: transaction.walletId || "",
-      debtPerson: initialDebtPerson || undefined,
-      description: initialCleanNote || "",
+      debtPerson: parsedDebtPerson || undefined,
+      description: initialCleanDesc || "",
       goalId: transaction.goalId || undefined,
       recordedAt: initialDate,
     },
@@ -91,23 +98,14 @@ export function EditTransactionForm({
     return false;
   });
 
-  const descriptionVal = useWatch({ control, name: "description" });
+  const selectedTag = useWatch({ control, name: "tag" }) || "";
   const availableTags = selectedCat ? getCategoryTags(selectedCat.name) : [];
 
-  const handleToggleTag = (tag: string) => {
-    const current = (descriptionVal || "").trim();
-    if (!current) {
-      setValue("description", tag, { shouldValidate: true });
-      return;
-    }
-    if (current.toLowerCase().includes(tag.toLowerCase())) {
-      const regex = new RegExp(`(^|\\s*·\\s*|,\\s*|\\s+)${tag}($|\\s*·\\s*|,\\s*|\\s+)`, "gi");
-      let next = current.replace(regex, " ").replace(/\s{2,}/g, " ").trim();
-      if (next.startsWith("·")) next = next.replace(/^·\s*/, "");
-      if (next.endsWith("·")) next = next.replace(/\s*·$/, "");
-      setValue("description", next, { shouldValidate: true });
+  const handleSelectTag = (tag: string) => {
+    if (selectedTag.trim().toLowerCase() === tag.trim().toLowerCase()) {
+      setValue("tag", "", { shouldValidate: true });
     } else {
-      setValue("description", `${current} · ${tag}`, { shouldValidate: true });
+      setValue("tag", tag, { shouldValidate: true });
     }
   };
 
@@ -118,6 +116,7 @@ export function EditTransactionForm({
     if (data.walletId) formData.append("walletId", data.walletId);
     formData.append("categoryId", data.categoryId);
     if (data.debtPerson) formData.append("debtPerson", data.debtPerson);
+    if (data.tag) formData.append("tag", data.tag);
     if (data.description || data.note) {
       formData.append("note", (data.description || data.note)!);
       formData.append("description", (data.description || data.note)!);
@@ -393,7 +392,7 @@ export function EditTransactionForm({
             />
           </div>
 
-          {/* Description & Quick Tags */}
+          {/* Tag chi tiết (Tách riêng khỏi Mô tả) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label
@@ -403,12 +402,17 @@ export function EditTransactionForm({
                   color: "var(--foreground-muted)",
                 }}
               >
-                Ghi chú / Mô tả
+                <Tag size={13} style={{ display: "inline", marginRight: "4px" }} />
+                Tag chi tiết (Tùy chọn)
               </label>
-              {availableTags.length > 0 && (
-                <span className="text-[11px] text-muted-foreground flex items-center gap-1 font-medium">
-                  <Tag size={11} className="text-primary" /> Tag gợi ý theo danh mục
-                </span>
+              {selectedTag && (
+                <button
+                  type="button"
+                  onClick={() => setValue("tag", "")}
+                  className="text-[11px] text-danger hover:underline cursor-pointer"
+                >
+                  ✕ Bỏ chọn tag
+                </button>
               )}
             </div>
 
@@ -416,20 +420,19 @@ export function EditTransactionForm({
             {availableTags.length > 0 && (
               <div className="flex items-center gap-1.5 flex-wrap mb-2">
                 {availableTags.map((tag) => {
-                  const currentDesc = (descriptionVal || "").trim();
-                  const isSelected = currentDesc.toLowerCase().includes(tag.toLowerCase());
+                  const isSelected = selectedTag.trim().toLowerCase() === tag.trim().toLowerCase();
                   return (
                     <button
                       key={tag}
                       type="button"
-                      onClick={() => handleToggleTag(tag)}
+                      onClick={() => handleSelectTag(tag)}
                       className={`text-xs px-2.5 py-1 rounded-lg border font-medium cursor-pointer transition-all duration-150 flex items-center gap-1 ${
                         isSelected
                           ? "bg-primary text-white border-primary shadow-xs"
                           : "bg-card text-foreground hover:bg-muted/70 hover:border-slate-400 border-border"
                       }`}
                     >
-                      <span>{tag}</span>
+                      <span>#{tag}</span>
                     </button>
                   );
                 })}
@@ -437,8 +440,28 @@ export function EditTransactionForm({
             )}
 
             <input
+              {...register("tag")}
+              placeholder="Chọn tag gợi ý ở trên hoặc tự nhập tag..."
+              style={inputStyle}
+            />
+          </div>
+
+          {/* Ghi chú / Mô tả (Độc lập 100%) */}
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: "13px",
+                fontWeight: 500,
+                color: "var(--foreground-muted)",
+                marginBottom: "6px",
+              }}
+            >
+              Ghi chú / Diễn giải thêm (Tùy chọn)
+            </label>
+            <input
               {...register("description")}
-              placeholder={availableTags.length > 0 ? `VD: ${availableTags[0]}...` : "VD: Ăn trưa với đồng nghiệp..."}
+              placeholder="VD: Ăn trưa với đồng nghiệp, Bàn công việc..."
               style={inputStyle}
             />
           </div>

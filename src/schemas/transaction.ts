@@ -6,6 +6,7 @@ export const TransactionSchema = z.object({
     .positive("Số tiền phải lớn hơn 0"),
   type: z.enum(["INCOME", "EXPENSE"] as const, { error: "Chọn loại giao dịch" }),
   categoryId: z.string().min(1, "Chọn danh mục"),
+  tag: z.string().max(50, "Tag tối đa 50 ký tự").optional().nullable(),
   note: z.string().max(200, "Ghi chú tối đa 200 ký tự").optional().nullable(),
   description: z.string().max(200, "Ghi chú tối đa 200 ký tự").optional().nullable(),
   recordedAt: z.coerce.date({ error: "Chọn thời điểm giao dịch" }),

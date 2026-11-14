@@ -6,6 +6,9 @@ import {
   getCategoryTags,
   extractTagFromNote,
   getAllTags,
+  formatTransactionNote,
+  parseTransactionNote,
+  aggregateTagSpending,
 } from "../constants";
 import { classifyCategoryByKeywords } from "../ai/localStatementParser";
 
@@ -103,6 +106,106 @@ describe("Financial Categories & Detailed Tags", () => {
     assert.ok(all.length >= 150);
     const unique = new Set(all);
     assert.equal(unique.size, all.length);
+  });
+
+  it("formatTransactionNote và parseTransactionNote hoạt động 2 chiều chính xác độc lập với miêu tả", () => {
+    // 1. Chỉ có tag
+    const note1 = formatTransactionNote({ tag: "Cà phê" });
+    assert.equal(note1, "[Tag: Cà phê]");
+    const parsed1 = parseTransactionNote(note1);
+    assert.equal(parsed1.tag, "Cà phê");
+    assert.equal(parsed1.description, "");
+    assert.equal(parsed1.debtPerson, null);
+
+    // 2. Có tag và miêu tả riêng
+    const note2 = formatTransactionNote({ tag: "Xăng xe", description: "Đổ xăng Petrolimex Nguyễn Tri Phương" });
+    assert.equal(note2, "[Tag: Xăng xe] Đổ xăng Petrolimex Nguyễn Tri Phương");
+    const parsed2 = parseTransactionNote(note2);
+    assert.equal(parsed2.tag, "Xăng xe");
+    assert.equal(parsed2.description, "Đổ xăng Petrolimex Nguyễn Tri Phương");
+    assert.equal(parsed2.debtPerson, null);
+
+    // 3. Có cả tag, đối tác nợ và miêu tả
+    const note3 = formatTransactionNote({
+      tag: "Cơm trưa",
+      debtPerson: "Nguyễn Văn A",
+      description: "Ăn trưa liên hoan team",
+    });
+    assert.equal(note3, "[Tag: Cơm trưa] [Người: Nguyễn Văn A] Ăn trưa liên hoan team");
+    const parsed3 = parseTransactionNote(note3);
+    assert.equal(parsed3.tag, "Cơm trưa");
+    assert.equal(parsed3.debtPerson, "Nguyễn Văn A");
+    assert.equal(parsed3.description, "Ăn trưa liên hoan team");
+
+    // 4. Dọn sạch các system tags khác mà không làm mất miêu tả
+    const note4 = "[Tag: Tiền trọ] [tx_id:abc1234] [Đã vào sổ nợ] Tiền phòng tháng 10";
+    const parsed4 = parseTransactionNote(note4);
+    assert.equal(parsed4.tag, "Tiền trọ");
+    assert.equal(parsed4.description, "Tiền phòng tháng 10");
+
+    // 5. Tự động nhận diện tag từ diễn giải cũ nếu chưa có tag tường minh
+    const noteLegacy = "Uống trà sữa Gongcha với bạn";
+    const parsedLegacy = parseTransactionNote(noteLegacy, "Ăn uống");
+    assert.equal(parsedLegacy.tag, "Trà sữa");
+    assert.equal(parsedLegacy.description, "Uống trà sữa Gongcha với bạn");
+  });
+
+  it("aggregateTagSpending tổng hợp và xếp hạng chi tiêu theo tag chính xác", () => {
+    const transactions = [
+      {
+        type: "EXPENSE",
+        amount: 50000,
+        note: "[Tag: Cà phê] Highlands",
+        category: { name: "Ăn uống", color: "#f97316" },
+      },
+      {
+        type: "EXPENSE",
+        amount: 45000,
+        note: "[Tag: Cà phê] Phúc Long",
+        category: { name: "Ăn uống", color: "#f97316" },
+      },
+      {
+        type: "EXPENSE",
+        amount: 80000,
+        note: "[Tag: Xăng xe] Đổ xăng",
+        category: { name: "Di chuyển", color: "#eab308" },
+      },
+      {
+        type: "EXPENSE",
+        amount: 25000,
+        note: "Bánh tráng nướng", // Nhận diện ngầm tag hoặc Chưa gắn tag
+        category: { name: "Ăn uống", color: "#f97316" },
+      },
+      {
+        type: "INCOME", // Phải bỏ qua thu nhập
+        amount: 10000000,
+        note: "Lương tháng",
+        category: { name: "Lương", color: "#22c55e" },
+      },
+    ];
+
+    const totalExpense = 200000;
+    const aggregated = aggregateTagSpending(transactions, totalExpense);
+
+    assert.ok(aggregated.length > 0);
+    // Cà phê: 50k + 45k = 95k (lớn nhất)
+    assert.equal(aggregated[0].name, "Cà phê");
+    assert.equal(aggregated[0].value, 95000);
+    assert.equal(aggregated[0].count, 2);
+    assert.equal(aggregated[0].categoryName, "Ăn uống");
+    assert.equal(aggregated[0].percentage, Math.round((95000 / 200000) * 100)); // 48%
+
+    // Xăng xe: 80k (thứ hai)
+    assert.equal(aggregated[1].name, "Xăng xe");
+    assert.equal(aggregated[1].value, 80000);
+    assert.equal(aggregated[1].count, 1);
+    assert.equal(aggregated[1].categoryName, "Di chuyển");
+    assert.equal(aggregated[1].percentage, 40);
+
+    // Thứ hạng phải được sắp xếp giảm dần theo value
+    for (let i = 0; i < aggregated.length - 1; i++) {
+      assert.ok(aggregated[i].value >= aggregated[i + 1].value);
+    }
   });
 });
 
