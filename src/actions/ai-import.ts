@@ -2,7 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { toInstant } from "@/lib/utils";
+import { toDate, toInstant } from "@/lib/utils";
+import { toCents } from "@/lib/money";
 import { ConfirmImportSchema } from "@/schemas/ai-import";
 import { revalidatePath } from "next/cache";
 import { collectCorrections } from "@/lib/category-rules";
@@ -15,8 +16,15 @@ export interface ImportResult {
   imported: number;
   /** Số quy tắc phân loại mới học được từ các lần sửa danh mục */
   learnedRules?: number;
+  /** Số vế đối ứng (phía tài khoản còn lại của chuyển khoản) được tạo thêm */
+  counterpartCreated?: number;
+  /** Số vế đối ứng đã có sẵn nên không tạo lại */
+  counterpartMatched?: number;
   error?: string;
 }
+
+/** Cửa sổ thời gian để coi một giao dịch có sẵn là vế đối ứng (ngân hàng và thẻ ghi sổ lệch 1–2 ngày). */
+const MIRROR_MATCH_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 
 /**
  * Bulk-insert các giao dịch sau khi user xem xét và confirm.
@@ -68,12 +76,14 @@ export async function confirmAiImport(
 
   // Kiểm tra quyền sở hữu ví nếu có truyền walletId để chống IDOR
   let validatedWalletId: string | null = null;
+  let sourceWalletName = "tài khoản khác";
   if (walletId) {
     const wallet = await db.orm.public.Wallet.where({ id: walletId, userId }).first();
     if (!wallet) {
       return { success: false, imported: 0, error: "Ví được chọn không tồn tại hoặc không thuộc quyền sở hữu." };
     }
     validatedWalletId = wallet.id;
+    sourceWalletName = wallet.name;
   }
 
   // ── Lấy toàn bộ categories của user ──
@@ -143,6 +153,29 @@ export async function confirmAiImport(
     }
   }
 
+  // ── Kiểm tra tài khoản đối ứng của các dòng chuyển khoản (chống IDOR) ──
+  const counterpartIds = [
+    ...new Set(
+      transactions
+        .filter((t) => t.isTransfer && t.counterpartWalletId)
+        .map((t) => t.counterpartWalletId as string)
+    ),
+  ];
+  const counterpartNames = new Map<string, string>();
+  if (counterpartIds.length > 0) {
+    const owned = (await db.orm.public.Wallet.where((w) => w.userId.eq(userId)).all()) as any[];
+    for (const id of counterpartIds) {
+      const w = owned.find((x) => x.id === id);
+      if (!w) {
+        return { success: false, imported: 0, error: "Tài khoản đối ứng không tồn tại hoặc không thuộc quyền sở hữu." };
+      }
+      if (id === validatedWalletId) {
+        return { success: false, imported: 0, error: "Tài khoản đối ứng phải khác tài khoản đang import." };
+      }
+      counterpartNames.set(id, w.name);
+    }
+  }
+
   // ── Bulk insert transactions ──
   const transactionData = transactions.map((t) => {
     const catId = categoryMap.get(t.categoryName.toLowerCase());
@@ -161,9 +194,59 @@ export async function confirmAiImport(
     };
   });
 
+  // ── Vế đối ứng của chuyển khoản ──
+  // Import sao kê ngân hàng có dòng trả nợ thẻ: nếu chỉ ghi phía ngân hàng thì dư nợ thẻ không giảm
+  // (tiền mất mà nợ vẫn còn). Tạo thêm vế ngược chiều trên tài khoản đối ứng — trừ khi vế đó đã có sẵn
+  // (VD đã import sao kê thẻ hoặc đã ghi "Thanh toán thẻ" trước đó) để không ghi nhận hai lần.
+  const mirrorData: typeof transactionData = [];
+  let counterpartMatched = 0;
+  const mirrorRows = transactions.filter((t) => t.isTransfer && t.counterpartWalletId);
+  if (mirrorRows.length > 0) {
+    const times = mirrorRows.map((t) => Date.parse(t.recordedAt));
+    const fromInstant = toInstant(new Date(Math.min(...times) - MIRROR_MATCH_WINDOW_MS));
+    const toInstantEnd = toInstant(new Date(Math.max(...times) + MIRROR_MATCH_WINDOW_MS));
+    const nearby = (await db.orm.public.Transaction
+      .where((t) => t.userId.eq(userId))
+      .where((t) => t.recordedAt.gte(fromInstant))
+      .where((t) => t.recordedAt.lte(toInstantEnd))
+      .all()) as any[];
+    const used = new Set<string>();
+
+    for (const t of mirrorRows) {
+      const cpId = t.counterpartWalletId as string;
+      const mirrorType = t.type === "INCOME" ? "EXPENSE" : "INCOME";
+      const cents = toCents(t.amount);
+      const time = Date.parse(t.recordedAt);
+      const existing = nearby.find(
+        (ex) =>
+          !used.has(ex.id) &&
+          ex.walletId === cpId &&
+          ex.type === mirrorType &&
+          toCents(ex.amount) === cents &&
+          Math.abs(toDate(ex.recordedAt).getTime() - time) <= MIRROR_MATCH_WINDOW_MS
+      );
+      if (existing) {
+        used.add(existing.id);
+        counterpartMatched++;
+        continue;
+      }
+      const baseNote = (t.note ?? "").trim().replace(/^\[TRANSFER\]\s*/, "");
+      const direction = mirrorType === "INCOME" ? `Nhận từ ${sourceWalletName}` : `Chuyển sang ${sourceWalletName}`;
+      mirrorData.push({
+        amount: String(t.amount),
+        type: mirrorType,
+        note: `${TRANSFER_PREFIX} ${direction}${baseNote ? ` - ${baseNote}` : ""}`,
+        recordedAt: toInstant(t.recordedAt),
+        categoryId: categoryMap.get(TRANSFER_CATEGORY_NAME.toLowerCase())!,
+        walletId: cpId,
+        userId,
+      });
+    }
+  }
+
   try {
     await db.transaction(async (tx: any) => {
-      for (const txData of transactionData) {
+      for (const txData of [...transactionData, ...mirrorData]) {
         await tx.orm.public.Transaction.create(txData);
       }
     });
@@ -196,7 +279,13 @@ export async function confirmAiImport(
       console.error("[Import] Không thể lưu quy tắc phân loại:", (learnErr as Error)?.message);
     }
 
-    return { success: true, imported: transactionData.length, learnedRules };
+    return {
+      success: true,
+      imported: transactionData.length,
+      learnedRules,
+      counterpartCreated: mirrorData.length,
+      counterpartMatched,
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Lỗi không xác định";
     return { success: false, imported: 0, error: message };

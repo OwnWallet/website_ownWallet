@@ -7,6 +7,7 @@ import { sumIncomeExpense } from "@/lib/finance";
 import { getWallets } from "@/actions/wallets";
 import { getAutoRolloverBudgets } from "@/actions/budgets";
 import { getCreditDebt, getWalletKind } from "@/lib/credit-card";
+import { addMoney, subMoney, sumMoney } from "@/lib/money";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -130,9 +131,9 @@ export async function getCashFlowData(): Promise<CashFlowData> {
 
     if (bal > 0) {
       if (isSavings) {
-        savingsCash += bal;
+        savingsCash = addMoney(savingsCash, bal);
       } else {
-        instantCash += bal;
+        instantCash = addMoney(instantCash, bal);
       }
     }
 
@@ -151,7 +152,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
 
   const totalLiquidCash = Math.max(0, instantCash);
   const totalSavingsAndEmergency = Math.max(0, savingsCash);
-  const totalAllCash = totalLiquidCash + totalSavingsAndEmergency;
+  const totalAllCash = addMoney(totalLiquidCash, totalSavingsAndEmergency);
 
   const processedWallets: WalletCashItem[] = rawWallets.map((w) => ({
     ...w,
@@ -167,11 +168,11 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   for (const d of debts as any[]) {
     const amount = Number(d.amount);
     const paid = Number(d.paidAmount ?? 0);
-    const remain = Math.max(0, amount - paid);
+    const remain = Math.max(0, subMoney(amount, paid));
 
     if (d.status !== "PAID" && remain > 0) {
       if (d.direction === "OWED") {
-        totalReceivables += remain;
+        totalReceivables = addMoney(totalReceivables, remain);
         topReceivables.push({
           id: d.id,
           person: d.person,
@@ -180,7 +181,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
           dueDate: d.dueDate ? toDate(d.dueDate).toISOString() : null,
         });
       } else {
-        totalPayables += remain;
+        totalPayables = addMoney(totalPayables, remain);
         topPayables.push({
           id: d.id,
           person: d.person,
@@ -195,7 +196,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   for (const c of creditCards) {
     const remain = getCreditDebt(Number(c.currentBalance ?? c.balance ?? 0));
     if (remain <= 0) continue;
-    totalPayables += remain;
+    totalPayables = addMoney(totalPayables, remain);
     topPayables.push({
       id: c.id,
       person: `Thẻ tín dụng ${c.name}`,
@@ -211,12 +212,12 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   // 3. Tính Giá trị Đầu tư
   const totalInvestments = (investments as any[]).reduce((sum, inv) => {
     const price = inv.currentPrice ?? inv.buyPrice ?? 0;
-    return sum + Number(price) * Number(inv.quantity);
+    return addMoney(sum, Number(price) * Number(inv.quantity));
   }, 0);
 
   // 4. Mục tiêu tích lũy
   const totalGoalsSaved = (goals as any[]).reduce(
-    (sum, g) => sum + Number(g.savedAmount ?? 0),
+    (sum, g) => addMoney(sum, g.savedAmount ?? 0),
     0
   );
 
@@ -294,11 +295,11 @@ export async function getCashFlowData(): Promise<CashFlowData> {
       : 0;
 
   // 8. Vị thế tiền mặt ròng
-  const netAvailableCash = totalAllCash + totalReceivables - totalPayables;
+  const netAvailableCash = subMoney(addMoney(totalAllCash, totalReceivables), totalPayables);
 
   // 9. Cấu trúc thanh khoản
   const totalWealth =
-    totalLiquidCash + totalSavingsAndEmergency + totalReceivables + totalInvestments;
+    sumMoney([totalLiquidCash, totalSavingsAndEmergency, totalReceivables, totalInvestments]);
 
   // 10. Gợi ý hành động thực tế
   const insights: CashFlowData["insights"] = [];

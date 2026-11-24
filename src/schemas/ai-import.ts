@@ -59,6 +59,8 @@ export const ConfirmImportSchema = z.object({
         ruleKeyword: z.string().optional(),
         // Chuyển khoản nội bộ (VD thanh toán thẻ tín dụng): giảm/tăng số dư nhưng không tính là thu/chi
         isTransfer: z.boolean().optional().default(false),
+        // Tài khoản phía bên kia của chuyển khoản (VD thẻ tín dụng được trả nợ) — tạo thêm vế ngược chiều
+        counterpartWalletId: z.string().optional().nullable(),
       })
     )
     .min(1, "Phải có ít nhất 1 giao dịch"),

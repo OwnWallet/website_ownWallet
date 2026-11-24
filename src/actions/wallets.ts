@@ -15,7 +15,7 @@ import {
   type CardTx,
   type InstallmentLike,
 } from "@/lib/credit-card";
-import { fromCents, toCents } from "@/lib/money";
+import { fromCents, subMoney, sumMoney, toCents } from "@/lib/money";
 import { getOrCreateTransferCategory } from "@/lib/transfer-category";
 
 /** "" / null / undefined → undefined, để các trường số tùy chọn từ FormData không bị ép thành 0. */
@@ -173,10 +173,10 @@ export async function getWallets() {
       credit = {
         creditLimit,
         creditDebt,
-        availableCredit: creditLimit - creditDebt,
+        availableCredit: subMoney(creditLimit, creditDebt),
         utilization: getCreditUtilization(creditDebt, creditLimit),
         activeInstallmentCount: activeInstallments.length,
-        installmentRemaining: activeInstallments.reduce((s, p) => s + p.remainingAmount, 0),
+        installmentRemaining: sumMoney(activeInstallments.map((p) => p.remainingAmount)),
         statement: {
           lastStatementDate: summary.lastStatementDate.toISOString(),
           nextStatementDate: summary.nextStatementDate.toISOString(),

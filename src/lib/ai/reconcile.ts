@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { toInstant, toDate, getVNDateParts } from "@/lib/utils";
+import { toCents } from "@/lib/money";
 
 /** Ngày theo múi giờ Việt Nam (YYYY-MM-DD) — tránh lệch ngày khi so sánh bằng UTC */
 function vnDayKey(d: Date): string {
@@ -53,7 +54,8 @@ export async function reconcileTransactionsWithDb(
   return transactions.map((tx) => {
     const txDate = new Date(tx.recordedAt);
     const txDateStr = vnDayKey(txDate);
-    const txAmount = Math.round(tx.amount);
+    // So khớp chính xác đến từng xu (100,40 ≠ 100,00)
+    const txAmount = toCents(tx.amount);
 
     let bestMatch: {
       item: any;
@@ -64,7 +66,7 @@ export async function reconcileTransactionsWithDb(
     for (const ex of existingTxs) {
       if (matchedExistingIds.has(ex.id)) continue;
 
-      const exAmount = Math.round(Number(ex.amount));
+      const exAmount = toCents(ex.amount);
       if (exAmount !== txAmount || ex.type !== tx.type) {
         continue;
       }

@@ -73,3 +73,17 @@ test("Money: input display", () => {
   assert.equal(formatAmountInput(0.1 + 0.2), "0,3");
   assert.equal(formatAmountInput(0), "");
 });
+
+test("Money: negative amounts round symmetrically to cents", () => {
+  assert.equal(toCents(12.345), 1235);
+  assert.equal(toCents(-12.345), -1235);
+  assert.equal(toCents("-12.345"), -1235);
+});
+
+test("Money: long reference codes are not amounts", () => {
+  assert.equal(parseAmountString("26246040431935"), null);
+  assert.equal(parseAmountString("FT26246040431935"), null);
+  // 13 chữ số liền vẫn là số tiền hợp lệ; có dấu phân cách thì không giới hạn
+  assert.equal(parseAmountString("1234567890123")?.value, 1234567890123);
+  assert.equal(parseAmountString("12.345.678.901.234")?.value, 12345678901234);
+});

@@ -116,7 +116,13 @@ function dueDateOf(stmt: YMD, statementDay: number, paymentDueDay: number | null
     return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() };
   }
   // Ngày đến hạn > ngày chốt → cùng tháng; ngược lại → tháng sau.
-  const target = paymentDueDay > statementDay ? { y: stmt.y, m: stmt.m } : addMonths(stmt.y, stmt.m, 1);
+  // So sánh sau khi kẹp về cuối tháng: chốt 29 / hạn 30 trong tháng 2 đều thành ngày 28 → phải dời sang tháng sau,
+  // nếu không hạn thanh toán trùng ngày chốt (0 ngày ân hạn).
+  if (paymentDueDay > statementDay) {
+    const sameMonthDay = clampDay(stmt.y, stmt.m, paymentDueDay);
+    if (sameMonthDay > stmt.d) return { y: stmt.y, m: stmt.m, d: sameMonthDay };
+  }
+  const target = addMonths(stmt.y, stmt.m, 1);
   return { y: target.y, m: target.m, d: clampDay(target.y, target.m, paymentDueDay) };
 }
 
@@ -359,8 +365,15 @@ function normalizeText(s: string): string {
 const REFUND_RE = /\b(hoan tien|hoan tra|hoan phi|refund|cash ?back|reversal|reversed|tra lai|dieu chinh giam)\b/;
 const CARD_SIDE_PAYMENT_RE =
   /\b(thanh toan|ttoan|tt|payment|tra no|trich no|auto ?debit|nop tien|nap tien|ghi co thanh toan)\b/;
-const CREDIT_CARD_RE = /\b(the tin dung|credit ?card|the td|tttd|ttttd|visa|master ?card|jcb|amex)\b/;
+/** Nhắc rõ đến thẻ tín dụng. */
+const CREDIT_CARD_RE = /\b(the tin dung|credit ?card|the td|tttd|ttttd)\b/;
+/** Chỉ nêu tên tổ chức thẻ — có thể là thẻ ghi nợ, nên cần thêm cụm "trả nợ thẻ" mới tính. */
+const CARD_NETWORK_RE = /\b(visa|master ?card|jcb|amex)\b/;
 const BANK_SIDE_PAYMENT_RE = /\b(thanh toan|ttoan|tt|tra no|payment|nop|auto ?debit|trich no)\b/;
+// "thanh toan the Visa ..." cũng có thể là quẹt thẻ mua hàng, nên chỉ nhận các cụm nói rõ việc trả nợ.
+const CARD_DEBT_PAYMENT_RE = /\b(tra no|du no|sao ke|card payment|auto ?debit|trich no)\b/;
+/** Giao dịch bằng thẻ ghi nợ (mua hàng thật), không phải trả nợ thẻ tín dụng. */
+const DEBIT_CARD_RE = /\b(the ghi no|debit card|napas)\b|(?<!auto ?)\bdebit\b/;
 
 /**
  * Gợi ý một dòng sao kê là "thanh toán thẻ tín dụng" — tức chuyển khoản nội bộ, KHÔNG phải thu/chi thật
@@ -379,7 +392,9 @@ export function suggestCardPaymentTransfer(
     return type === "INCOME" && CARD_SIDE_PAYMENT_RE.test(n) && !REFUND_RE.test(n);
   }
   if (targetKind === "BANK" || targetKind === "CASH") {
-    return type === "EXPENSE" && CREDIT_CARD_RE.test(n) && BANK_SIDE_PAYMENT_RE.test(n);
+    if (type !== "EXPENSE" || DEBIT_CARD_RE.test(n)) return false;
+    if (CREDIT_CARD_RE.test(n)) return BANK_SIDE_PAYMENT_RE.test(n);
+    return CARD_NETWORK_RE.test(n) && CARD_DEBT_PAYMENT_RE.test(n);
   }
   return false;
 }

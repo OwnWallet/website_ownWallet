@@ -185,3 +185,24 @@ test("Credit card: statement import helpers", async (t) => {
     assert.equal(matchesDetectedAccount({ type: "BANK", accountNumber: "0123456789" }, "0123 456 789"), true);
   });
 });
+
+test("Credit card: due date never falls on the statement date in short months", () => {
+  // Chốt ngày 29, hạn ngày 30: tháng 2/2027 cả hai kẹp về 28/02 → hạn phải sang tháng 3
+  const feb = getStatementCycle(29, 30, vn(2027, 3, 10));
+  assert.equal(ymd(feb.lastStatementDate), "2027-02-28");
+  assert.equal(ymd(feb.dueDate), "2027-03-30");
+  // Tháng đủ ngày vẫn giữ hạn trong cùng tháng
+  const jan = getStatementCycle(29, 30, vn(2027, 2, 10));
+  assert.equal(ymd(jan.lastStatementDate), "2027-01-29");
+  assert.equal(ymd(jan.dueDate), "2027-01-30");
+});
+
+test("Credit card: debit-card purchases are not card payments", () => {
+  assert.equal(suggestCardPaymentTransfer("BANK", "EXPENSE", "TT the Visa Debit tai Shopee"), false);
+  assert.equal(suggestCardPaymentTransfer("BANK", "EXPENSE", "Thanh toan the ghi no NAPAS tai Circle K"), false);
+  assert.equal(suggestCardPaymentTransfer("BANK", "EXPENSE", "Thanh toan the Visa tai Highlands"), false);
+  // Trả nợ thẻ qua tên tổ chức thẻ vẫn được nhận diện
+  assert.equal(suggestCardPaymentTransfer("BANK", "EXPENSE", "Tra no the Visa 4123"), true);
+  assert.equal(suggestCardPaymentTransfer("BANK", "EXPENSE", "Auto debit Mastercard 4123 du no thang 11"), true);
+  assert.equal(suggestCardPaymentTransfer("BANK", "EXPENSE", "TT the tin dung Visa 4123"), true);
+});

@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { serializeData, toDate, toInstant } from "@/lib/utils";
+import { formatCurrency, serializeData, toDate, toInstant } from "@/lib/utils";
+import { fromCents, toCents } from "@/lib/money";
 import { TRANSFER_CATEGORY_NAME } from "@/lib/finance";
 import { getInstallmentProgress, getWalletKind } from "@/lib/credit-card";
 
@@ -122,6 +123,27 @@ export async function createInstallment(formData: FormData) {
     }
     if (existing) {
       return { error: "Giao dịch này đã được chuyển đổi trả góp" };
+    }
+    // Gốc trả góp lớn hơn giao dịch gốc sẽ làm phần "chưa đến kỳ" vượt dư nợ thật → số tiền sao kê bị tính thiếu.
+    if (toCents(data.principal) > toCents(sourceTx.amount)) {
+      return { error: `Số tiền trả góp không được lớn hơn giao dịch gốc (${formatCurrency(Number(sourceTx.amount))})` };
+    }
+  } else {
+    // Không gắn giao dịch: gốc trả góp phải nằm trong dư nợ hiện tại của thẻ.
+    const txs = (await db.orm.public.Transaction
+      .select("amount", "type")
+      .where({ userId, walletId: wallet.id })
+      .all()) as { amount: string | number; type: string }[];
+    let balance = toCents(wallet.balance);
+    for (const t of txs) {
+      if (t.type === "INCOME") balance += toCents(t.amount);
+      else if (t.type === "EXPENSE") balance -= toCents(t.amount);
+    }
+    const debt = Math.max(0, -balance);
+    if (toCents(data.principal) > debt) {
+      return {
+        error: `Số tiền trả góp không được lớn hơn dư nợ hiện tại của thẻ (${formatCurrency(fromCents(debt))}). Hãy ghi nhận giao dịch chi tiêu trước.`,
+      };
     }
   }
 

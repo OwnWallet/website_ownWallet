@@ -22,7 +22,9 @@ export function toCents(value: number | string | null | undefined): number {
   }
   if (!Number.isFinite(value)) return 0;
   // Khử nhiễu biểu diễn nhị phân (12.34 * 100 = 1233.9999999999998) — giá trị đầu vào có ≤ 2 chữ số thập phân.
-  return Math.round(value * 100);
+  // Làm tròn theo trị tuyệt đối để số âm và số dương đối xứng (Math.round(-1234.5) = -1234).
+  const cents = Math.round(Math.abs(value) * 100);
+  return value < 0 ? -cents : cents;
 }
 
 export function fromCents(cents: number): number {
@@ -59,6 +61,9 @@ export function splitMoney(total: number | string, parts: number): number[] {
   out[n - 1] = cents - base * (n - 1);
   return out.map(fromCents);
 }
+
+/** Số chữ số tối đa của một số tiền viết liền không dấu phân cách (tới 9.999 tỷ). */
+const MAX_PLAIN_DIGITS = 13;
 
 export interface ParsedAmount {
   value: number;
@@ -105,6 +110,8 @@ export function parseAmountString(raw: string): ParsedAmount | null {
   }
   s = s.replace(/\s+/g, "");
   if (!/^\d[\d.,]*$/.test(s)) return null;
+  // Dãy số liền dài (mã bút toán / số tham chiếu như "26246040431935") không phải số tiền.
+  if (/^\d+$/.test(s) && s.length > MAX_PLAIN_DIGITS) return null;
 
   let intPart = s;
   let fracPart = "";

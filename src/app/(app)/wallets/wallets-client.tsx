@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { getWalletKind, WALLET_KIND_EMOJI, type WalletKind } from "@/lib/credit-card";
+import { sumMoney } from "@/lib/money";
 import { CreditCardSection, type CreditInfo } from "./credit-card-section";
 import { CreditCardFields } from "./credit-card-fields";
 import { FitAmount } from "@/components/ui/fit-amount";
@@ -110,16 +111,16 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
   const moneyWallets = wallets.filter((w) => getWalletKind(w) !== "CREDIT");
 
   // Summary stats
-  const totalBalance = moneyWallets.reduce((sum, w) => sum + w.currentBalance, 0);
-  const totalCreditDebt = creditWallets.reduce((sum, w) => sum + (w.credit?.creditDebt ?? 0), 0);
-  const totalCreditLimit = creditWallets.reduce((sum, w) => sum + (w.credit?.creditLimit ?? 0), 0);
+  const totalBalance = sumMoney(moneyWallets.map((w) => w.currentBalance));
+  const totalCreditDebt = sumMoney(creditWallets.map((w) => w.credit?.creditDebt ?? 0));
+  const totalCreditLimit = sumMoney(creditWallets.map((w) => w.credit?.creditLimit ?? 0));
   const creditDueCount = creditWallets.filter((w) =>
     ["DUE_SOON", "OVERDUE"].includes(w.credit?.statement.status ?? "")
   ).length;
-  const totalCashBalance = cashWallets.reduce((sum, w) => sum + w.currentBalance, 0);
-  const totalBankBalance = bankWallets.reduce((sum, w) => sum + w.currentBalance, 0);
-  const totalIncome = wallets.reduce((sum, w) => sum + w.income, 0);
-  const totalExpense = wallets.reduce((sum, w) => sum + w.expense, 0);
+  const totalCashBalance = sumMoney(cashWallets.map((w) => w.currentBalance));
+  const totalBankBalance = sumMoney(bankWallets.map((w) => w.currentBalance));
+  const totalIncome = sumMoney(wallets.map((w) => w.income));
+  const totalExpense = sumMoney(wallets.map((w) => w.expense));
   const totalTxs = wallets.reduce((sum, w) => sum + w.txCount, 0);
 
   // Bank / Cash Theme Helper

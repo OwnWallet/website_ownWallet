@@ -27,7 +27,17 @@ interface ReviewRow extends ParsedTransaction {
   _isTransfer: boolean;
   /** Người dùng đã tự bật/tắt — không tự gợi ý lại khi đổi tài khoản */
   _transferManual: boolean;
+  /** Tài khoản phía bên kia của chuyển khoản ("" = chỉ ghi một phía) */
+  _counterpartWalletId: string;
+  /** Người dùng đã tự chọn tài khoản đối ứng — không tự gợi ý lại */
+  _counterpartManual: boolean;
 }
+
+/** Dòng chưa có gợi ý chuyển khoản / tài khoản đối ứng. */
+type RowDraft = Omit<ReviewRow, "_isTransfer" | "_counterpartWalletId"> & {
+  _isTransfer?: boolean;
+  _counterpartWalletId?: string;
+};
 
 type ReviewWallet = {
   id: string;
@@ -69,6 +79,37 @@ function formatDate(iso: string) {
   } catch {
     return iso;
   }
+}
+
+/**
+ * Gợi ý tài khoản phía bên kia của một dòng chuyển khoản:
+ *  1. Tài khoản có 4 số cuối khớp một dãy số trong nội dung giao dịch.
+ *  2. Sao kê ngân hàng / ví có dòng chi trả nợ thẻ và người dùng chỉ có đúng một thẻ tín dụng → thẻ đó.
+ * Sao kê thẻ tín dụng: phía bên kia luôn là tài khoản ngân hàng / ví (không phải thẻ khác).
+ */
+function suggestCounterpartWallet(
+  wallets: ReviewWallet[],
+  sourceWalletId: string,
+  sourceKind: WalletKind | null,
+  type: string,
+  note: string | undefined
+): string {
+  const pool = wallets.filter(
+    (w) => w.id !== sourceWalletId && (sourceKind !== "CREDIT" || getWalletKind(w) !== "CREDIT")
+  );
+  const groups = (note ?? "").match(/\d{4,}/g) ?? [];
+  if (groups.length > 0) {
+    const byAcc = pool.find((w) => {
+      const acc = (w.accountNumber ?? "").replace(/\D/g, "");
+      return acc.length >= 4 && groups.some((g) => g === acc || g.endsWith(acc.slice(-4)));
+    });
+    if (byAcc) return byAcc.id;
+  }
+  if (sourceKind !== "CREDIT" && type === "EXPENSE") {
+    const cards = pool.filter((w) => getWalletKind(w) === "CREDIT");
+    if (cards.length === 1) return cards[0].id;
+  }
+  return "";
 }
 
 function confidenceBadge(c: number) {
@@ -130,31 +171,53 @@ export default function ImportReview({
     suggestCardPaymentTransfer(kind, type, note) ||
     categoryName.trim().toLowerCase() === TRANSFER_CATEGORY_NAME.toLowerCase();
 
+  /** Gợi ý lại cờ chuyển khoản và tài khoản đối ứng, giữ nguyên những gì người dùng đã tự chỉnh. */
+  const applySuggestions = (r: RowDraft, walletId: string, kind: WalletKind | null): ReviewRow => {
+    const isTransfer =
+      r._transferManual && r._isTransfer !== undefined ? r._isTransfer : autoTransfer(kind, r.type, r.note, r.categoryName);
+    const counterpart =
+      r._counterpartManual && r._counterpartWalletId !== undefined && r._counterpartWalletId !== walletId
+        ? r._counterpartWalletId
+        : suggestCounterpartWallet(wallets, walletId, kind, r.type, r.note);
+    return { ...r, _isTransfer: isTransfer, _counterpartWalletId: counterpart };
+  };
+
   // Tự động bỏ chọn các giao dịch bị phát hiện trùng lặp với Database
-  const [rows, setRows] = useState<ReviewRow[]>(() => {
-    const kind = selectedKind;
-    return transactions.map((t, i) => ({
-      ...t,
-      _id: `row-${i}`,
-      _selected: !t.duplicateInfo?.isDuplicate,
-      _isTransfer: autoTransfer(kind, t.type, t.note, t.categoryName),
-      _transferManual: false,
-    }));
-  });
+  const [rows, setRows] = useState<ReviewRow[]>(() =>
+    transactions.map((t, i) =>
+      applySuggestions(
+        {
+          ...t,
+          _id: `row-${i}`,
+          _selected: !t.duplicateInfo?.isDuplicate,
+          _transferManual: false,
+          _counterpartManual: false,
+        },
+        selectedWalletId,
+        selectedKind
+      )
+    )
+  );
 
   // Đổi tài khoản nhận → gợi ý lại các dòng thanh toán thẻ (trừ dòng người dùng đã tự chỉnh)
   const changeWallet = (walletId: string) => {
     setSelectedWalletId(walletId);
     const kind = kindOf(walletId);
-    setRows((prev) =>
-      prev.map((r) =>
-        r._transferManual ? r : { ...r, _isTransfer: autoTransfer(kind, r.type, r.note, r.categoryName) }
-      )
-    );
+    setRows((prev) => prev.map((r) => applySuggestions(r, walletId, kind)));
   };
 
   const setRowTransfer = (id: string, value: boolean) =>
     setRows((prev) => prev.map((r) => (r._id === id ? { ...r, _isTransfer: value, _transferManual: true } : r)));
+
+  const setRowCounterpart = (id: string, walletId: string) =>
+    setRows((prev) =>
+      prev.map((r) => (r._id === id ? { ...r, _counterpartWalletId: walletId, _counterpartManual: true } : r))
+    );
+
+  // Tài khoản có thể làm phía bên kia của chuyển khoản (khác tài khoản đang import)
+  const counterpartOptions = wallets.filter(
+    (w) => w.id !== selectedWalletId && (selectedKind !== "CREDIT" || getWalletKind(w) !== "CREDIT")
+  );
 
   const transferCount = rows.filter((r) => r._selected && r._isTransfer).length;
 
@@ -164,6 +227,8 @@ export default function ImportReview({
     success: boolean;
     imported?: number;
     learnedRules?: number;
+    counterpartCreated?: number;
+    counterpartMatched?: number;
     error?: string;
   } | null>(null);
 
@@ -232,6 +297,9 @@ export default function ImportReview({
               type: newType as "INCOME" | "EXPENSE",
               categoryName: "",
               _isTransfer: r._transferManual ? r._isTransfer : suggestCardPaymentTransfer(selectedKind, newType, r.note),
+              _counterpartWalletId: r._counterpartManual
+                ? r._counterpartWalletId
+                : suggestCounterpartWallet(wallets, selectedWalletId, selectedKind, newType, r.note),
             }
           : r
       )
@@ -246,7 +314,7 @@ export default function ImportReview({
       const result = await confirmAiImport({
         walletId: selectedWalletId || null,
         transactions: selected.map(
-          ({ amount, type, categoryName, note, recordedAt, suggestedCategoryName, ruleKeyword, _isTransfer }) => ({
+          ({ amount, type, categoryName, note, recordedAt, suggestedCategoryName, ruleKeyword, _isTransfer, _counterpartWalletId }) => ({
             amount,
             type,
             categoryName: _isTransfer ? TRANSFER_CATEGORY_NAME : categoryName,
@@ -255,6 +323,10 @@ export default function ImportReview({
             suggestedCategoryName,
             ruleKeyword,
             isTransfer: _isTransfer,
+            counterpartWalletId:
+              _isTransfer && _counterpartWalletId && _counterpartWalletId !== selectedWalletId
+                ? _counterpartWalletId
+                : null,
           })
         ),
       });
@@ -283,6 +355,19 @@ export default function ImportReview({
         <p className="text-muted">
           Đã thêm <strong className="text-income">{importResult.imported} giao dịch</strong> vào OwnWallet.
         </p>
+        {(Boolean(importResult.counterpartCreated) || Boolean(importResult.counterpartMatched)) && (
+          <p className="text-sm mt-2">
+            ↔ Chuyển khoản nội bộ:{" "}
+            {Boolean(importResult.counterpartCreated) && (
+              <>đã ghi thêm <strong>{importResult.counterpartCreated}</strong> giao dịch ở tài khoản bên kia</>
+            )}
+            {Boolean(importResult.counterpartCreated) && Boolean(importResult.counterpartMatched) && "; "}
+            {Boolean(importResult.counterpartMatched) && (
+              <><strong>{importResult.counterpartMatched}</strong> giao dịch đã có sẵn nên không ghi lại</>
+            )}
+            .
+          </p>
+        )}
         {Boolean(importResult.learnedRules) && (
           <p className="text-sm mt-2">
             📌 Đã ghi nhớ <strong>{importResult.learnedRules} quy tắc phân loại</strong> từ các danh mục bạn sửa — lần import sau sẽ tự áp dụng.
@@ -566,6 +651,29 @@ export default function ImportReview({
                         <span className="block text-[10px] text-indigo-700/80 mt-0.5">
                           {row.type === "INCOME" ? "Thanh toán vào thẻ / nhận chuyển nội bộ" : "Trả nợ thẻ / chuyển nội bộ"} · không tính thu/chi
                         </span>
+                        {counterpartOptions.length > 0 && (
+                          <label className="block mt-1.5 text-[10px] font-semibold text-indigo-800">
+                            {row.type === "EXPENSE" ? "Chuyển tới" : "Nhận từ"}
+                            <select
+                              id={`row-counterpart-${row._id}`}
+                              value={row._counterpartWalletId}
+                              onChange={(e) => setRowCounterpart(row._id, e.target.value)}
+                              className="mt-0.5 block w-full rounded border border-indigo-200 bg-white px-1.5 py-1 text-[11px] font-normal text-foreground"
+                            >
+                              <option value="">— Chỉ ghi phía này —</option>
+                              {counterpartOptions.map((w) => (
+                                <option key={w.id} value={w.id}>
+                                  {WALLET_KIND_EMOJI[getWalletKind(w)]} {w.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                        {!row._counterpartWalletId && (
+                          <span className="block text-[10px] text-amber-700 mt-1">
+                            Chưa chọn tài khoản bên kia: số dư / dư nợ của tài khoản đó sẽ không thay đổi.
+                          </span>
+                        )}
                         <button
                           type="button"
                           onClick={() => setRowTransfer(row._id, false)}

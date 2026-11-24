@@ -761,6 +761,40 @@ function parseAmountCell(cell: unknown): ParsedAmount | null {
 }
 
 /**
+ * Nhận diện sao kê THẺ TÍN DỤNG từ văn bản: trên sao kê thẻ, số âm / CR là khoản ghi có
+ * (thanh toán thẻ, hoàn tiền) — ngược với sao kê tài khoản, nơi số âm là tiền ra.
+ */
+function isCreditCardStatementText(text: string): boolean {
+  const n = normalizeVietnamese(text);
+  if (/\b(han muc tin dung|credit limit|du no cuoi ky|thanh toan toi thieu|minimum payment|sao ke the tin dung|credit card statement)\b/.test(n)) {
+    return true;
+  }
+  // Số thẻ bị che: "4123 **** **** 5678", "4123xxxxxxxx5678"
+  return /\b\d{4}[\s-]*(?:[*xX•]{4}[\s-]*){2}\d{4}\b|\b\d{4,6}[*xX•]{6,}\d{4}\b/.test(text);
+}
+
+/**
+ * Chiều giao dịch của một ô số tiền có dấu (cột số tiền duy nhất).
+ *  - Hậu tố CR → luôn là tiền vào.
+ *  - Sao kê thẻ tín dụng: số âm = ghi có (INCOME), số dương = chi tiêu.
+ *  - Sao kê tài khoản có cột mang cả số âm lẫn số dương: âm = EXPENSE, dương = INCOME.
+ *  - "+" đứng đầu → tiền vào.
+ * Trả về null khi không xác định được từ dấu (để dùng cột "Loại" hoặc mặc định).
+ */
+function typeFromSignedAmount(
+  parsed: ParsedAmount,
+  raw: string,
+  ctx: { isCardStatement: boolean; signedColumn: boolean }
+): "INCOME" | "EXPENSE" | null {
+  if (parsed.credit) return "INCOME";
+  // Sao kê thẻ: chỉ số âm mới mang nghĩa ghi có; số dương để cột "Loại" / mặc định (chi tiêu) quyết định.
+  if (ctx.isCardStatement) return parsed.negative ? "INCOME" : null;
+  if (raw.trim().startsWith("+")) return "INCOME";
+  if (ctx.signedColumn) return parsed.negative ? "EXPENSE" : "INCOME";
+  return null;
+}
+
+/**
  * Kiểm tra xem một dòng có phải là dòng tổng kết / chân trang / tiêu đề bảng cần dừng gộp diễn giải không
  */
 function isFooterOrHeaderRowText(rowText: string): boolean {
@@ -1331,6 +1365,7 @@ function parseGenericTextPdfLocally(
   const lines = rawText.split("\n");
   const transactions: ParsedTransaction[] = [];
   let skipped = 0;
+  const signCtx = { isCardStatement: isCreditCardStatementText(rawText), signedColumn: false };
 
   for (const line of lines) {
     if (isFooterOrHeaderRowText(line)) continue;
@@ -1340,11 +1375,11 @@ function parseGenericTextPdfLocally(
     const isoDate = parseVietnameseDateToIso(parts[0]);
     if (!isoDate) continue;
 
-    const numericCells: { idx: number; val: number; raw: string; credit: boolean }[] = [];
+    const numericCells: { idx: number; val: number; raw: string; parsed: ParsedAmount }[] = [];
     for (let i = parts.length - 1; i >= 1; i--) {
       const parsedAmt = parseAmountString(parts[i]);
       if (parsedAmt && parsedAmt.value > 0) {
-        numericCells.unshift({ idx: i, val: parsedAmt.value, raw: parts[i], credit: parsedAmt.credit });
+        numericCells.unshift({ idx: i, val: parsedAmt.value, raw: parts[i], parsed: parsedAmt });
       }
     }
 
@@ -1353,7 +1388,7 @@ function parseGenericTextPdfLocally(
     const amountCell =
       numericCells.length >= 2 ? numericCells[numericCells.length - 2] : numericCells[0];
     const type: "INCOME" | "EXPENSE" =
-      amountCell.raw.trim().startsWith("+") || amountCell.credit ? "INCOME" : "EXPENSE";
+      typeFromSignedAmount(amountCell.parsed, amountCell.raw, signCtx) ?? "EXPENSE";
 
     const descParts = parts.slice(1, amountCell.idx).filter((p) => !/^\d{6,}$/.test(p));
     const note = descParts.join(" ").trim() || parts[1] || "Giao dịch sao kê";
@@ -1451,6 +1486,24 @@ export function parseExcelOrCsvLocally(
 
       if (headerIdx === -1) continue;
 
+      // Quy ước dấu của cột số tiền: sao kê thẻ tín dụng, hoặc cột có cả số âm lẫn số dương.
+      const sheetText = rows.map((r) => (r ?? []).map((c) => String(c ?? "")).join(" ")).join("\n");
+      let hasNegative = false;
+      let hasPositive = false;
+      if (amountCol !== -1) {
+        for (let r = headerIdx + 1; r < rows.length; r++) {
+          const p = parseAmountCell(rows[r]?.[amountCol]);
+          if (!p || p.value <= 0 || p.credit) continue;
+          if (p.negative) hasNegative = true;
+          else hasPositive = true;
+        }
+      }
+      const signCtx = {
+        isCardStatement: isCreditCardStatementText(sheetText),
+        // Có cột "Loại" thì cột đó quyết định chiều; dấu âm/dương chỉ dùng khi không có cột Loại.
+        signedColumn: hasNegative && hasPositive && typeCol === -1,
+      };
+
       for (let r = headerIdx + 1; r < rows.length; r++) {
         const row = rows[r];
         if (!row || row.length === 0) continue;
@@ -1482,11 +1535,12 @@ export function parseExcelOrCsvLocally(
           const rawAmtStr = String(row[amountCol] ?? "").trim();
           const parsedAmt = parseAmountCell(row[amountCol]);
           const val = parsedAmt?.value ?? NaN;
-          if (!isNaN(val) && val > 0) {
+          if (parsedAmt && !isNaN(val) && val > 0) {
             amount = val;
-            // "+" hoặc hậu tố CR (ghi có — sao kê thẻ tín dụng) → tiền vào
-            if (rawAmtStr.startsWith("+") || parsedAmt?.credit) {
-              type = "INCOME";
+            // Dấu của số tiền (CR, âm/dương, "+") quyết định trước; không có dấu thì dùng cột "Loại".
+            const signedType = typeFromSignedAmount(parsedAmt, rawAmtStr, signCtx);
+            if (signedType) {
+              type = signedType;
             } else if (typeCol !== -1) {
               const tNorm = normalizeVietnamese(String(row[typeCol] ?? ""));
               if (/\b(thu|income|co|credit|nap)\b/.test(tNorm)) {
