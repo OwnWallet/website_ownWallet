@@ -13,6 +13,7 @@ import { EvidenceUpload } from "@/components/ui/evidence-upload";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 import { isDebtCategory } from "@/lib/debt-sync";
 import { getCategoryTags, parseTransactionNote } from "@/lib/constants";
+import { getWalletKind, WALLET_KIND_EMOJI } from "@/lib/credit-card";
 
 interface Props {
   transaction: {
@@ -289,7 +290,7 @@ export function EditTransactionForm({
                 <option value="" style={{ color: "#64748b" }}>-- Không gắn ví (Tiền ngoài sổ) --</option>
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.bankName === "CASH" ? "💵" : "💳"} {w.name}{w.isDefault ? " (Mặc định)" : ""}
+                    {WALLET_KIND_EMOJI[getWalletKind(w)]} {w.name}{getWalletKind(w) === "CREDIT" ? " (Thẻ tín dụng)" : ""}{w.isDefault ? " (Mặc định)" : ""}
                   </option>
                 ))}
               </select>

@@ -33,9 +33,9 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'3c1f6b28753f2d59a1581b263de62218a127bebff22c64ca3e261d985a975c39'>;
+  StorageHashBase<'30336b8714ca558094f04749c5a68f426f75a1364d6998f09e63df422029972a'>;
 export type ExecutionHash =
-  ExecutionHashBase<'288b36db1497fdbad063c7f236151383840d6533f126816138f10711bd53f843'>;
+  ExecutionHashBase<'53a96c0a28eeb1ef63e6396a361be87e46b6dc09a2aa06edf263372a08f4e346'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -249,6 +249,21 @@ export type FieldOutputTypes = {
       readonly categoryId: CodecTypes['pg/text@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
     };
+    readonly CardInstallment: {
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly name: CodecTypes['pg/text@1']['output'];
+      readonly principal: CodecTypes['pg/numeric@1']['output'];
+      readonly months: CodecTypes['pg/int4@1']['output'];
+      readonly feeAmount: CodecTypes['pg/numeric@1']['output'];
+      readonly startDate: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly transactionId: CodecTypes['pg/text@1']['output'] | null;
+      readonly feeTransactionId: CodecTypes['pg/text@1']['output'] | null;
+      readonly note: CodecTypes['pg/text@1']['output'] | null;
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly walletId: CodecTypes['pg/text@1']['output'];
+      readonly userId: CodecTypes['pg/text@1']['output'];
+    };
     readonly CashFlowSource: {
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'];
@@ -276,6 +291,16 @@ export type FieldOutputTypes = {
       readonly isDefault: CodecTypes['pg/bool@1']['output'];
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
+    };
+    readonly CategoryRule: {
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly userId: CodecTypes['pg/text@1']['output'];
+      readonly keyword: CodecTypes['pg/text@1']['output'];
+      readonly txType: CodecTypes['pg/text@1']['output'];
+      readonly categoryId: CodecTypes['pg/text@1']['output'];
+      readonly hits: CodecTypes['pg/int4@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
     };
     readonly Debt: {
       readonly id: CodecTypes['pg/text@1']['output'];
@@ -369,6 +394,10 @@ export type FieldOutputTypes = {
       readonly color: CodecTypes['pg/text@1']['output'] | null;
       readonly icon: CodecTypes['pg/text@1']['output'] | null;
       readonly isDefault: CodecTypes['pg/bool@1']['output'];
+      readonly type: 'BANK' | 'CASH' | 'CREDIT';
+      readonly creditLimit: CodecTypes['pg/numeric@1']['output'] | null;
+      readonly statementDay: CodecTypes['pg/int4@1']['output'] | null;
+      readonly paymentDueDay: CodecTypes['pg/int4@1']['output'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
@@ -385,6 +414,21 @@ export type FieldInputTypes = {
       readonly categoryId: CodecTypes['pg/text@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
     };
+    readonly CardInstallment: {
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly name: CodecTypes['pg/text@1']['input'];
+      readonly principal: CodecTypes['pg/numeric@1']['input'];
+      readonly months: CodecTypes['pg/int4@1']['input'];
+      readonly feeAmount: CodecTypes['pg/numeric@1']['input'];
+      readonly startDate: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly transactionId: CodecTypes['pg/text@1']['input'] | null;
+      readonly feeTransactionId: CodecTypes['pg/text@1']['input'] | null;
+      readonly note: CodecTypes['pg/text@1']['input'] | null;
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly walletId: CodecTypes['pg/text@1']['input'];
+      readonly userId: CodecTypes['pg/text@1']['input'];
+    };
     readonly CashFlowSource: {
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'];
@@ -412,6 +456,16 @@ export type FieldInputTypes = {
       readonly isDefault: CodecTypes['pg/bool@1']['input'];
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
+    };
+    readonly CategoryRule: {
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly userId: CodecTypes['pg/text@1']['input'];
+      readonly keyword: CodecTypes['pg/text@1']['input'];
+      readonly txType: CodecTypes['pg/text@1']['input'];
+      readonly categoryId: CodecTypes['pg/text@1']['input'];
+      readonly hits: CodecTypes['pg/int4@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
     };
     readonly Debt: {
       readonly id: CodecTypes['pg/text@1']['input'];
@@ -505,6 +559,10 @@ export type FieldInputTypes = {
       readonly color: CodecTypes['pg/text@1']['input'] | null;
       readonly icon: CodecTypes['pg/text@1']['input'] | null;
       readonly isDefault: CodecTypes['pg/bool@1']['input'];
+      readonly type: 'BANK' | 'CASH' | 'CREDIT';
+      readonly creditLimit: CodecTypes['pg/numeric@1']['input'] | null;
+      readonly statementDay: CodecTypes['pg/int4@1']['input'] | null;
+      readonly paymentDueDay: CodecTypes['pg/int4@1']['input'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
@@ -520,6 +578,21 @@ export type StorageColumnTypes = {
       readonly month: CodecTypes['pg/int4@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
       readonly year: CodecTypes['pg/int4@1']['output'];
+    };
+    readonly CardInstallment: {
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly feeAmount: CodecTypes['pg/numeric@1']['output'];
+      readonly feeTransactionId: CodecTypes['pg/text@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly months: CodecTypes['pg/int4@1']['output'];
+      readonly name: CodecTypes['pg/text@1']['output'];
+      readonly note: CodecTypes['pg/text@1']['output'] | null;
+      readonly principal: CodecTypes['pg/numeric@1']['output'];
+      readonly startDate: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly transactionId: CodecTypes['pg/text@1']['output'] | null;
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly userId: CodecTypes['pg/text@1']['output'];
+      readonly walletId: CodecTypes['pg/text@1']['output'];
     };
     readonly CashFlowSource: {
       readonly amount: CodecTypes['pg/numeric@1']['output'];
@@ -547,6 +620,16 @@ export type StorageColumnTypes = {
       readonly isDefault: CodecTypes['pg/bool@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'];
       readonly type: 'EXPENSE' | 'INCOME' | 'INVEST' | 'DEBT' | 'SAVINGS';
+      readonly userId: CodecTypes['pg/text@1']['output'];
+    };
+    readonly CategoryRule: {
+      readonly categoryId: CodecTypes['pg/text@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly hits: CodecTypes['pg/int4@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly keyword: CodecTypes['pg/text@1']['output'];
+      readonly txType: CodecTypes['pg/text@1']['output'];
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
     };
     readonly Debt: {
@@ -638,10 +721,14 @@ export type StorageColumnTypes = {
       readonly bankName: CodecTypes['pg/text@1']['output'] | null;
       readonly color: CodecTypes['pg/text@1']['output'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly creditLimit: CodecTypes['pg/numeric@1']['output'] | null;
       readonly icon: CodecTypes['pg/text@1']['output'] | null;
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly isDefault: CodecTypes['pg/bool@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'];
+      readonly paymentDueDay: CodecTypes['pg/int4@1']['output'] | null;
+      readonly statementDay: CodecTypes['pg/int4@1']['output'] | null;
+      readonly type: 'BANK' | 'CASH' | 'CREDIT';
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
     };
@@ -656,6 +743,21 @@ export type StorageColumnInputTypes = {
       readonly month: CodecTypes['pg/int4@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
       readonly year: CodecTypes['pg/int4@1']['input'];
+    };
+    readonly CardInstallment: {
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly feeAmount: CodecTypes['pg/numeric@1']['input'];
+      readonly feeTransactionId: CodecTypes['pg/text@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly months: CodecTypes['pg/int4@1']['input'];
+      readonly name: CodecTypes['pg/text@1']['input'];
+      readonly note: CodecTypes['pg/text@1']['input'] | null;
+      readonly principal: CodecTypes['pg/numeric@1']['input'];
+      readonly startDate: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly transactionId: CodecTypes['pg/text@1']['input'] | null;
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly userId: CodecTypes['pg/text@1']['input'];
+      readonly walletId: CodecTypes['pg/text@1']['input'];
     };
     readonly CashFlowSource: {
       readonly amount: CodecTypes['pg/numeric@1']['input'];
@@ -683,6 +785,16 @@ export type StorageColumnInputTypes = {
       readonly isDefault: CodecTypes['pg/bool@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'];
       readonly type: 'EXPENSE' | 'INCOME' | 'INVEST' | 'DEBT' | 'SAVINGS';
+      readonly userId: CodecTypes['pg/text@1']['input'];
+    };
+    readonly CategoryRule: {
+      readonly categoryId: CodecTypes['pg/text@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly hits: CodecTypes['pg/int4@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly keyword: CodecTypes['pg/text@1']['input'];
+      readonly txType: CodecTypes['pg/text@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
     };
     readonly Debt: {
@@ -774,10 +886,14 @@ export type StorageColumnInputTypes = {
       readonly bankName: CodecTypes['pg/text@1']['input'] | null;
       readonly color: CodecTypes['pg/text@1']['input'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly creditLimit: CodecTypes['pg/numeric@1']['input'] | null;
       readonly icon: CodecTypes['pg/text@1']['input'] | null;
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly isDefault: CodecTypes['pg/bool@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'];
+      readonly paymentDueDay: CodecTypes['pg/int4@1']['input'] | null;
+      readonly statementDay: CodecTypes['pg/int4@1']['input'] | null;
+      readonly type: 'BANK' | 'CASH' | 'CREDIT';
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
     };
@@ -869,6 +985,128 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'Budget';
+                    readonly columns: readonly ['userId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
+            readonly CardInstallment: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly name: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly principal: {
+                  readonly nativeType: 'numeric';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly nullable: false;
+                };
+                readonly months: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly feeAmount: {
+                  readonly nativeType: 'numeric';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/numeric@1', '0'>;
+                  };
+                };
+                readonly startDate: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                };
+                readonly transactionId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly feeTransactionId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly note: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly createdAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly updatedAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                };
+                readonly walletId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly userId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'CardInstallment_userId_walletId_idx_7f86a2cd';
+                  readonly prefix: 'CardInstallment_userId_walletId_idx';
+                  readonly columns: readonly ['userId', 'walletId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'CardInstallment_walletId_idx_2e003173';
+                  readonly prefix: 'CardInstallment_walletId_idx';
+                  readonly columns: readonly ['walletId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'CardInstallment_userId_idx_a489d58a';
+                  readonly prefix: 'CardInstallment_userId_idx';
+                  readonly columns: readonly ['userId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'CardInstallment';
+                    readonly columns: readonly ['walletId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Wallet';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'CardInstallment';
                     readonly columns: readonly ['userId'];
                   };
                   readonly target: {
@@ -1133,6 +1371,60 @@ type ContractBase = Omit<
                   };
                 },
               ];
+            };
+            readonly CategoryRule: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly userId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly keyword: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly txType: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly categoryId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly hits: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/int4@1', 1>;
+                  };
+                };
+                readonly createdAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly updatedAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
             };
             readonly Debt: {
               columns: {
@@ -1843,6 +2135,30 @@ type ContractBase = Omit<
                     readonly value: DefaultLiteralValue<'pg/bool@1', false>;
                   };
                 };
+                readonly type: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/text@1', 'BANK'>;
+                  };
+                };
+                readonly creditLimit: {
+                  readonly nativeType: 'numeric';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly nullable: true;
+                };
+                readonly statementDay: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                };
+                readonly paymentDueDay: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                };
                 readonly createdAt: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
@@ -1933,6 +2249,10 @@ type ContractBase = Omit<
               readonly kind: 'valueSet';
               readonly values: readonly ['INCOME', 'EXPENSE'];
             };
+            readonly WalletType: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['BANK', 'CASH', 'CREDIT'];
+            };
           };
         };
       };
@@ -1963,6 +2283,14 @@ type ContractBase = Omit<
     readonly CashFlowSource: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'CashFlowSource';
+    };
+    readonly CardInstallment: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'CardInstallment';
+    };
+    readonly CategoryRule: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'CategoryRule';
     };
   };
   readonly domain: {
@@ -2026,6 +2354,111 @@ type ContractBase = Omit<
                 readonly month: { readonly column: 'month' };
                 readonly year: { readonly column: 'year' };
                 readonly categoryId: { readonly column: 'categoryId' };
+                readonly userId: { readonly column: 'userId' };
+              };
+            };
+          };
+          readonly CardInstallment: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly principal: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/numeric@1' };
+              };
+              readonly months: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly feeAmount: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/numeric@1' };
+              };
+              readonly startDate: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly transactionId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly feeTransactionId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly note: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly walletId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly user: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
+                readonly cardinality: 'N:1';
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly wallet: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Wallet';
+                };
+                readonly cardinality: 'N:1';
+                readonly on: {
+                  readonly localFields: readonly ['walletId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'CardInstallment';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly name: { readonly column: 'name' };
+                readonly principal: { readonly column: 'principal' };
+                readonly months: { readonly column: 'months' };
+                readonly feeAmount: { readonly column: 'feeAmount' };
+                readonly startDate: { readonly column: 'startDate' };
+                readonly transactionId: { readonly column: 'transactionId' };
+                readonly feeTransactionId: { readonly column: 'feeTransactionId' };
+                readonly note: { readonly column: 'note' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+                readonly walletId: { readonly column: 'walletId' };
                 readonly userId: { readonly column: 'userId' };
               };
             };
@@ -2260,6 +2693,63 @@ type ContractBase = Omit<
                 readonly isDefault: { readonly column: 'isDefault' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly userId: { readonly column: 'userId' };
+              };
+            };
+          };
+          readonly CategoryRule: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly keyword: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly txType: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly categoryId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly hits: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'CategoryRule';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly userId: { readonly column: 'userId' };
+                readonly keyword: { readonly column: 'keyword' };
+                readonly txType: { readonly column: 'txType' };
+                readonly categoryId: { readonly column: 'categoryId' };
+                readonly hits: { readonly column: 'hits' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
               };
             };
           };
@@ -2867,6 +3357,17 @@ type ContractBase = Omit<
                   readonly targetFields: readonly ['userId'];
                 };
               };
+              readonly cardInstallments: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'CardInstallment';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
               readonly cashFlowSources: {
                 readonly to: {
                   readonly namespace: 'public' & NamespaceId;
@@ -2987,6 +3488,22 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
               };
+              readonly type: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly creditLimit: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/numeric@1' };
+              };
+              readonly statementDay: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly paymentDueDay: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
               readonly createdAt: {
                 readonly nullable: false;
                 readonly type: {
@@ -3011,6 +3528,17 @@ type ContractBase = Omit<
                 readonly to: {
                   readonly namespace: 'public' & NamespaceId;
                   readonly model: 'CashFlowSource';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['walletId'];
+                };
+              };
+              readonly installments: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'CardInstallment';
                 };
                 readonly cardinality: '1:N';
                 readonly on: {
@@ -3050,6 +3578,10 @@ type ContractBase = Omit<
                 readonly color: { readonly column: 'color' };
                 readonly icon: { readonly column: 'icon' };
                 readonly isDefault: { readonly column: 'isDefault' };
+                readonly type: { readonly column: 'type' };
+                readonly creditLimit: { readonly column: 'creditLimit' };
+                readonly statementDay: { readonly column: 'statementDay' };
+                readonly paymentDueDay: { readonly column: 'paymentDueDay' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
                 readonly userId: { readonly column: 'userId' };
@@ -3104,6 +3636,14 @@ type ContractBase = Omit<
               { readonly name: 'TOPUP'; readonly value: 'TOPUP' },
               { readonly name: 'PAYMENT'; readonly value: 'PAYMENT' },
               { readonly name: 'NOTE'; readonly value: 'NOTE' },
+            ];
+          };
+          readonly WalletType: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'BANK'; readonly value: 'BANK' },
+              { readonly name: 'CASH'; readonly value: 'CASH' },
+              { readonly name: 'CREDIT'; readonly value: 'CREDIT' },
             ];
           };
           readonly CashFlowSourceType: {
@@ -3162,6 +3702,23 @@ type ContractBase = Omit<
             readonly column: 'id';
           };
           readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
+        },
+        {
+          readonly ref: {
+            readonly namespace: 'public';
+            readonly table: 'CardInstallment';
+            readonly column: 'id';
+          };
+          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
+        },
+        {
+          readonly ref: {
+            readonly namespace: 'public';
+            readonly table: 'CardInstallment';
+            readonly column: 'updatedAt';
+          };
+          readonly onCreate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+          readonly onUpdate: { readonly kind: 'generator'; readonly id: 'instantNow' };
         },
         {
           readonly ref: {

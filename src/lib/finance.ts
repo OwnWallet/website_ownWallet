@@ -7,6 +7,8 @@
  * wallets but are NOT real income or spending.
  */
 
+import { fromCents, toCents } from "./money";
+
 export const TRANSFER_PREFIX = "[TRANSFER]";
 export const TRANSFER_CATEGORY_NAME = "Chuyển khoản nội bộ";
 
@@ -25,15 +27,16 @@ export function sumIncomeExpense(
   txs: readonly TxLike[],
   { excludeTransfers = true }: { excludeTransfers?: boolean } = {}
 ): { income: number; expense: number; net: number } {
+  // Cộng bằng xu (số nguyên) để tổng chính xác tuyệt đối.
   let income = 0;
   let expense = 0;
   for (const t of txs) {
     if (excludeTransfers && isTransfer(t)) continue;
-    const amt = Number(t.amount) || 0;
+    const amt = toCents(t.amount as number | string | null | undefined);
     if (t.type === "INCOME") income += amt;
     else if (t.type === "EXPENSE") expense += amt;
   }
-  return { income, expense, net: income - expense };
+  return { income: fromCents(income), expense: fromCents(expense), net: fromCents(income - expense) };
 }
 
 /**

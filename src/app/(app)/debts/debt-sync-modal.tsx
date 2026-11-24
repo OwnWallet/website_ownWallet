@@ -37,6 +37,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
+import { FitAmount } from "@/components/ui/fit-amount";
 
 const emptySubscribe = () => () => {};
 function useMounted() {
@@ -472,8 +473,8 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                         </span>
                         <span className="text-sm font-bold">{summary?.toCreateCount ?? 0}</span>
                       </div>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        {formatCurrency(summary?.toCreateAmount ?? 0)}
+                      <p className="text-[10px] text-muted-foreground min-w-0">
+                        <FitAmount>{formatCurrency(summary?.toCreateAmount ?? 0)}</FitAmount>
                       </p>
                     </div>
 
@@ -485,8 +486,8 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                         </span>
                         <span className="text-sm font-bold">{summary?.toMergeCount ?? 0}</span>
                       </div>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        {formatCurrency(summary?.toMergeAmount ?? 0)}
+                      <p className="text-[10px] text-muted-foreground min-w-0">
+                        <FitAmount>{formatCurrency(summary?.toMergeAmount ?? 0)}</FitAmount>
                       </p>
                     </div>
 
@@ -498,8 +499,8 @@ export function DebtSyncModal({ triggerButton }: { triggerButton?: React.ReactNo
                         </span>
                         <span className="text-sm font-bold">{summary?.toPaymentCount ?? 0}</span>
                       </div>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        {formatCurrency(summary?.toPaymentAmount ?? 0)}
+                      <p className="text-[10px] text-muted-foreground min-w-0">
+                        <FitAmount>{formatCurrency(summary?.toPaymentAmount ?? 0)}</FitAmount>
                       </p>
                     </div>
 

@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, serializeData } from "@/lib/utils";
+import { formatCurrency, formatMetric, serializeData } from "@/lib/utils";
 import { redirect } from "next/navigation";
 import { InvestmentListClient } from "./investment-list-client";
 import { AddInvestmentForm } from "./add-investment-form";
@@ -89,7 +89,7 @@ export default async function InvestmentsPage() {
               {totalPnL > 0 ? "+" : ""}
               {formatCurrency(totalPnL)}
             </p>
-            <p className="kpi-card-sub">{totalPnLPercent.toFixed(2)}% {isProfit ? "lợi nhuận" : "lỗ"}</p>
+            <p className="kpi-card-sub">{formatMetric(totalPnLPercent)}% {isProfit ? "lợi nhuận" : "lỗ"}</p>
           </div>
 
           <div className="kpi-card" style={{ "--kpi-accent": "#ea580c" } as React.CSSProperties}>

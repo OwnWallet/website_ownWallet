@@ -51,6 +51,7 @@ import { WalletBadge } from "@/components/ui/wallet-badge";
 import { EvidenceModal } from "@/components/ui/evidence-modal";
 import { isDebtCategory, extractDebtPerson } from "@/lib/debt-sync";
 import { parseTransactionNote } from "@/lib/constants";
+import { FitAmount } from "@/components/ui/fit-amount";
 
 interface Category {
  id: string;
@@ -360,7 +361,7 @@ export function TransactionList({
    : "Kỳ này";
 
  const activeDaysCount = daysWithExpense.size || 1;
- const dailyAvgExpense = Math.round(expense / activeDaysCount);
+ const dailyAvgExpense = expense / activeDaysCount;
 
  return {
  income,
@@ -465,8 +466,8 @@ export function TransactionList({
             </div>
           </div>
           <div className="mt-3">
-            <p className="text-xl sm:text-2xl xl:text-3xl font-black text-emerald-700 truncate tabular-nums tracking-tight">
-              +{formatCurrency(summary.income)}
+            <p className="text-xl sm:text-2xl xl:text-3xl font-black text-emerald-700 min-w-0 tabular-nums tracking-tight">
+              <FitAmount>+{formatCurrency(summary.income)}</FitAmount>
             </p>
             <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
               {filtered.filter((t) => t.type === "INCOME").length} giao dịch thu
@@ -485,8 +486,8 @@ export function TransactionList({
             </div>
           </div>
           <div className="mt-3">
-            <p className="text-xl sm:text-2xl xl:text-3xl font-black text-rose-700 truncate tabular-nums tracking-tight">
-              -{formatCurrency(summary.expense)}
+            <p className="text-xl sm:text-2xl xl:text-3xl font-black text-rose-700 min-w-0 tabular-nums tracking-tight">
+              <FitAmount>-{formatCurrency(summary.expense)}</FitAmount>
             </p>
             <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
               {filtered.filter((t) => t.type === "EXPENSE").length} giao dịch chi
@@ -513,7 +514,7 @@ export function TransactionList({
               {summary.closingCumulativeBalance > 0 ? "+" : ""}
               {formatCurrency(summary.closingCumulativeBalance)}
             </p>
-            <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1 truncate">
+            <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1 break-words">
               Đầu kỳ: {summary.openingCumulativeBalance >= 0 ? "+" : "-"}{formatCurrencyCompact(Math.abs(summary.openingCumulativeBalance))} · Trong kỳ: {summary.net >= 0 ? "+" : "-"}{formatCurrencyCompact(Math.abs(summary.net))}
             </p>
           </div>
@@ -530,8 +531,8 @@ export function TransactionList({
             </div>
           </div>
           <div className="mt-3">
-            <p className="text-xl sm:text-2xl xl:text-3xl font-black text-primary truncate tabular-nums tracking-tight">
-              {formatCurrency(summary.dailyAvgExpense)}
+            <p className="text-xl sm:text-2xl xl:text-3xl font-black text-primary min-w-0 tabular-nums tracking-tight">
+              <FitAmount>{formatCurrency(summary.dailyAvgExpense)}</FitAmount>
             </p>
             <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
               Tính trên {summary.activeDaysCount} ngày có chi tiêu

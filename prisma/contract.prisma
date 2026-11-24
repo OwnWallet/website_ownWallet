@@ -47,6 +47,13 @@ enum DebtLogType {
   NOTE    = "NOTE"    // Ghi chú thuần tuý
 }
 
+enum WalletType {
+  @@type("pg/text@1")
+  BANK   = "BANK"   // Tài khoản ngân hàng
+  CASH   = "CASH"   // Ví tiền mặt
+  CREDIT = "CREDIT" // Thẻ tín dụng
+}
+
 enum CashFlowSourceType {
   @@type("pg/text@1")
   SALARY              = "SALARY"              // Tiền lương định kỳ
@@ -88,6 +95,7 @@ model User {
   budgets      Budget[]
   wallets      Wallet[]
   cashFlowSources CashFlowSource[]
+  cardInstallments CardInstallment[]
 
   @@map("User")
 }
@@ -101,6 +109,10 @@ model Wallet {
   color         String?       @default("#7c3aed")
   icon          String?       @default("Landmark")
   isDefault     Boolean       @default(false)
+  type          WalletType    @default(BANK)
+  creditLimit   Decimal?      // Hạn mức tín dụng (chỉ dùng cho CREDIT)
+  statementDay  Int?          // Ngày chốt sao kê trong tháng (1 - 31)
+  paymentDueDay Int?          // Ngày đến hạn thanh toán (1 - 31, nếu <= statementDay thì thuộc tháng sau)
   createdAt     DateTime      @default(now())
   updatedAt     temporal.updatedAt()
 
@@ -108,6 +120,7 @@ model Wallet {
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions  Transaction[]
   cashFlowSources CashFlowSource[]
+  installments  CardInstallment[]
 
   @@index([userId])
   @@map("Wallet")
@@ -303,3 +316,42 @@ model CashFlowSource {
   @@map("CashFlowSource")
 }
 
+// Khoản trả góp qua thẻ tín dụng
+model CardInstallment {
+  id            String   @id @default(cuid(2))
+  name          String
+  principal     Decimal            // Số tiền gốc chuyển đổi trả góp
+  months        Int                // Số kỳ trả góp
+  feeAmount     Decimal  @default("0") // Tổng phí chuyển đổi / lãi
+  startDate     DateTime           // Ngày bắt đầu (kỳ đầu tiên rơi vào sao kê kế tiếp)
+  transactionId String?            // Giao dịch gốc (nếu chuyển đổi từ giao dịch)
+  feeTransactionId String?         // Giao dịch ghi nhận phí chuyển đổi (nếu có)
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     temporal.updatedAt()
+
+  walletId String
+  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, walletId])
+  @@map("CardInstallment")
+}
+
+// Bảng tự quản lý bằng SQL thô (src/lib/category-rules-db.ts) — khai báo để Prisma
+// không lập kế hoạch DROP khi chạy `db update`/`migration plan`. Không sinh DDL.
+model CategoryRule {
+  id         String   @id
+  userId     String
+  keyword    String
+  txType     String
+  categoryId String
+  hits       Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+
+  @@control(tolerated)
+  @@map("CategoryRule")
+}

@@ -632,7 +632,7 @@ export function aggregateTagSpending(
       categoryColor: data.categoryColor,
       value: data.value,
       count: data.count,
-      percentage: totalExpense > 0 ? Math.round((data.value / totalExpense) * 100) : 0,
+      percentage: totalExpense > 0 ? (data.value / totalExpense) * 100 : 0,
     }))
     .sort((a, b) => b.value - a.value);
 }

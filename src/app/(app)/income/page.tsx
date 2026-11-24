@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getCashFlowData } from "@/actions/income";
 import { getCashFlowSources } from "@/actions/cash-flow";
 import { CashFlowManager } from "./cash-flow-manager";
-import { formatCurrency, formatCurrencyCompact } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact, formatMetric } from "@/lib/utils";
 import {
   Banknote,
   Wallet,
@@ -240,7 +240,7 @@ export default async function CashFlowPage() {
                 {data.wallets.map((w) => (
                   <div
                     key={w.id}
-                    title={`${w.name}: ${formatCurrency(w.balance)} (${w.percentOfTotal}%)`}
+                    title={`${w.name}: ${formatCurrency(w.balance)} (${formatMetric(w.percentOfTotal)}%)`}
                     style={{
                       width: `${w.percentOfTotal}%`,
                       backgroundColor: w.color,
@@ -255,7 +255,7 @@ export default async function CashFlowPage() {
                   <div key={w.id} className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: w.color }} />
                     <span className="truncate max-w-[100px]">{w.name}</span>
-                    <strong className="text-foreground">{w.percentOfTotal}%</strong>
+                    <strong className="text-foreground">{formatMetric(w.percentOfTotal)}%</strong>
                   </div>
                 ))}
               </div>
@@ -318,7 +318,7 @@ export default async function CashFlowPage() {
               <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Cash Runway sinh tồn:</span>
                 <span className="font-bold text-foreground">
-                  {data.runwayMonths >= 99 ? "Vô hạn" : `${data.runwayMonths} tháng`} ({data.runwayStatus.label})
+                  {data.runwayMonths >= 99 ? "Vô hạn" : `${formatMetric(data.runwayMonths)} tháng`} ({data.runwayStatus.label})
                 </span>
               </div>
             </div>

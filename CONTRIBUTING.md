@@ -68,6 +68,9 @@ Thông điệp commit cần ngắn gọn, rõ ràng theo chuẩn:
   - Không chỉnh sửa file `schema.prisma` truyền thống. Dự án dùng **`prisma/contract.prisma`** (PSL v2).
   - Khởi tạo lại TypeScript contract sau khi sửa model: `npm run db:emit`.
   - Cập nhật database: `npm run db:migrate` (hoặc `npm run db:apply`).
+  - **Trước mọi thay đổi schema trên DB thật:** chạy `npx prisma db update --dry-run` và kiểm tra không có `DROP`; `npm run db:fingerprint -- --out backups/before.json`; `npm run db:backup` (cần `pg_dump` 17: biến `PG_BIN`, thư mục `../tools/pgsql/bin`, hoặc Docker). Sau khi áp dụng: `npm run db:fingerprint -- --compare backups/before.json` phải báo mọi bảng cũ khớp.
+  - Khôi phục (chỉ vào DB mới/local, không `--clean` lên DB thật): `pg_restore --no-owner --no-privileges -d <db> backups/<file>.dump`.
+  - Bảng `CategoryRule`, `SystemSetting` được tạo bằng SQL thô; bảng nào có trong DB nhưng không có trong contract sẽ bị `db update` lập kế hoạch DROP → khai báo với `@@control(tolerated)`.
 - **Next.js 16 App Router & Server Actions:**
   - Hạn chế tạo API route thủ công nếu có thể xử lý trực tiếp qua Server Actions trong `src/app/(app)/...`.
 - **Bảo mật:**

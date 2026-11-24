@@ -4,9 +4,17 @@ import { useState, useTransition } from "react";
 import type { ParsedTransaction } from "@/schemas/ai-import";
 import { confirmAiImport } from "@/actions/ai-import";
 import { useRouter } from "next/navigation";
-import { maskAccountNumber } from "@/lib/utils";
+import { formatCurrency, formatMetric, maskAccountNumber } from "@/lib/utils";
 import { SmartCurrencyInput } from "@/components/ui/smart-currency-input";
 import { extractMerchantKey } from "@/lib/category-rules";
+import {
+  getWalletKind,
+  matchesDetectedAccount,
+  suggestCardPaymentTransfer,
+  WALLET_KIND_EMOJI,
+  type WalletKind,
+} from "@/lib/credit-card";
+import { TRANSFER_CATEGORY_NAME } from "@/lib/finance";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -15,7 +23,19 @@ import { extractMerchantKey } from "@/lib/category-rules";
 interface ReviewRow extends ParsedTransaction {
   _id: string; // unique key cho list
   _selected: boolean;
+  /** Chuyển khoản nội bộ (VD thanh toán thẻ tín dụng) — không tính là thu/chi */
+  _isTransfer: boolean;
+  /** Người dùng đã tự bật/tắt — không tự gợi ý lại khi đổi tài khoản */
+  _transferManual: boolean;
 }
+
+type ReviewWallet = {
+  id: string;
+  name: string;
+  type?: string | null;
+  bankName?: string | null;
+  accountNumber?: string | null;
+};
 
 interface ImportReviewProps {
   transactions: ParsedTransaction[];
@@ -27,7 +47,7 @@ interface ImportReviewProps {
   fallbackReason?: string;
   detectedBank?: string;
   detectedAccountNumber?: string;
-  wallets?: { id: string; name: string; bankName?: string | null; accountNumber?: string | null }[];
+  wallets?: ReviewWallet[];
   categories?: { id: string; name: string; type: string; color?: string; icon?: string | null }[];
   onReset: () => void;
 }
@@ -53,10 +73,10 @@ function formatDate(iso: string) {
 
 function confidenceBadge(c: number) {
   if (c >= 0.85)
-    return { label: `${Math.round(c * 100)}%`, cls: "badge-success" };
+    return { label: `${formatMetric(c * 100)}%`, cls: "badge-success" };
   if (c >= 0.65)
-    return { label: `${Math.round(c * 100)}%`, cls: "badge-warning" };
-  return { label: `${Math.round(c * 100)}%`, cls: "badge-danger" };
+    return { label: `${formatMetric(c * 100)}%`, cls: "badge-warning" };
+  return { label: `${formatMetric(c * 100)}%`, cls: "badge-danger" };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,11 +102,9 @@ export default function ImportReview({
 
   const [selectedWalletId, setSelectedWalletId] = useState<string>(() => {
     if (wallets.length === 0) return "";
-    // 1. Ưu tiên khớp theo Số tài khoản trong sao kê
+    // 1. Ưu tiên khớp theo Số tài khoản / 4 số cuối thẻ tín dụng trong sao kê
     if (detectedAccountNumber) {
-      const byAcc = wallets.find(
-        (w) => w.accountNumber && w.accountNumber.replace(/\s+/g, "") === detectedAccountNumber.replace(/\s+/g, "")
-      );
+      const byAcc = wallets.find((w) => matchesDetectedAccount(w, detectedAccountNumber));
       if (byAcc) return byAcc.id;
     }
     // 2. Ưu tiên khớp theo Tên ngân hàng phát hiện từ sao kê (Techcombank / TPBank)
@@ -102,14 +120,43 @@ export default function ImportReview({
     return wallets[0].id;
   });
 
+  const kindOf = (walletId: string): WalletKind | null => {
+    const w = wallets.find((x) => x.id === walletId);
+    return w ? getWalletKind(w) : null;
+  };
+  const selectedKind = kindOf(selectedWalletId);
+
+  const autoTransfer = (kind: WalletKind | null, type: string, note: string | undefined, categoryName: string) =>
+    suggestCardPaymentTransfer(kind, type, note) ||
+    categoryName.trim().toLowerCase() === TRANSFER_CATEGORY_NAME.toLowerCase();
+
   // Tự động bỏ chọn các giao dịch bị phát hiện trùng lặp với Database
-  const [rows, setRows] = useState<ReviewRow[]>(() =>
-    transactions.map((t, i) => ({
+  const [rows, setRows] = useState<ReviewRow[]>(() => {
+    const kind = selectedKind;
+    return transactions.map((t, i) => ({
       ...t,
       _id: `row-${i}`,
       _selected: !t.duplicateInfo?.isDuplicate,
-    }))
-  );
+      _isTransfer: autoTransfer(kind, t.type, t.note, t.categoryName),
+      _transferManual: false,
+    }));
+  });
+
+  // Đổi tài khoản nhận → gợi ý lại các dòng thanh toán thẻ (trừ dòng người dùng đã tự chỉnh)
+  const changeWallet = (walletId: string) => {
+    setSelectedWalletId(walletId);
+    const kind = kindOf(walletId);
+    setRows((prev) =>
+      prev.map((r) =>
+        r._transferManual ? r : { ...r, _isTransfer: autoTransfer(kind, r.type, r.note, r.categoryName) }
+      )
+    );
+  };
+
+  const setRowTransfer = (id: string, value: boolean) =>
+    setRows((prev) => prev.map((r) => (r._id === id ? { ...r, _isTransfer: value, _transferManual: true } : r)));
+
+  const transferCount = rows.filter((r) => r._selected && r._isTransfer).length;
 
   const [filterMode, setFilterMode] = useState<"all" | "valid" | "duplicate">("all");
 
@@ -179,7 +226,14 @@ export default function ImportReview({
   const updateRowType = (id: string, newType: string) =>
     setRows((prev) =>
       prev.map((r) =>
-        r._id === id ? { ...r, type: newType as "INCOME" | "EXPENSE", categoryName: "" } : r
+        r._id === id
+          ? {
+              ...r,
+              type: newType as "INCOME" | "EXPENSE",
+              categoryName: "",
+              _isTransfer: r._transferManual ? r._isTransfer : suggestCardPaymentTransfer(selectedKind, newType, r.note),
+            }
+          : r
       )
     );
 
@@ -192,14 +246,15 @@ export default function ImportReview({
       const result = await confirmAiImport({
         walletId: selectedWalletId || null,
         transactions: selected.map(
-          ({ amount, type, categoryName, note, recordedAt, suggestedCategoryName, ruleKeyword }) => ({
+          ({ amount, type, categoryName, note, recordedAt, suggestedCategoryName, ruleKeyword, _isTransfer }) => ({
             amount,
             type,
-            categoryName,
+            categoryName: _isTransfer ? TRANSFER_CATEGORY_NAME : categoryName,
             note,
             recordedAt,
             suggestedCategoryName,
             ruleKeyword,
+            isTransfer: _isTransfer,
           })
         ),
       });
@@ -388,16 +443,38 @@ export default function ImportReview({
           </div>
           <select
             value={selectedWalletId}
-            onChange={(e) => setSelectedWalletId(e.target.value)}
+            onChange={(e) => changeWallet(e.target.value)}
             className="text-xs font-bold px-3 py-2 rounded-lg border border-border bg-card text-foreground outline-none cursor-pointer focus:border-primary shrink-0 shadow-2xs"
           >
             {wallets.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.bankName === "CASH" ? "💵" : "💳"} {w.name} {w.accountNumber && w.bankName !== "CASH" ? `(STK: ${maskAccountNumber(w.accountNumber)})` : ""}
+                {WALLET_KIND_EMOJI[getWalletKind(w)]} {w.name}{" "}
+                {getWalletKind(w) === "CREDIT"
+                  ? `(Thẻ tín dụng${w.accountNumber ? ` •••• ${w.accountNumber.slice(-4)}` : ""})`
+                  : w.accountNumber && w.bankName !== "CASH"
+                  ? `(STK: ${maskAccountNumber(w.accountNumber)})`
+                  : ""}
               </option>
             ))}
             <option value="">-- Chưa gán tài khoản --</option>
           </select>
+        </div>
+      )}
+
+      {(selectedKind === "CREDIT" || transferCount > 0) && (
+        <div className="p-3 rounded-xl border border-indigo-200 bg-indigo-50/70 text-xs text-indigo-900 space-y-1">
+          {selectedKind === "CREDIT" && (
+            <p>
+              <span className="font-bold">💳 Sao kê thẻ tín dụng:</span> chi tiêu bằng thẻ làm tăng dư nợ; các khoản
+              thanh toán thẻ được ghi là <span className="font-semibold">chuyển khoản nội bộ</span> (giảm dư nợ, không tính là thu nhập).
+            </p>
+          )}
+          {transferCount > 0 && (
+            <p>
+              ↔ Có <span className="font-bold">{transferCount}</span> giao dịch được đánh dấu chuyển khoản nội bộ — sẽ không
+              tính vào tổng thu/chi. Bấm &quot;Bỏ&quot; ở từng dòng nếu đó là thu/chi thật.
+            </p>
+          )}
         </div>
       )}
 
@@ -483,48 +560,74 @@ export default function ImportReview({
 
                   {/* Category */}
                   <td>
-                    <select
-                      id={`row-cat-${row._id}`}
-                      value={row.categoryName}
-                      onChange={(e) =>
-                        updateRow(row._id, "categoryName", e.target.value)
-                      }
-                      className="cat-input"
-                    >
-                      <option value="">-- Chọn danh mục --</option>
-                      <optgroup label={row.type === "INCOME" ? "Thu nhập" : "Chi tiêu"}>
-                        {categories
-                          .filter((c) => c.type === row.type)
-                          .map((c) => (
-                            <option key={c.id} value={c.name}>
-                              {c.icon ? `${c.icon} ` : ""}{c.name}
-                            </option>
-                          ))}
-                      </optgroup>
-                      {categories.some((c) => c.type === "DEBT") && (
-                        <optgroup label="Nợ & Vay">
-                          {categories
-                            .filter((c) => c.type === "DEBT")
-                            .map((c) => (
-                              <option key={c.id} value={c.name}>
-                                {c.icon ? `${c.icon} ` : ""}{c.name}
-                              </option>
-                            ))}
-                        </optgroup>
-                      )}
-                    </select>
-                    {row.categorySource === "rule" && row.categoryName === row.suggestedCategoryName && (
-                      <div
-                        className="mt-1 text-[10px] font-semibold text-violet-700"
-                        title={row.ruleKeyword ? `Theo quy tắc: "${row.ruleKeyword}"` : undefined}
-                      >
-                        📌 Quy tắc{row.ruleKeyword ? `: ${row.ruleKeyword}` : ""}
+                    {row._isTransfer ? (
+                      <div className="text-[11px] leading-tight rounded-md border border-indigo-200 bg-indigo-50 text-indigo-800 px-2 py-1.5">
+                        <span className="font-bold">↔ Chuyển khoản nội bộ</span>
+                        <span className="block text-[10px] text-indigo-700/80 mt-0.5">
+                          {row.type === "INCOME" ? "Thanh toán vào thẻ / nhận chuyển nội bộ" : "Trả nợ thẻ / chuyển nội bộ"} · không tính thu/chi
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setRowTransfer(row._id, false)}
+                          className="mt-1 text-[10px] font-semibold underline cursor-pointer"
+                        >
+                          Bỏ — đây là thu/chi thật
+                        </button>
                       </div>
-                    )}
-                    {isCorrected(row) && (
-                      <div className="mt-1 text-[10px] font-semibold text-emerald-700">
-                        ✏️ Sẽ ghi nhớ: {extractMerchantKey(row.note)}
-                      </div>
+                    ) : (
+                      <>
+                        <select
+                          id={`row-cat-${row._id}`}
+                          value={row.categoryName}
+                          onChange={(e) =>
+                            updateRow(row._id, "categoryName", e.target.value)
+                          }
+                          className="cat-input"
+                        >
+                          <option value="">-- Chọn danh mục --</option>
+                          <optgroup label={row.type === "INCOME" ? "Thu nhập" : "Chi tiêu"}>
+                            {categories
+                              .filter((c) => c.type === row.type)
+                              .map((c) => (
+                                <option key={c.id} value={c.name}>
+                                  {c.icon ? `${c.icon} ` : ""}{c.name}
+                                </option>
+                              ))}
+                          </optgroup>
+                          {categories.some((c) => c.type === "DEBT") && (
+                            <optgroup label="Nợ & Vay">
+                              {categories
+                                .filter((c) => c.type === "DEBT")
+                                .map((c) => (
+                                  <option key={c.id} value={c.name}>
+                                    {c.icon ? `${c.icon} ` : ""}{c.name}
+                                  </option>
+                                ))}
+                            </optgroup>
+                          )}
+                        </select>
+                        {row.categorySource === "rule" && row.categoryName === row.suggestedCategoryName && (
+                          <div
+                            className="mt-1 text-[10px] font-semibold text-violet-700"
+                            title={row.ruleKeyword ? `Theo quy tắc: "${row.ruleKeyword}"` : undefined}
+                          >
+                            📌 Quy tắc{row.ruleKeyword ? `: ${row.ruleKeyword}` : ""}
+                          </div>
+                        )}
+                        {isCorrected(row) && (
+                          <div className="mt-1 text-[10px] font-semibold text-emerald-700">
+                            ✏️ Sẽ ghi nhớ: {extractMerchantKey(row.note)}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setRowTransfer(row._id, true)}
+                          className="mt-1 block text-[10px] font-semibold text-indigo-700 hover:underline cursor-pointer"
+                          title="Đánh dấu là chuyển khoản nội bộ (VD: thanh toán thẻ tín dụng)"
+                        >
+                          ↔ Đánh dấu chuyển khoản nội bộ
+                        </button>
+                      </>
                     )}
                   </td>
 
@@ -553,7 +656,7 @@ export default function ImportReview({
                           {row.duplicateInfo?.matchedTx && (
                             <span className="block text-[10px] text-amber-700 mt-0.5">
                               (Khớp với GD: {formatDate(row.duplicateInfo.matchedTx.recordedAt)} ·{" "}
-                              {new Intl.NumberFormat("vi-VN").format(row.duplicateInfo.matchedTx.amount)}đ
+                              {formatCurrency(row.duplicateInfo.matchedTx.amount)}
                               {row.duplicateInfo.matchedTx.note ? ` · "${row.duplicateInfo.matchedTx.note}"` : ""})
                             </span>
                           )}

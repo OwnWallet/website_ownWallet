@@ -193,7 +193,7 @@ describe("Financial Categories & Detailed Tags", () => {
     assert.equal(aggregated[0].value, 95000);
     assert.equal(aggregated[0].count, 2);
     assert.equal(aggregated[0].categoryName, "Ăn uống");
-    assert.equal(aggregated[0].percentage, Math.round((95000 / 200000) * 100)); // 48%
+    assert.equal(aggregated[0].percentage, (95000 / 200000) * 100); // 47,5% — không làm tròn
 
     // Xăng xe: 80k (thứ hai)
     assert.equal(aggregated[1].name, "Xăng xe");

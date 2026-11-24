@@ -46,6 +46,10 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { getWalletKind, WALLET_KIND_EMOJI, type WalletKind } from "@/lib/credit-card";
+import { CreditCardSection, type CreditInfo } from "./credit-card-section";
+import { CreditCardFields } from "./credit-card-fields";
+import { FitAmount } from "@/components/ui/fit-amount";
 
 interface WalletItem {
   id: string;
@@ -61,6 +65,11 @@ interface WalletItem {
   icon: string | null;
   isDefault: boolean;
   createdAt: string;
+  type?: WalletKind | null;
+  creditLimit?: number | null;
+  statementDay?: number | null;
+  paymentDueDay?: number | null;
+  credit: CreditInfo | null;
 }
 
 interface WalletsClientProps {
@@ -75,10 +84,10 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
 
   // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [createType, setCreateType] = useState<"BANK" | "CASH">("BANK");
+  const [createType, setCreateType] = useState<WalletKind>("BANK");
 
   const [editingWallet, setEditingWallet] = useState<WalletItem | null>(null);
-  const [editType, setEditType] = useState<"BANK" | "CASH">("BANK");
+  const [editType, setEditType] = useState<WalletKind>("BANK");
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isReassignOpen, setIsReassignOpen] = useState(false);
@@ -93,16 +102,20 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
   const [transferAmount, setTransferAmount] = useState<number | string>("");
   const [transferFee, setTransferFee] = useState<number | string>(0);
 
-  // Cash vs Bank categorization
-  const cashWallets = wallets.filter(
-    (w) => w.bankName === "CASH" || (w.name || "").toLowerCase().includes("tiền mặt")
-  );
-  const bankWallets = wallets.filter(
-    (w) => w.bankName !== "CASH" && !(w.name || "").toLowerCase().includes("tiền mặt")
-  );
+  // Cash vs Bank vs Credit card categorization
+  const cashWallets = wallets.filter((w) => getWalletKind(w) === "CASH");
+  const bankWallets = wallets.filter((w) => getWalletKind(w) === "BANK");
+  const creditWallets = wallets.filter((w) => getWalletKind(w) === "CREDIT");
+  // Ví có số dư thực (thẻ tín dụng là khoản nợ, không phải tiền đang có)
+  const moneyWallets = wallets.filter((w) => getWalletKind(w) !== "CREDIT");
 
   // Summary stats
-  const totalBalance = wallets.reduce((sum, w) => sum + w.currentBalance, 0);
+  const totalBalance = moneyWallets.reduce((sum, w) => sum + w.currentBalance, 0);
+  const totalCreditDebt = creditWallets.reduce((sum, w) => sum + (w.credit?.creditDebt ?? 0), 0);
+  const totalCreditLimit = creditWallets.reduce((sum, w) => sum + (w.credit?.creditLimit ?? 0), 0);
+  const creditDueCount = creditWallets.filter((w) =>
+    ["DUE_SOON", "OVERDUE"].includes(w.credit?.statement.status ?? "")
+  ).length;
   const totalCashBalance = cashWallets.reduce((sum, w) => sum + w.currentBalance, 0);
   const totalBankBalance = bankWallets.reduce((sum, w) => sum + w.currentBalance, 0);
   const totalIncome = wallets.reduce((sum, w) => sum + w.income, 0);
@@ -111,7 +124,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
 
   // Bank / Cash Theme Helper
   const getCardTheme = (wallet: WalletItem) => {
-    const isCash = wallet.bankName === "CASH" || (wallet.name || "").toLowerCase().includes("tiền mặt");
+    const isCash = getWalletKind(wallet) === "CASH";
     if (isCash) {
       return {
         isCash: true,
@@ -170,7 +183,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
     const fd = new FormData(e.currentTarget);
     const res = await createWallet(fd);
     if (res.error) {
-      toast.error("Vui lòng kiểm tra lại thông tin");
+      toast.error(res.message || "Vui lòng kiểm tra lại thông tin");
     } else {
       toast.success("Đã thêm tài khoản / ví mới!");
       setIsCreateOpen(false);
@@ -184,7 +197,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
     const fd = new FormData(e.currentTarget);
     const res = await updateWallet(editingWallet.id, fd);
     if (res.error) {
-      toast.error("Vui lòng kiểm tra lại thông tin");
+      toast.error(res.message || "Vui lòng kiểm tra lại thông tin");
     } else {
       toast.success("Đã cập nhật thông tin tài khoản / ví!");
       setEditingWallet(null);
@@ -219,9 +232,9 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       const res = await transferBetweenWallets(fd);
-      if ((res as any)?.error) {
-        toast.error(String((res as any).error));
-      } else {
+      if ("error" in res && res.error) {
+        toast.error(String(res.error));
+      } else if ("amount" in res) {
         toast.success(
           `Đã chuyển ${formatCurrency(Number(res.amount))} từ "${res.fromName}" sang "${res.toName}"!`
         );
@@ -288,7 +301,12 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
       </div>
 
       {/* ─── KPI Overview (Separates Cash vs Bank) ─────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+      <div
+        className={cn(
+          "grid grid-cols-2 gap-3 md:gap-4",
+          creditWallets.length > 0 ? "lg:grid-cols-3 xl:grid-cols-5" : "lg:grid-cols-4"
+        )}
+      >
         {/* Tổng số dư thực tế */}
         <div className="card p-4 flex flex-col justify-between border-primary/20 bg-primary/5">
           <div className="flex items-center justify-between text-muted">
@@ -300,11 +318,11 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
             </div>
           </div>
           <div className="mt-2">
-            <p className="text-xl md:text-2xl font-extrabold text-foreground truncate">
-              {formatCurrency(totalBalance)}
+            <p className="text-xl md:text-2xl font-extrabold text-foreground min-w-0">
+              <FitAmount>{formatCurrency(totalBalance)}</FitAmount>
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Từ {wallets.length} tài khoản & ví
+              Từ {moneyWallets.length} tài khoản & ví{creditWallets.length > 0 ? " (không gồm thẻ tín dụng)" : ""}
             </p>
           </div>
         </div>
@@ -320,8 +338,8 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
             </div>
           </div>
           <div className="mt-2">
-            <p className="text-xl md:text-2xl font-extrabold text-emerald-600 truncate">
-              {formatCurrency(totalCashBalance)}
+            <p className="text-xl md:text-2xl font-extrabold text-emerald-600 min-w-0">
+              <FitAmount>{formatCurrency(totalCashBalance)}</FitAmount>
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {cashWallets.length} ví tiền mặt hoạt động
@@ -340,8 +358,8 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
             </div>
           </div>
           <div className="mt-2">
-            <p className="text-xl md:text-2xl font-extrabold text-violet-700 truncate">
-              {formatCurrency(totalBankBalance)}
+            <p className="text-xl md:text-2xl font-extrabold text-violet-700 min-w-0">
+              <FitAmount>{formatCurrency(totalBankBalance)}</FitAmount>
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {bankWallets.length} tài khoản ngân hàng
@@ -368,6 +386,29 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
             </p>
           </div>
         </div>
+
+        {/* Dư nợ thẻ tín dụng */}
+        {creditWallets.length > 0 && (
+          <div className="card p-4 flex flex-col justify-between border-indigo-500/20 bg-indigo-500/5">
+            <div className="flex items-center justify-between text-muted">
+              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-700">
+                Dư nợ thẻ tín dụng
+              </span>
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/15 flex items-center justify-center text-indigo-600">
+                <CreditCard size={16} />
+              </div>
+            </div>
+            <div className="mt-2">
+              <p className="text-xl md:text-2xl font-extrabold text-rose-600 min-w-0">
+                <FitAmount>{formatCurrency(totalCreditDebt)}</FitAmount>
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Hạn mức {formatCurrency(totalCreditLimit)} · {creditWallets.length} thẻ
+                {creditDueCount > 0 ? ` · ${creditDueCount} thẻ sắp/đã đến hạn` : ""}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ─── Empty state (no wallets are auto-created) ───────────── */}
@@ -397,7 +438,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
 
       {/* ─── Grid of Cards (Bank & Cash) ───────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-5">
-        {wallets.map((wallet) => {
+        {moneyWallets.map((wallet) => {
           const theme = getCardTheme(wallet);
 
           return (
@@ -469,8 +510,8 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                   <span className="text-[10px] text-white/70 uppercase font-semibold tracking-wider block">
                     {theme.isCash ? "Số dư tiền mặt" : "Số dư khả dụng"}
                   </span>
-                  <p className="text-xl md:text-2xl font-black tracking-tight text-white mt-0.5 truncate">
-                    {formatCurrency(wallet.currentBalance)}
+                  <p className="text-xl md:text-2xl font-black tracking-tight text-white mt-0.5 min-w-0">
+                    <FitAmount>{formatCurrency(wallet.currentBalance)}</FitAmount>
                   </p>
                 </div>
               </div>
@@ -481,14 +522,14 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                 <div className="grid grid-cols-3 gap-2 py-2 border-b border-border/70 text-center">
                   <div>
                     <span className="text-[10px] text-muted-foreground block">Thu vào</span>
-                    <span className="text-xs font-bold text-emerald-600 truncate block">
-                      +{formatCurrency(wallet.income)}
+                    <span className="text-xs font-bold text-emerald-600 min-w-0 block">
+                      <FitAmount>+{formatCurrency(wallet.income)}</FitAmount>
                     </span>
                   </div>
                   <div>
                     <span className="text-[10px] text-muted-foreground block">Chi ra</span>
-                    <span className="text-xs font-bold text-rose-600 truncate block">
-                      -{formatCurrency(wallet.expense)}
+                    <span className="text-xs font-bold text-rose-600 min-w-0 block">
+                      <FitAmount>-{formatCurrency(wallet.expense)}</FitAmount>
                     </span>
                   </div>
                   <div>
@@ -514,12 +555,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                       type="button"
                       onClick={() => {
                         setEditingWallet(wallet);
-                        setEditType(
-                          wallet.bankName === "CASH" ||
-                          (wallet.name || "").toLowerCase().includes("tiền mặt")
-                            ? "CASH"
-                            : "BANK"
-                        );
+                        setEditType(getWalletKind(wallet));
                       }}
                       className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors cursor-pointer"
                       title="Chỉnh sửa thông tin"
@@ -543,6 +579,25 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
         })}
       </div>
 
+      {/* ─── Thẻ tín dụng ─────────────────────────────────────── */}
+      {wallets.length > 0 && (
+        <CreditCardSection
+          cards={creditWallets}
+          sources={moneyWallets}
+          onAdd={() => {
+            setCreateType("CREDIT");
+            setIsCreateOpen(true);
+          }}
+          onEdit={(card) => {
+            const w = creditWallets.find((x) => x.id === card.id);
+            if (!w) return;
+            setEditingWallet(w);
+            setEditType("CREDIT");
+          }}
+          onDelete={(id) => setDeletingId(id)}
+        />
+      )}
+
       {/* ─── Modal Thêm tài khoản / ví mới ─────────────────────── */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="sm:max-w-md">
@@ -559,34 +614,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
               <label className="text-xs font-semibold text-foreground block mb-1.5">
                 Loại tài khoản / ví <span className="text-rose-500">*</span>
               </label>
-              <div className="grid grid-cols-2 gap-2 p-1 bg-muted/60 rounded-xl border border-border">
-                <button
-                  type="button"
-                  onClick={() => setCreateType("BANK")}
-                  className={cn(
-                    "flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                    createType === "BANK"
-                      ? "bg-card text-foreground shadow-xs border border-border"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Landmark size={14} className={createType === "BANK" ? "text-primary" : ""} />
-                  <span>🏦 Ngân hàng / Thẻ</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCreateType("CASH")}
-                  className={cn(
-                    "flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                    createType === "CASH"
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Banknote size={14} />
-                  <span>💵 Ví tiền mặt</span>
-                </button>
-              </div>
+              <WalletTypeSwitcher value={createType} onChange={setCreateType} />
             </div>
 
             {/* Name */}
@@ -601,14 +629,20 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                 placeholder={
                   createType === "CASH"
                     ? "VD: Tiền mặt trong ví, Tiền tiêu vặt, Két sắt..."
+                    : createType === "CREDIT"
+                    ? "VD: Thẻ Visa TPBank, Techcombank Spark..."
                     : "VD: TPBank - TK 2, Techcombank..."
                 }
                 className="w-full px-3 py-2 text-sm rounded-xl border border-border bg-card outline-none focus:border-primary"
               />
             </div>
 
+            <input type="hidden" name="type" value={createType} />
+
             {/* Conditional fields based on type */}
-            {createType === "CASH" ? (
+            {createType === "CREDIT" ? (
+              <CreditCardFields />
+            ) : createType === "CASH" ? (
               <>
                 <input type="hidden" name="bankName" value="CASH" />
                 <input type="hidden" name="accountNumber" value="" />
@@ -652,6 +686,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
               </div>
             )}
 
+            {createType !== "CREDIT" && (
             <div>
               <label className="text-xs font-semibold text-foreground block mb-1">
                 Số dư ban đầu (VNĐ)
@@ -664,6 +699,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                 showWordsPreview
               />
             </div>
+            )}
 
             <div className="flex items-center gap-2 pt-1">
               <input
@@ -687,7 +723,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                 Hủy
               </button>
               <button type="submit" className="btn-primary text-xs">
-                Tạo {createType === "CASH" ? "ví tiền mặt" : "tài khoản"}
+                Tạo {createType === "CASH" ? "ví tiền mặt" : createType === "CREDIT" ? "thẻ tín dụng" : "tài khoản"}
               </button>
             </DialogFooter>
           </form>
@@ -711,34 +747,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                 <label className="text-xs font-semibold text-foreground block mb-1.5">
                   Loại tài khoản / ví
                 </label>
-                <div className="grid grid-cols-2 gap-2 p-1 bg-muted/60 rounded-xl border border-border">
-                  <button
-                    type="button"
-                    onClick={() => setEditType("BANK")}
-                    className={cn(
-                      "flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                      editType === "BANK"
-                        ? "bg-card text-foreground shadow-xs border border-border"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <Landmark size={14} className={editType === "BANK" ? "text-primary" : ""} />
-                    <span>🏦 Ngân hàng / Thẻ</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditType("CASH")}
-                    className={cn(
-                      "flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                      editType === "CASH"
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <Banknote size={14} />
-                    <span>💵 Ví tiền mặt</span>
-                  </button>
-                </div>
+                <WalletTypeSwitcher value={editType} onChange={setEditType} />
               </div>
 
               <div>
@@ -754,7 +763,20 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                 />
               </div>
 
-              {editType === "CASH" ? (
+              <input type="hidden" name="type" value={editType} />
+
+              {editType === "CREDIT" ? (
+                <CreditCardFields
+                  defaults={{
+                    bankName: editingWallet.bankName !== "CASH" ? editingWallet.bankName : null,
+                    accountNumber: editingWallet.accountNumber,
+                    creditLimit: editingWallet.creditLimit ?? null,
+                    openingDebt: Math.max(0, -editingWallet.balance),
+                    statementDay: editingWallet.statementDay ?? null,
+                    paymentDueDay: editingWallet.paymentDueDay ?? null,
+                  }}
+                />
+              ) : editType === "CASH" ? (
                 <>
                   <input type="hidden" name="bankName" value="CASH" />
                   <input type="hidden" name="accountNumber" value="" />
@@ -800,18 +822,20 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
                 </div>
               )}
 
-              <div>
-                <label className="text-xs font-semibold text-foreground block mb-1">
-                  Số dư ban đầu (VNĐ)
-                </label>
-                <SmartCurrencyInput
-                  name="balance"
-                  defaultValue={editingWallet.balance}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-border bg-card outline-none focus:border-primary"
-                  showQuickButtons
-                  showWordsPreview
-                />
-              </div>
+              {editType !== "CREDIT" && (
+                <div>
+                  <label className="text-xs font-semibold text-foreground block mb-1">
+                    Số dư ban đầu (VNĐ)
+                  </label>
+                  <SmartCurrencyInput
+                    name="balance"
+                    defaultValue={editingWallet.balance}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-border bg-card outline-none focus:border-primary"
+                    showQuickButtons
+                    showWordsPreview
+                  />
+                </div>
+              )}
 
               <div className="flex items-center gap-2 pt-1">
                 <input
@@ -866,7 +890,7 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
               >
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.bankName === "CASH" ? "💵" : "💳"} {w.name} {w.bankName && w.bankName !== "CASH" ? `(${w.bankName})` : ""}
+                    {WALLET_KIND_EMOJI[getWalletKind(w)]} {w.name} {w.bankName && w.bankName !== "CASH" ? `(${w.bankName})` : ""}
                   </option>
                 ))}
               </select>
@@ -1040,6 +1064,32 @@ export function WalletsClient({ initialWallets, unassignedCount }: WalletsClient
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+const WALLET_TYPE_OPTIONS: { value: WalletKind; label: string; activeCls: string }[] = [
+  { value: "BANK", label: "🏦 Ngân hàng", activeCls: "bg-card text-foreground shadow-xs border border-border" },
+  { value: "CASH", label: "💵 Tiền mặt", activeCls: "bg-emerald-600 text-white shadow-xs" },
+  { value: "CREDIT", label: "💳 Thẻ tín dụng", activeCls: "bg-indigo-600 text-white shadow-xs" },
+];
+
+function WalletTypeSwitcher({ value, onChange }: { value: WalletKind; onChange: (v: WalletKind) => void }) {
+  return (
+    <div className="grid grid-cols-3 gap-2 p-1 bg-muted/60 rounded-xl border border-border">
+      {WALLET_TYPE_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={cn(
+            "flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+            value === opt.value ? opt.activeCls : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <span className="truncate">{opt.label}</span>
+        </button>
+      ))}
     </div>
   );
 }

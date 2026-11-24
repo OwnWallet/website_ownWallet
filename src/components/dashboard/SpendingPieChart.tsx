@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { formatCurrency, formatCurrencyCompact } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact, formatMetric } from "@/lib/utils";
 
 interface CategoryItem {
   name: string;
@@ -25,7 +25,7 @@ function CustomLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }: an
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
   return (
     <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={800}>
-      {`${(percent * 100).toFixed(0)}%`}
+      {`${formatMetric(percent * 100)}%`}
     </text>
   );
 }
@@ -85,7 +85,7 @@ export function SpendingPieChart({ data, totalExpense }: SpendingPieChartProps) 
       {/* Legend list */}
       <div className="space-y-2 max-h-[160px] overflow-y-auto">
         {sorted.map((item) => {
-          const pct = totalExpense > 0 ? ((item.value / totalExpense) * 100).toFixed(1) : "0";
+          const pct = totalExpense > 0 ? formatMetric((item.value / totalExpense) * 100) : "0";
           return (
             <div key={item.name} className="flex items-center justify-between gap-2 text-xs sm:text-sm">
               <div className="flex items-center gap-2 min-w-0">

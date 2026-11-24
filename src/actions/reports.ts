@@ -2,7 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatDateTime, formatMetric } from "@/lib/utils";
+import { subMoney } from "@/lib/money";
 import { generateWithFallback } from "@/lib/ai/gemini";
 
 async function getUserId(): Promise<string> {
@@ -41,13 +42,13 @@ function buildFallbackAdvice(input: AiFinancialReportInput): AiFinancialAdvice {
     topCategories,
   } = input;
 
-  const net = currentIncome - currentExpense;
+  const net = subMoney(currentIncome, currentExpense);
   const savingsRate =
-    currentIncome > 0 ? Math.round(((currentIncome - currentExpense) / currentIncome) * 100) : 0;
+    currentIncome > 0 ? ((currentIncome - currentExpense) / currentIncome) * 100 : 0;
   const expDiffPct =
-    lastExpense > 0 ? Math.round(((currentExpense - lastExpense) / lastExpense) * 100) : null;
+    lastExpense > 0 ? ((currentExpense - lastExpense) / lastExpense) * 100 : null;
   const incDiffPct =
-    lastIncome > 0 ? Math.round(((currentIncome - lastIncome) / lastIncome) * 100) : null;
+    lastIncome > 0 ? ((currentIncome - lastIncome) / lastIncome) * 100 : null;
 
   const highlights: string[] = [];
   const warnings: string[] = [];
@@ -55,7 +56,7 @@ function buildFallbackAdvice(input: AiFinancialReportInput): AiFinancialAdvice {
 
   if (net > 0) {
     highlights.push(
-      `Dòng tiền dương +${formatCurrency(net)} trong ${periodName} (Tỷ lệ tiết kiệm đạt ${savingsRate}%).`
+      `Dòng tiền dương +${formatCurrency(net)} trong ${periodName} (Tỷ lệ tiết kiệm đạt ${formatMetric(savingsRate)}%).`
     );
   } else if (net < 0) {
     warnings.push(
@@ -64,53 +65,53 @@ function buildFallbackAdvice(input: AiFinancialReportInput): AiFinancialAdvice {
   }
 
   if (incDiffPct !== null && incDiffPct > 5) {
-    highlights.push(`Thu nhập tăng trưởng +${incDiffPct}% so với kỳ trước.`);
+    highlights.push(`Thu nhập tăng trưởng +${formatMetric(incDiffPct)}% so với kỳ trước.`);
   } else if (incDiffPct !== null && incDiffPct < -10) {
-    warnings.push(`Thu nhập giảm ${Math.abs(incDiffPct)}% so với kỳ trước.`);
+    warnings.push(`Thu nhập giảm ${formatMetric(Math.abs(incDiffPct))}% so với kỳ trước.`);
   }
 
   if (expDiffPct !== null && expDiffPct > 15) {
     warnings.push(
-      `Chi tiêu tăng +${expDiffPct}% so với kỳ trước (${formatCurrency(lastExpense)} → ${formatCurrency(currentExpense)}).`
+      `Chi tiêu tăng +${formatMetric(expDiffPct)}% so với kỳ trước (${formatCurrency(lastExpense)} → ${formatCurrency(currentExpense)}).`
     );
   } else if (expDiffPct !== null && expDiffPct < -5) {
-    highlights.push(`Kiểm soát chi tiêu tốt: giảm ${Math.abs(expDiffPct)}% so với kỳ trước.`);
+    highlights.push(`Kiểm soát chi tiêu tốt: giảm ${formatMetric(Math.abs(expDiffPct))}% so với kỳ trước.`);
   }
 
   if (topCategories.length > 0 && currentExpense > 0) {
     const top1 = topCategories[0];
-    const top1Share = Math.round((top1.value / currentExpense) * 100);
+    const top1Share = (top1.value / currentExpense) * 100;
     if (top1Share >= 40) {
       warnings.push(
-        `Danh mục "${top1.name}" chiếm tới ${top1Share}% tổng chi tiêu (${formatCurrency(top1.value)}).`
+        `Danh mục "${top1.name}" chiếm tới ${formatMetric(top1Share)}% tổng chi tiêu (${formatCurrency(top1.value)}).`
       );
       actionableTips.push(
         `Thiết lập hạn mức ngân sách tại mục Ngân sách cho danh mục "${top1.name}" giảm 10–15% ở kỳ tới.`
       );
     } else {
       highlights.push(
-        `Cơ cấu chi tiêu khá phân tán; danh mục lớn nhất là "${top1.name}" (${top1Share}% tổng chi).`
+        `Cơ cấu chi tiêu khá phân tán; danh mục lớn nhất là "${top1.name}" (${formatMetric(top1Share)}% tổng chi).`
       );
     }
   }
 
   if (input.topTags && input.topTags.length > 0 && currentExpense > 0) {
     const topTag = input.topTags[0];
-    const topTagShare = Math.round((topTag.value / currentExpense) * 100);
+    const topTagShare = (topTag.value / currentExpense) * 100;
     if (topTagShare >= 15 && topTag.name !== "Chưa gắn tag") {
       actionableTips.push(
-        `Khoản chi tiêu cho tag "#${topTag.name}" (${topTag.categoryName}) chiếm ${topTagShare}% tổng chi (${formatCurrency(topTag.value)}). Cân nhắc rà soát và tối ưu các khoản phát sinh này.`
+        `Khoản chi tiêu cho tag "#${topTag.name}" (${topTag.categoryName}) chiếm ${formatMetric(topTagShare)}% tổng chi (${formatCurrency(topTag.value)}). Cân nhắc rà soát và tối ưu các khoản phát sinh này.`
       );
     }
   }
 
   if (savingsRate < 20 && currentIncome > 0) {
     actionableTips.push(
-      `Áp dụng quy tắc 50/30/20: trích tự động tối thiểu 20% thu nhập (${formatCurrency(Math.round(currentIncome * 0.2))}) vào Mục tiêu Tiết kiệm ngay khi nhận lương.`
+      `Áp dụng quy tắc 50/30/20: trích tự động tối thiểu 20% thu nhập (${formatCurrency(currentIncome * 0.2)}) vào Mục tiêu Tiết kiệm ngay khi nhận lương.`
     );
   } else if (savingsRate >= 20) {
     actionableTips.push(
-      `Duy trì tỷ lệ tiết kiệm ${savingsRate}% và phân bổ phần thặng dư (${formatCurrency(Math.max(0, net))}) vào danh mục Đầu tư hoặc Quỹ dự phòng.`
+      `Duy trì tỷ lệ tiết kiệm ${formatMetric(savingsRate)}% và phân bổ phần thặng dư (${formatCurrency(Math.max(0, net))}) vào danh mục Đầu tư hoặc Quỹ dự phòng.`
     );
   }
 
@@ -121,7 +122,7 @@ function buildFallbackAdvice(input: AiFinancialReportInput): AiFinancialAdvice {
   return {
     summary:
       net >= 0
-        ? `Tài chính ${periodName} đang ở trạng thái tích cực với thặng dư +${formatCurrency(net)} (tiết kiệm ${savingsRate}%).`
+        ? `Tài chính ${periodName} đang ở trạng thái tích cực với thặng dư +${formatCurrency(net)} (tiết kiệm ${formatMetric(savingsRate)}%).`
         : `Cần chú ý kiểm soát chi tiêu trong ${periodName} do đang bội chi ${formatCurrency(Math.abs(net))}.`,
     highlights:
       highlights.length > 0

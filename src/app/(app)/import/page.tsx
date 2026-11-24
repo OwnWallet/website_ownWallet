@@ -10,7 +10,7 @@ import { DEFAULT_GEMINI_MODEL } from "@/lib/ai/models";
 export const metadata: Metadata = {
   title: "Import",
   description:
-    "Upload sao kê ngân hàng PDF hoặc bảng Excel/CSV để tự động phân tích và nhập giao dịch vào OwnWallet.",
+    "Upload sao kê ngân hàng / thẻ tín dụng (PDF) hoặc bảng Excel/CSV để tự động phân tích và nhập giao dịch vào OwnWallet.",
 };
 
 export default async function ImportPage() {

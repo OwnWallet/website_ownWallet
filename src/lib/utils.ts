@@ -121,28 +121,13 @@ export function formatCurrency(amount: number | string): string {
 }
 
 /**
- * Format số tiền dạng compact, làm tròn đến số thập phân hàng trăm
- * @example formatCurrencyCompact(3500000) → "3,5tr ₫"
- * @example formatCurrencyCompact(1250000) → "1,25tr ₫"
+ * Trước đây hiển thị dạng rút gọn ("3,5tr ₫") làm mất các chữ số lẻ.
+ * Nay luôn hiển thị số tiền đầy đủ, chính xác đến 2 chữ số thập phân (giống formatCurrency).
+ * Chỉ trục biểu đồ mới dùng nhãn rút gọn (định dạng riêng trong từng biểu đồ).
+ * @example formatCurrencyCompact(3512345.67) → "3.512.345,67 ₫"
  */
 export function formatCurrencyCompact(amount: number): string {
-  const abs = Math.abs(amount);
-  const formatWithDecimals = (val: number, unit: string) => {
-    const rounded = roundToHundredth(val);
-    const str = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(rounded);
-    return `${str}${unit} ₫`;
-  };
-
-  if (abs >= 1_000_000_000) {
-    return formatWithDecimals(amount / 1_000_000_000, "tỷ");
-  }
-  if (abs >= 1_000_000) {
-    return formatWithDecimals(amount / 1_000_000, "tr");
-  }
-  if (abs >= 1_000) {
-    return formatWithDecimals(amount / 1_000, "k");
-  }
-  return `${amount} ₫`;
+  return formatCurrency(amount);
 }
 
 // ─── Vietnamese Currency Reader (Đọc tiền bằng chữ) ───────────

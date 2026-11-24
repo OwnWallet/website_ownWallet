@@ -15,6 +15,11 @@ export function getPool(): Pool | null {
       max: 5,
       idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 5000,
+      keepAlive: true,
+    });
+    // Kết nối nhàn rỗi bị server DB cắt chỉ bị loại khỏi pool, không làm sập tiến trình
+    _pool.on("error", (err) => {
+      console.warn("[system-settings] Kết nối nhàn rỗi bị đóng:", err.message);
     });
   }
   return _pool;

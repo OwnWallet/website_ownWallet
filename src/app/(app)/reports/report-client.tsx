@@ -498,7 +498,7 @@ export function ReportClient({
                               {formatCurrency(item.value)}
                             </span>
                             <span className="text-[10px] text-muted-foreground tabular-nums font-medium">
-                              {item.percentage}%
+                              {formatMetric(item.percentage)}%
                             </span>
                           </div>
                         </div>

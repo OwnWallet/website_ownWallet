@@ -6,13 +6,16 @@ import { getAutoRolloverBudgets } from "@/actions/budgets";
 import { formatCurrency, formatCurrencyCompact, formatDateTime, calcPercent, formatMetric, getFilterDateRange, getVNDateParts, toInstant, toDate, serializeData, maskAccountNumber } from "@/lib/utils";
 import { BUDGET_WARNING_THRESHOLD } from "@/lib/constants";
 import { isTransfer, percentOf } from "@/lib/finance";
-import { TrendingUp, TrendingDown, Wallet, AlertTriangle, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { getWalletKind } from "@/lib/credit-card";
+import { addMoney, subMoney } from "@/lib/money";
+import { TrendingUp, TrendingDown, Wallet, AlertTriangle, ArrowUpRight, ArrowDownLeft, CreditCard } from "lucide-react";
 import Link from "next/link";
 import { DashboardChart } from "@/components/ui/DashboardChart";
 import { Card } from "@/components/ui/card";
 import { SpendingPieChart } from "@/components/dashboard/SpendingPieChart";
 import { CashFlowTrendChart } from "@/components/dashboard/CashFlowTrendChart";
 import { FinancialHealthScore } from "@/components/dashboard/FinancialHealthScore";
+import { FitAmount } from "@/components/ui/fit-amount";
 
 async function getDashboardData(
   userId: string,
@@ -110,10 +113,10 @@ async function getDashboardData(
 
       const amt = Number(t.amount);
       if (t.type === "INCOME") {
-        income += amt;
+        income = addMoney(income, amt);
       } else if (t.type === "EXPENSE") {
-        expense += amt;
-        spentMap.set(t.categoryId, (spentMap.get(t.categoryId) || 0) + amt);
+        expense = addMoney(expense, amt);
+        spentMap.set(t.categoryId, addMoney(spentMap.get(t.categoryId) || 0, amt));
       }
     });
 
@@ -127,26 +130,26 @@ async function getDashboardData(
       const recMs = toDate(t.recordedAt).getTime();
       const amt = Number(t.amount);
       if (recMs < fromMs) {
-        if (t.type === "INCOME") allPriorIncome += amt;
-        else if (t.type === "EXPENSE") allPriorExpense += amt;
+        if (t.type === "INCOME") allPriorIncome = addMoney(allPriorIncome, amt);
+        else if (t.type === "EXPENSE") allPriorExpense = addMoney(allPriorExpense, amt);
       }
       if (recMs >= prevFromMs && recMs <= prevToMs) {
         const isInternalTransfer = isAllWallets && isTransfer(t);
         if (!isInternalTransfer) {
-          if (t.type === "INCOME") prevPeriodIncome += amt;
-          else if (t.type === "EXPENSE") prevPeriodExpense += amt;
+          if (t.type === "INCOME") prevPeriodIncome = addMoney(prevPeriodIncome, amt);
+          else if (t.type === "EXPENSE") prevPeriodExpense = addMoney(prevPeriodExpense, amt);
         }
       }
     }
 
     const initialWalletBalance = (realWallets as any[]).reduce((sum, w) => {
-      if (!walletId || walletId === "ALL") return sum + Number(w.balance ?? 0);
+      if (!walletId || walletId === "ALL") return addMoney(sum, w.balance ?? 0);
       if (walletId === "UNASSIGNED") return 0;
-      return w.id === walletId ? sum + Number(w.balance ?? 0) : sum;
+      return w.id === walletId ? addMoney(sum, w.balance ?? 0) : sum;
     }, 0);
 
-    const prevMonthNet = prevPeriodIncome - prevPeriodExpense;
-    const openingCumulativeBalance = initialWalletBalance + (allPriorIncome - allPriorExpense);
+    const prevMonthNet = subMoney(prevPeriodIncome, prevPeriodExpense);
+    const openingCumulativeBalance = addMoney(initialWalletBalance, subMoney(allPriorIncome, allPriorExpense));
 
     const investPnL = investments.reduce((sum: number, inv: any) => {
       if (inv.currentPrice) {
@@ -171,7 +174,7 @@ async function getDashboardData(
       const key = cat?.id ?? "__none__";
       const existing = categorySpendMap.get(key);
       if (existing) {
-        existing.value += Number(tx.amount);
+        existing.value = addMoney(existing.value, tx.amount);
       } else {
         categorySpendMap.set(key, {
           name: cat?.name ?? "Khác",
@@ -200,9 +203,8 @@ async function getDashboardData(
       const key = `${y}-${String(m).padStart(2, "0")}`;
       const entry = monthlyMap.get(key);
       if (!entry) continue;
-      const amt = Number(tx.amount);
-      if (tx.type === "INCOME") entry.income += amt;
-      else if (tx.type === "EXPENSE") entry.expense += amt;
+      if (tx.type === "INCOME") entry.income = addMoney(entry.income, tx.amount);
+      else if (tx.type === "EXPENSE") entry.expense = addMoney(entry.expense, tx.amount);
     }
     const cashFlowTrend = Array.from(monthlyMap.values());
 
@@ -210,18 +212,38 @@ async function getDashboardData(
     let totalOutstandingDebt = 0; // Chỉ tính OWE (mình nợ người khác)
     let totalReceivableDebt = 0;  // Chỉ tính OWED (người khác nợ mình)
     for (const d of allDebts as any[]) {
-      const remain = Math.max(0, Number(d.amount) - Number(d.paidAmount));
+      const remain = Math.max(0, subMoney(d.amount, d.paidAmount));
       if (d.direction === "OWED") {
-        totalReceivableDebt += remain;
+        totalReceivableDebt = addMoney(totalReceivableDebt, remain);
       } else {
-        totalOutstandingDebt += remain;
+        totalOutstandingDebt = addMoney(totalOutstandingDebt, remain);
       }
     }
 
-    // Total wallet balance
+    // Total wallet balance (thẻ tín dụng là khoản nợ, không phải tiền đang có)
     const totalWalletBalance = (realWallets as any[]).reduce((sum, w) => {
-      return sum + (Number(w.currentBalance ?? w.balance ?? 0));
+      if (getWalletKind(w) === "CREDIT") return sum;
+      return addMoney(sum, w.currentBalance ?? w.balance ?? 0);
     }, 0);
+
+    // Dư nợ thẻ tín dụng tính đến cuối kỳ đang xem (theo cùng phạm vi ví với số dư lũy kế).
+    // Số dư âm của thẻ đã nằm trong số dư lũy kế; tách ra để Sức khỏe tài chính coi đó là nợ.
+    const creditWallets = (realWallets as any[]).filter(
+      (w) => getWalletKind(w) === "CREDIT" && (isAllWallets || w.id === walletId)
+    );
+    const creditBalanceAtClose = new Map<string, number>(
+      creditWallets.map((w) => [w.id, Number(w.balance ?? 0) as number])
+    );
+    for (const t of allPriorAndCurrentTxs as any[]) {
+      if (!t.walletId || !creditBalanceAtClose.has(t.walletId)) continue;
+      const prev = creditBalanceAtClose.get(t.walletId)!;
+      creditBalanceAtClose.set(
+        t.walletId,
+        t.type === "INCOME" ? addMoney(prev, t.amount) : subMoney(prev, t.amount)
+      );
+    }
+    let creditCardDebt = 0;
+    for (const b of creditBalanceAtClose.values()) creditCardDebt = addMoney(creditCardDebt, Math.max(0, -b));
 
     // Budget health for score
     const budgetHealth = budgetsWithSpend.map((b: any) => ({
@@ -282,6 +304,7 @@ async function getDashboardData(
       totalReceivableDebt,
       totalWalletBalance,
       totalInvestmentValue,
+      creditCardDebt,
       budgetHealth,
     };
   } catch (error) {
@@ -325,6 +348,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     totalOutstandingDebt,
     totalReceivableDebt,
     totalInvestmentValue,
+    creditCardDebt,
     budgetHealth,
   } = await getDashboardData(
     session.user.id,
@@ -334,9 +358,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     filterDate.year,
     selectedWalletId
   );
-  const netBalance = income - expense;
+  const netBalance = subMoney(income, expense);
   // Tự động cộng dồn lũy kế toàn phần đến cuối kỳ đang xem (khớp 100% với tổng số dư Ví)
-  const closingCumulativeBalance = openingCumulativeBalance + netBalance;
+  const closingCumulativeBalance = addMoney(openingCumulativeBalance, netBalance);
+
+  // Thẻ tín dụng sắp đến hạn / quá hạn thanh toán (theo thời điểm hiện tại)
+  const dueCards = (wallets as any[])
+    .filter((w) => ["DUE_SOON", "OVERDUE"].includes(w.credit?.statement?.status))
+    .sort((a, b) => a.credit.statement.daysUntilDue - b.credit.statement.daysUntilDue);
 
   const monthLabel = filterDate.label;
   const currShortLabel =
@@ -418,7 +447,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-orange-50/90 border border-orange-200/80 animate-scale-in">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-8 h-8 rounded-lg bg-orange-100 border border-orange-200 text-orange-700 flex items-center justify-center shrink-0 text-sm font-bold shadow-2xs">
-              {activeWallet.bankName === "CASH" || (activeWallet.name || "").toLowerCase().includes("tiền mặt") ? "💵" : "💳"}
+              {getWalletKind(activeWallet) === "CASH" ? "💵" : getWalletKind(activeWallet) === "CREDIT" ? "💳" : "🏦"}
             </div>
             <p className="text-sm font-semibold text-slate-900 truncate">
               Đang lọc:{" "}
@@ -443,6 +472,51 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
       )}
 
+      {/* Cảnh báo hạn thanh toán thẻ tín dụng */}
+      {dueCards.length > 0 && (
+        <div className="space-y-2">
+          {dueCards.map((w: any) => {
+            const s = w.credit.statement;
+            const overdue = s.status === "OVERDUE";
+            return (
+              <Link
+                key={w.id}
+                href="/wallets"
+                className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors ${
+                  overdue
+                    ? "bg-rose-50/90 border-rose-200 hover:bg-rose-100/80"
+                    : "bg-amber-50/90 border-amber-200 hover:bg-amber-100/80"
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      overdue ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    <CreditCard size={16} />
+                  </div>
+                  <p className={`text-sm min-w-0 ${overdue ? "text-rose-900" : "text-amber-900"}`}>
+                    <span className="font-bold">{w.name}</span>{" "}
+                    {overdue
+                      ? `đã quá hạn thanh toán ${Math.abs(s.daysUntilDue)} ngày`
+                      : s.daysUntilDue === 0
+                      ? "đến hạn thanh toán hôm nay"
+                      : `đến hạn thanh toán sau ${s.daysUntilDue} ngày`}
+                    <span className="hidden sm:inline"> · còn phải trả </span>
+                    <span className="sm:hidden"> · </span>
+                    <span className="font-bold">{formatCurrency(s.remainingDue)}</span>
+                  </p>
+                </div>
+                <span className={`text-xs font-semibold shrink-0 ${overdue ? "text-rose-700" : "text-amber-700"}`}>
+                  Thanh toán →
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         {kpiCards.map((card, i) => (
@@ -464,12 +538,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             {/* Value & Single Crisp Context Line */}
             <div className="space-y-1.5">
               <p
-                className={`text-2xl sm:text-3xl font-black tabular-nums tracking-tight truncate ${card.color}`}
+                className={`text-2xl sm:text-3xl font-black tabular-nums tracking-tight min-w-0 ${card.color}`}
                 title={`${card.prefix}${formatCurrency(Math.abs(card.value))}`}
               >
-                {card.prefix}{formatCurrencyCompact(Math.abs(card.value))}
+                <FitAmount>{card.prefix}{formatCurrencyCompact(Math.abs(card.value))}</FitAmount>
               </p>
-              <p className="text-xs sm:text-sm text-slate-600 font-medium truncate" title={card.desc}>
+              <p className="text-xs sm:text-sm text-slate-600 font-medium break-words" title={card.desc}>
                 {card.desc}
               </p>
             </div>
@@ -514,9 +588,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <FinancialHealthScore
             income={income}
             expense={expense}
-            totalDebt={totalOutstandingDebt}
+            totalDebt={addMoney(totalOutstandingDebt, creditCardDebt)}
             totalReceivable={totalReceivableDebt}
-            totalWalletBalance={closingCumulativeBalance}
+            totalWalletBalance={addMoney(closingCumulativeBalance, creditCardDebt)}
+            creditCardDebt={creditCardDebt}
             totalInvestmentValue={totalInvestmentValue}
             budgets={budgetHealth}
           />
@@ -675,14 +750,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                             {w.name}
                           </span>
                           <span className="text-xs text-muted-foreground truncate block">
-                            {w.accountNumber ? `STK: ${maskAccountNumber(w.accountNumber)} · ` : ""}
+                            {w.credit
+                              ? `Thẻ tín dụng · `
+                              : w.accountNumber
+                              ? `STK: ${maskAccountNumber(w.accountNumber)} · `
+                              : ""}
                             {w.txCount ?? 0} giao dịch
                           </span>
                         </div>
                       </div>
-                      <span className="text-sm font-extrabold text-foreground tabular-nums shrink-0">
-                        {formatCurrencyCompact(w.currentBalance ?? w.balance)}
-                      </span>
+                      {w.credit ? (
+                        <span className="text-sm font-extrabold text-rose-600 tabular-nums shrink-0" title="Dư nợ thẻ">
+                          -{formatCurrencyCompact(w.credit.creditDebt)}
+                        </span>
+                      ) : (
+                        <span className="text-sm font-extrabold text-foreground tabular-nums shrink-0">
+                          {formatCurrencyCompact(w.currentBalance ?? w.balance)}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}

@@ -2,10 +2,11 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { toInstant, toDate, serializeData } from "@/lib/utils";
+import { toInstant, toDate, serializeData, formatCurrency, formatMetric } from "@/lib/utils";
 import { sumIncomeExpense } from "@/lib/finance";
 import { getWallets } from "@/actions/wallets";
 import { getAutoRolloverBudgets } from "@/actions/budgets";
+import { getCreditDebt, getWalletKind } from "@/lib/credit-card";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -116,7 +117,9 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   let instantCash = 0;
   let savingsCash = 0;
 
-  const rawWallets = (wallets as any[]).map((w) => {
+  // Thẻ tín dụng không phải tiền mặt: dư nợ thẻ được tính vào khoản phải trả bên dưới.
+  const creditCards = (wallets as any[]).filter((w) => getWalletKind(w) === "CREDIT");
+  const rawWallets = (wallets as any[]).filter((w) => getWalletKind(w) !== "CREDIT").map((w) => {
     const bal = Number(w.currentBalance ?? w.balance ?? 0);
     const nameLower = (w.name || "").toLowerCase();
     const isSavings =
@@ -152,7 +155,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
 
   const processedWallets: WalletCashItem[] = rawWallets.map((w) => ({
     ...w,
-    percentOfTotal: totalAllCash > 0 ? Math.round((Math.max(0, w.balance) / totalAllCash) * 100) : 0,
+    percentOfTotal: totalAllCash > 0 ? (Math.max(0, w.balance) / totalAllCash) * 100 : 0,
   })).sort((a, b) => b.balance - a.balance);
 
   // 2. Tính toán Nợ & Cho vay (Receivables vs Payables)
@@ -189,6 +192,19 @@ export async function getCashFlowData(): Promise<CashFlowData> {
     }
   }
 
+  for (const c of creditCards) {
+    const remain = getCreditDebt(Number(c.currentBalance ?? c.balance ?? 0));
+    if (remain <= 0) continue;
+    totalPayables += remain;
+    topPayables.push({
+      id: c.id,
+      person: `Thẻ tín dụng ${c.name}`,
+      amount: remain,
+      remain,
+      dueDate: c.credit?.statement?.remainingDue > 0 ? c.credit.statement.dueDate : null,
+    });
+  }
+
   topReceivables.sort((a, b) => b.remain - a.remain);
   topPayables.sort((a, b) => b.remain - a.remain);
 
@@ -211,8 +227,8 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   );
 
   // Chia 3 tháng (nếu chưa đủ 90 ngày thì tối thiểu tính 1 tháng)
-  const averageMonthlyIncome = Math.round(total90dIncome / 3);
-  let monthlyBurnRate = Math.round(total90dExpense / 3);
+  const averageMonthlyIncome = total90dIncome / 3;
+  let monthlyBurnRate = total90dExpense / 3;
 
   const totalMonthlyBudget = budgets.totalEffectiveLimit;
 
@@ -226,7 +242,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   const availableCashForRunway = totalLiquidCash + totalSavingsAndEmergency;
   let runwayMonths = 0;
   if (monthlyBurnRate > 0) {
-    runwayMonths = Number((availableCashForRunway / monthlyBurnRate).toFixed(1));
+    runwayMonths = availableCashForRunway / monthlyBurnRate;
   } else if (availableCashForRunway > 0) {
     runwayMonths = 99; // Không có chi tiêu
   }
@@ -274,7 +290,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   const monthlyFreeCashFlow = Math.max(0, averageMonthlyIncome - fixedMonthlyCommitments);
   const fcfMargin =
     averageMonthlyIncome > 0
-      ? Math.round((monthlyFreeCashFlow / averageMonthlyIncome) * 100)
+      ? (monthlyFreeCashFlow / averageMonthlyIncome) * 100
       : 0;
 
   // 8. Vị thế tiền mặt ròng
@@ -290,7 +306,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   if (runwayMonths < 3) {
     insights.push({
       title: "Ưu tiên xây dựng đệm tiền mặt khẩn cấp",
-      desc: `Runway hiện tại là ${runwayMonths} tháng. Hãy tích lũy ít nhất 3 tháng chi phí (${(monthlyBurnRate * 3).toLocaleString("vi-VN")} ₫) vào ví tiết kiệm trước khi đầu tư rủi ro.`,
+      desc: `Runway hiện tại là ${formatMetric(runwayMonths)} tháng. Hãy tích lũy ít nhất 3 tháng chi phí (${formatCurrency(monthlyBurnRate * 3)}) vào ví tiết kiệm trước khi đầu tư rủi ro.`,
       type: "warning",
     });
   }
@@ -298,7 +314,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   if (totalReceivables > totalLiquidCash * 0.3 && totalReceivables > 0) {
     insights.push({
       title: "Đẩy nhanh tiến độ thu hồi các khoản cho vay",
-      desc: `Người khác đang mượn bạn ${totalReceivables.toLocaleString("vi-VN")} ₫ (chiếm ${(totalAllCash > 0 ? (totalReceivables / totalAllCash) * 100 : 0).toFixed(0)}% lượng tiền mặt). Thu hồi sớm sẽ giúp tăng mạnh tính thanh khoản.`,
+      desc: `Người khác đang mượn bạn ${formatCurrency(totalReceivables)} (chiếm ${formatMetric(totalAllCash > 0 ? (totalReceivables / totalAllCash) * 100 : 0)}% lượng tiền mặt). Thu hồi sớm sẽ giúp tăng mạnh tính thanh khoản.`,
       type: "tip",
     });
   }
@@ -306,7 +322,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   if (totalPayables > 0 && totalPayables > totalLiquidCash * 0.5) {
     insights.push({
       title: "Áp lực nghĩa vụ trả nợ đáng chú ý",
-      desc: `Bạn đang có ${totalPayables.toLocaleString("vi-VN")} ₫ nợ cần thanh toán. Hãy lập kế hoạch trả nợ định kỳ để tránh áp lực lãi suất phát sinh.`,
+      desc: `Bạn đang có ${formatCurrency(totalPayables)} nợ cần thanh toán. Hãy lập kế hoạch trả nợ định kỳ để tránh áp lực lãi suất phát sinh.`,
       type: "warning",
     });
   }
@@ -314,7 +330,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   if (monthlyFreeCashFlow > 0) {
     insights.push({
       title: "Dòng tiền tự do dương (Free Cash Flow)",
-      desc: `Mỗi tháng bạn dôi dư khoảng ${monthlyFreeCashFlow.toLocaleString("vi-VN")} ₫ (${fcfMargin}% thu nhập). Đây là nguồn vốn vàng để đầu tư sinh lời hoặc gia tăng tài sản.`,
+      desc: `Mỗi tháng bạn dôi dư khoảng ${formatCurrency(monthlyFreeCashFlow)} (${formatMetric(fcfMargin)}% thu nhập). Đây là nguồn vốn vàng để đầu tư sinh lời hoặc gia tăng tài sản.`,
       type: "success",
     });
   }
@@ -322,7 +338,7 @@ export async function getCashFlowData(): Promise<CashFlowData> {
   if (instantCash > monthlyBurnRate * 6 && monthlyBurnRate > 0) {
     insights.push({
       title: "Tối ưu hóa số dư tiền nhàn rỗi",
-      desc: `Ví tiền mặt & tài khoản thanh toán đang giữ ${instantCash.toLocaleString("vi-VN")} ₫ (vượt quá 6 tháng chi tiêu). Bạn có thể chuyển bớt vào tiền gửi có kỳ hạn hoặc kênh đầu tư để tránh lạm phát.`,
+      desc: `Ví tiền mặt & tài khoản thanh toán đang giữ ${formatCurrency(instantCash)} (vượt quá 6 tháng chi tiêu). Bạn có thể chuyển bớt vào tiền gửi có kỳ hạn hoặc kênh đầu tư để tránh lạm phát.`,
       type: "tip",
     });
   }

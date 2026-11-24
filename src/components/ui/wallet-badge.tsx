@@ -7,6 +7,7 @@ interface WalletBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
     id: string;
     name: string;
     bankName?: string | null;
+    type?: string | null;
     color?: string | null;
     icon?: string | null;
     accountNumber?: string | null;
@@ -43,7 +44,10 @@ export function WalletBadge({
   let themeStyles = "bg-purple-50 text-purple-700 border-purple-200/80 hover:bg-purple-100/70";
   let BankIcon = Landmark;
 
-  if (wallet.bankName === "CASH" || bank.includes("tiền mặt") || bank.includes("cash")) {
+  if (wallet.type === "CREDIT") {
+    themeStyles = "bg-indigo-50 text-indigo-700 border-indigo-200/80 hover:bg-indigo-100/70";
+    BankIcon = CreditCard;
+  } else if (wallet.bankName === "CASH" || bank.includes("tiền mặt") || bank.includes("cash")) {
     themeStyles = "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100/80";
     BankIcon = Banknote;
   } else if (bank.includes("techcombank") || bank.includes("tcb")) {

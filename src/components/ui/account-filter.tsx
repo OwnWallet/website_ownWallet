@@ -16,6 +16,7 @@ export interface WalletOption {
   id: string;
   name: string;
   bankName?: string | null;
+  type?: string | null;
   accountNumber?: string | null;
   color?: string | null;
   icon?: string | null;
@@ -33,6 +34,7 @@ interface AccountFilterProps {
 
 function getBankIcon(wallet?: WalletOption | null) {
   if (!wallet) return Landmark;
+  if (wallet.type === "CREDIT") return CreditCard;
   if (wallet.bankName === "CASH" || (wallet.bankName || wallet.name || "").toLowerCase().includes("tiền mặt")) {
     return Banknote;
   }
@@ -88,7 +90,8 @@ export function AccountFilter({
           const isTcb = (w.bankName || w.name).toLowerCase().includes("techcombank") || (w.bankName || w.name).toLowerCase().includes("tcb");
 
           let activeStyle = "bg-orange-600 text-white border-orange-600 shadow-xs";
-          if (isCash) activeStyle = "bg-emerald-600 text-white border-emerald-600 shadow-xs";
+          if (w.type === "CREDIT") activeStyle = "bg-indigo-600 text-white border-indigo-600 shadow-xs";
+          else if (isCash) activeStyle = "bg-emerald-600 text-white border-emerald-600 shadow-xs";
           else if (isTpb) activeStyle = "bg-violet-600 text-white border-violet-600 shadow-xs";
           else if (isTcb) activeStyle = "bg-rose-600 text-white border-rose-600 shadow-xs";
 
@@ -172,7 +175,8 @@ export function AccountFilter({
           const isTcb = (w.bankName || w.name).toLowerCase().includes("techcombank");
 
           let iconColor = "text-orange-500";
-          if (isCash) iconColor = "text-emerald-600";
+          if (w.type === "CREDIT") iconColor = "text-indigo-600";
+          else if (isCash) iconColor = "text-emerald-600";
           else if (isTpb) iconColor = "text-violet-500";
           else if (isTcb) iconColor = "text-rose-500";
 

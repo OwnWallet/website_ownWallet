@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatCurrency, formatRelativeTime } from "@/lib/utils";
+import { formatCurrency, formatMetric, formatRelativeTime } from "@/lib/utils";
 import { updateCurrentPrice, addInvestLog, deleteInvestment } from "@/actions/investments";
 import { Trash2, PlusCircle, History, Edit3, X, ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
@@ -130,7 +130,7 @@ export function InvestmentCard({
               </div>
               <div className="flex items-center gap-2 mt-1">
                 <span className={`text-sm font-extrabold ${isPos ? "text-income" : "text-expense"}`}>
-                  {pnl > 0 ? "+" : ""}{formatCurrency(pnl)} ({pnlPercent.toFixed(2)}%)
+                  {pnl > 0 ? "+" : ""}{formatCurrency(pnl)} ({formatMetric(pnlPercent)}%)
                 </span>
               </div>
             </div>
@@ -179,7 +179,7 @@ export function InvestmentCard({
                   {formatCurrency(targetPrice)}
                   {currentPrice > 0 && (
                     <span className="ml-1 text-[11px] font-normal text-emerald-600">
-                      ({(((targetPrice - currentPrice) / currentPrice) * 100).toFixed(1)}% nữa)
+                      ({formatMetric(((targetPrice - currentPrice) / currentPrice) * 100)}% nữa)
                     </span>
                   )}
                 </span>

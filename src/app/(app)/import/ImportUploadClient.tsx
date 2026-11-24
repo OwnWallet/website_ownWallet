@@ -73,7 +73,7 @@ const ACCEPTED = ".pdf,.xlsx,.xls,.csv";
 const MAX_MB = 10;
 
 interface ImportUploadClientProps {
-  wallets?: { id: string; name: string; bankName?: string | null; accountNumber?: string | null }[];
+  wallets?: { id: string; name: string; type?: string | null; bankName?: string | null; accountNumber?: string | null }[];
   categories?: { id: string; name: string; type: string; color?: string; icon?: string | null }[];
   defaultModel?: string;
 }

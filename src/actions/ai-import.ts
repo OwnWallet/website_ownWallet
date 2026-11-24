@@ -7,6 +7,8 @@ import { ConfirmImportSchema } from "@/schemas/ai-import";
 import { revalidatePath } from "next/cache";
 import { collectCorrections } from "@/lib/category-rules";
 import { upsertCategoryRules, reinforceCategoryRules } from "@/lib/category-rules-db";
+import { TRANSFER_CATEGORY_NAME, TRANSFER_PREFIX } from "@/lib/finance";
+import { getOrCreateTransferCategory } from "@/lib/transfer-category";
 
 export interface ImportResult {
   success: boolean;
@@ -55,7 +57,14 @@ export async function confirmAiImport(
     };
   }
 
-  const { transactions, walletId } = parsed.data;
+  const { walletId } = parsed.data;
+  // Dòng chọn danh mục "Chuyển khoản nội bộ" cũng là chuyển khoản, để luôn được loại khỏi tổng thu/chi.
+  const transactions = parsed.data.transactions.map((t) => {
+    const isTransfer =
+      t.isTransfer || t.categoryName.trim().toLowerCase() === TRANSFER_CATEGORY_NAME.toLowerCase();
+    return isTransfer ? { ...t, isTransfer: true, categoryName: TRANSFER_CATEGORY_NAME } : { ...t, isTransfer: false };
+  });
+  const regularTransactions = transactions.filter((t) => !t.isTransfer);
 
   // Kiểm tra quyền sở hữu ví nếu có truyền walletId để chống IDOR
   let validatedWalletId: string | null = null;
@@ -77,10 +86,17 @@ export async function confirmAiImport(
     existingCategories.map((c: { id: string; name: string }) => [c.name.toLowerCase(), c.id])
   );
 
+  // ── Danh mục chuyển khoản nội bộ (một danh mục dùng chung cho cả chiều vào / ra) ──
+  const firstTransfer = transactions.find((t) => t.isTransfer);
+  if (firstTransfer) {
+    const transferCat = await getOrCreateTransferCategory(db, userId, firstTransfer.type);
+    categoryMap.set(TRANSFER_CATEGORY_NAME.toLowerCase(), transferCat.id);
+  }
+
   // ── Tạo categories mới nếu cần ──
   const missingCategoryNames = [
     ...new Set(
-      transactions
+      regularTransactions
         .map((t) => t.categoryName.toLowerCase())
         .filter((name) => !categoryMap.has(name))
     ),
@@ -89,7 +105,7 @@ export async function confirmAiImport(
   if (missingCategoryNames.length > 0) {
     // Xác định type cho category mới dựa theo loại giao dịch đầu tiên dùng nó
     for (const name of missingCategoryNames) {
-      const firstUse = transactions.find(
+      const firstUse = regularTransactions.find(
         (t) => t.categoryName.toLowerCase() === name
       );
       const isDebt = /(^|\s)(nợ|vay|mượn)(\s|$)/.test(name);
@@ -133,10 +149,11 @@ export async function confirmAiImport(
     if (!catId) {
       throw new Error(`Không tìm thấy category: ${t.categoryName}`);
     }
+    const note = (t.note ?? "").trim();
     return {
       amount: String(t.amount),
       type: t.type,
-      note: t.note ?? "",
+      note: t.isTransfer && !note.startsWith(TRANSFER_PREFIX) ? `${TRANSFER_PREFIX} ${note}`.trim() : note,
       recordedAt: toInstant(t.recordedAt),
       categoryId: catId,
       walletId: validatedWalletId,
@@ -151,17 +168,15 @@ export async function confirmAiImport(
       }
     });
 
-    revalidatePath("/transactions");
-    revalidatePath("/dashboard");
-    revalidatePath("/wallets");
-    revalidatePath("/budget");
-    revalidatePath("/reports");
+    // Số dư ví / thẻ tín dụng ảnh hưởng mọi trang tài chính
+    revalidatePath("/", "layout");
 
     // ── Học quy tắc phân loại từ các dòng người dùng đã sửa danh mục ──
     // (không làm hỏng kết quả import nếu bước học gặp lỗi)
     let learnedRules = 0;
     try {
-      const corrections = collectCorrections(transactions);
+      // Không học quy tắc từ các dòng chuyển khoản nội bộ
+      const corrections = collectCorrections(regularTransactions);
       learnedRules = await upsertCategoryRules(
         userId,
         corrections
@@ -170,7 +185,7 @@ export async function confirmAiImport(
       );
 
       // Quy tắc được áp dụng và người dùng giữ nguyên → tăng độ tin cậy
-      const kept = transactions
+      const kept = regularTransactions
         .filter((t) => t.ruleKeyword && t.categoryName === t.suggestedCategoryName)
         .map((t) => ({ keyword: t.ruleKeyword!, txType: t.type }));
       const uniqueKept = [...new Map(kept.map((k) => [`${k.keyword}|${k.txType}`, k])).values()]

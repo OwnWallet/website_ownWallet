@@ -5,6 +5,7 @@
  */
 
 import * as XLSX from "xlsx";
+import { parseAmountString, type ParsedAmount } from "@/lib/money";
 import {
   extractPositionedItemsFromPdfBuffer,
   extractTextFromPdfBuffer,
@@ -742,20 +743,21 @@ function extractEmbeddedDateTimeIso(noteText: string, baseIsoDate: string): stri
  * Kiểm tra nghiêm ngặt để KHÔNG BAO GIỜ nhận nhầm mã bút toán kiểu "FT26246040431935\BNK".
  */
 function parseCurrencyNumber(raw: string): number {
-  const trimmed = raw.trim();
-  if (!trimmed) return NaN;
+  // Giữ nguyên phần thập phân: "1.234.567,89" → 1234567.89 (trước đây bị đọc thành 123456789)
+  const parsed = parseAmountString(raw);
+  return parsed ? parsed.value : NaN;
+}
 
-  // Loại bỏ hậu tố tiền tệ hợp lệ nếu có
-  const withoutCurrency = trimmed.replace(/\s*(?:VND|VNĐ|đ)\s*$/i, "").trim();
-
-  // Chỉ chấp nhận chuỗi thuần số có dấu phẩy/chấm phân cách hàng nghìn
-  if (!/^[\+\-]?\d{1,3}(?:[,\.]\d{3})*(?:[,\.]\d{1,2})?$|^\d+$/.test(withoutCurrency)) {
-    return NaN;
+/**
+ * Đọc một ô số tiền (chuỗi hoặc số thực từ Excel) kèm dấu hiệu âm / ghi có (CR).
+ * Ô số của Excel được dùng trực tiếp, không qua chuỗi, nên không mất chữ số lẻ.
+ */
+function parseAmountCell(cell: unknown): ParsedAmount | null {
+  if (typeof cell === "number") {
+    if (!Number.isFinite(cell)) return null;
+    return { value: Math.abs(cell), negative: cell < 0, credit: false };
   }
-
-  const numericOnly = withoutCurrency.replace(/[,\.\+\-]/g, "");
-  const val = Number(numericOnly);
-  return isNaN(val) ? NaN : Math.abs(val);
+  return parseAmountString(String(cell ?? ""));
 }
 
 /**
@@ -772,6 +774,19 @@ function isFooterOrHeaderRowText(rowText: string): boolean {
     /Ending balance/i,
     /Số dư đầu kỳ/i,
     /Opening balance/i,
+    // Dòng tổng kết của sao kê thẻ tín dụng
+    /Dư nợ (?:cuối kỳ|đầu kỳ|kỳ trước|hiện tại|sao kê)/i,
+    /Tổng dư nợ/i,
+    /Số tiền thanh toán tối thiểu/i,
+    /Thanh toán tối thiểu/i,
+    /Minimum (?:payment|amount due)/i,
+    /Hạn mức tín dụng/i,
+    /Credit limit/i,
+    /Available credit/i,
+    /Statement balance/i,
+    /(?:Previous|New) balance/i,
+    /Ngày đến hạn thanh toán/i,
+    /Payment due date/i,
     /Beginning balance/i,
     /Ngày thực hiện/i,
     /Ngày giao dịch/i,
@@ -1325,11 +1340,11 @@ function parseGenericTextPdfLocally(
     const isoDate = parseVietnameseDateToIso(parts[0]);
     if (!isoDate) continue;
 
-    const numericCells: { idx: number; val: number; raw: string }[] = [];
+    const numericCells: { idx: number; val: number; raw: string; credit: boolean }[] = [];
     for (let i = parts.length - 1; i >= 1; i--) {
-      const val = parseCurrencyNumber(parts[i]);
-      if (!isNaN(val) && val > 0) {
-        numericCells.unshift({ idx: i, val, raw: parts[i] });
+      const parsedAmt = parseAmountString(parts[i]);
+      if (parsedAmt && parsedAmt.value > 0) {
+        numericCells.unshift({ idx: i, val: parsedAmt.value, raw: parts[i], credit: parsedAmt.credit });
       }
     }
 
@@ -1337,9 +1352,8 @@ function parseGenericTextPdfLocally(
 
     const amountCell =
       numericCells.length >= 2 ? numericCells[numericCells.length - 2] : numericCells[0];
-    const type: "INCOME" | "EXPENSE" = amountCell.raw.trim().startsWith("+")
-      ? "INCOME"
-      : "EXPENSE";
+    const type: "INCOME" | "EXPENSE" =
+      amountCell.raw.trim().startsWith("+") || amountCell.credit ? "INCOME" : "EXPENSE";
 
     const descParts = parts.slice(1, amountCell.idx).filter((p) => !/^\d{6,}$/.test(p));
     const note = descParts.join(" ").trim() || parts[1] || "Giao dịch sao kê";
@@ -1382,7 +1396,17 @@ export function parseExcelOrCsvLocally(
   availableCategories: string[]
 ): LocalParseResult | null {
   try {
-    const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+    // raw: true — với CSV/văn bản, KHÔNG để thư viện tự đoán số / ngày theo định dạng Mỹ
+    // (trước đây "05/11/2026" bị đọc thành 11/05 và "45.000,5" thành 45). Ô số / ngày thật của
+    // file .xlsx vẫn giữ nguyên kiểu; chuỗi được đọc bằng parseAmountString / parseVietnameseDateToIso.
+    // File .xlsx (zip, "PK") / .xls (OLE) đọc dạng nhị phân. CSV / văn bản luôn giải mã UTF-8
+    // trước — nếu để thư viện tự đoán, CSV không có BOM bị đọc theo latin1 ("NgÃ y giao dá»ch").
+    const isZip = buffer.length > 1 && buffer[0] === 0x50 && buffer[1] === 0x4b;
+    const isOle = buffer.length > 3 && buffer[0] === 0xd0 && buffer[1] === 0xcf && buffer[2] === 0x11 && buffer[3] === 0xe0;
+    const workbook =
+      isZip || isOle
+        ? XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true })
+        : XLSX.read(buffer.toString("utf8").replace(/^\u{feff}/u, ""), { type: "string", cellDates: true, raw: true });
     const transactions: ParsedTransaction[] = [];
     let totalFound = 0;
     let skipped = 0;
@@ -1445,8 +1469,8 @@ export function parseExcelOrCsvLocally(
         let type: "INCOME" | "EXPENSE" = "EXPENSE";
 
         if (debitCol !== -1 && creditCol !== -1) {
-          const dVal = parseCurrencyNumber(String(row[debitCol] ?? ""));
-          const cVal = parseCurrencyNumber(String(row[creditCol] ?? ""));
+          const dVal = parseAmountCell(row[debitCol])?.value ?? NaN;
+          const cVal = parseAmountCell(row[creditCol])?.value ?? NaN;
           if (!isNaN(cVal) && cVal > 0) {
             amount = cVal;
             type = "INCOME";
@@ -1456,10 +1480,12 @@ export function parseExcelOrCsvLocally(
           }
         } else if (amountCol !== -1) {
           const rawAmtStr = String(row[amountCol] ?? "").trim();
-          const val = parseCurrencyNumber(rawAmtStr);
+          const parsedAmt = parseAmountCell(row[amountCol]);
+          const val = parsedAmt?.value ?? NaN;
           if (!isNaN(val) && val > 0) {
             amount = val;
-            if (rawAmtStr.startsWith("+")) {
+            // "+" hoặc hậu tố CR (ghi có — sao kê thẻ tín dụng) → tiền vào
+            if (rawAmtStr.startsWith("+") || parsedAmt?.credit) {
               type = "INCOME";
             } else if (typeCol !== -1) {
               const tNorm = normalizeVietnamese(String(row[typeCol] ?? ""));

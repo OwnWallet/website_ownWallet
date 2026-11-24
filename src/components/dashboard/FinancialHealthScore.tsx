@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { formatCurrencyCompact } from "@/lib/utils";
+import { formatCurrencyCompact, formatMetric } from "@/lib/utils";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface FinancialHealthProps {
@@ -11,6 +11,7 @@ interface FinancialHealthProps {
   totalReceivable?: number; // total receivable debt (OWED)
   totalWalletBalance: number;
   totalInvestmentValue: number;
+  creditCardDebt?: number; // phần dư nợ thẻ tín dụng đã nằm trong totalDebt
   budgets: { spent: number; limitAmount: number }[];
   monthlyExpenseAvg?: number; // last 3-month avg expense for runway calc
 }
@@ -45,7 +46,7 @@ function ScoreGauge({ score }: { score: number }) {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-3xl font-black tabular-nums" style={{ color }}>
-            {score}
+            {formatMetric(score)}
           </span>
           <span className="text-xs text-muted-foreground font-semibold">/100</span>
         </div>
@@ -80,7 +81,7 @@ function MetricBar({ label, value, max, color, description, icon }: MetricBarPro
           <span className="font-semibold text-foreground">{label}</span>
         </div>
         <span className="font-bold tabular-nums" style={{ color }}>
-          {value.toFixed(0)}%
+          {formatMetric(value)}%
         </span>
       </div>
       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -101,6 +102,7 @@ export function FinancialHealthScore({
   totalReceivable = 0,
   totalWalletBalance,
   totalInvestmentValue,
+  creditCardDebt = 0,
   budgets,
   monthlyExpenseAvg,
 }: FinancialHealthProps) {
@@ -122,7 +124,7 @@ export function FinancialHealthScore({
     const onBudget = budgets.filter((b) => b.spent <= b.limitAmount).length;
     const budgetScore = budgets.length > 0 ? (onBudget / budgets.length) * 10 : 10;
 
-    const total = Math.round(savingsScore + dtiScore + runwayScore + budgetScore);
+    const total = savingsScore + dtiScore + runwayScore + budgetScore;
 
     const dtiColor =
       dtiRatio <= 20 ? "#059669" : dtiRatio <= 50 ? "#2563eb" : dtiRatio <= 80 ? "#d97706" : "#e11d48";
@@ -133,11 +135,11 @@ export function FinancialHealthScore({
 
     return {
       total: Math.max(0, Math.min(100, total)),
-      savingsRate: Math.round(savingsRate),
+      savingsRate,
       savingsColor,
-      dtiRatio: Math.round(dtiRatio),
+      dtiRatio,
       dtiColor,
-      runwayMonths: Math.round(runwayMonths * 10) / 10,
+      runwayMonths,
       runwayColor,
     };
   }, [income, expense, totalDebt, totalWalletBalance, budgets, monthlyExpenseAvg]);
@@ -163,6 +165,7 @@ export function FinancialHealthScore({
             <p className="text-xs text-slate-600 mt-1 font-medium">
               Ví: {formatCurrencyCompact(totalWalletBalance)} + ĐT: {formatCurrencyCompact(totalInvestmentValue)}
               {totalReceivable > 0 ? ` + Phải thu: ${formatCurrencyCompact(totalReceivable)}` : ""} − Nợ: {formatCurrencyCompact(totalDebt)}
+              {creditCardDebt > 0 ? ` (gồm thẻ TD: ${formatCurrencyCompact(creditCardDebt)})` : ""}
             </p>
           </div>
 
@@ -170,7 +173,7 @@ export function FinancialHealthScore({
           <div className="rounded-xl p-3.5 border bg-slate-50/60 border-slate-200/60">
             <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Dự phòng khẩn cấp</p>
             <p className={`text-xl sm:text-2xl font-black mt-0.5 tabular-nums`} style={{ color: metrics.runwayColor }}>
-              {metrics.runwayMonths} tháng
+              {formatMetric(metrics.runwayMonths)} tháng
             </p>
             <p className="text-xs text-slate-600 mt-1 font-medium">Số tháng sống được với chi tiêu hiện tại</p>
           </div>
@@ -184,7 +187,7 @@ export function FinancialHealthScore({
           value={metrics.savingsRate}
           max={100}
           color={metrics.savingsColor}
-          description={`Mục tiêu ≥ 20% · Hiện tại: ${metrics.savingsRate}% thu nhập được tiết kiệm`}
+          description={`Mục tiêu ≥ 20% · Hiện tại: ${formatMetric(metrics.savingsRate)}% thu nhập được tiết kiệm`}
           icon={<TrendingUp size={12} />}
         />
         <MetricBar
@@ -192,7 +195,7 @@ export function FinancialHealthScore({
           value={metrics.dtiRatio}
           max={100}
           color={metrics.dtiColor}
-          description={`Mục tiêu < 20% · Nợ bằng ${metrics.dtiRatio}% thu nhập tháng này`}
+          description={`Mục tiêu < 20% · Nợ bằng ${formatMetric(metrics.dtiRatio)}% thu nhập tháng này`}
           icon={<TrendingDown size={12} />}
           invert
         />

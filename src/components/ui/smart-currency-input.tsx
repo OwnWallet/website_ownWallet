@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { cn, readVietnameseCurrency, roundToHundredth } from "@/lib/utils";
+import { cn, readVietnameseCurrency } from "@/lib/utils";
+import { addMoney, formatAmountInput, parseAmountString } from "@/lib/money";
 
 export interface SmartCurrencyInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "defaultValue"> {
@@ -13,7 +14,7 @@ export interface SmartCurrencyInputProps
   onChangeValue?: (value: number, rawString: string) => void;
   /** Tên trường cho native HTML form (FormData) */
   name?: string;
-  /** Cho phép nhập số thập phân hay không (mặc định false: chỉ số nguyên VNĐ) */
+  /** Cho phép nhập số thập phân (mặc định true: tối đa 2 chữ số thập phân, không làm tròn) */
   allowDecimals?: boolean;
   /** Có hiển thị các nút cộng nhanh số tiền (+10k, +50k, +100k, ...) không */
   showQuickButtons?: boolean;
@@ -43,19 +44,14 @@ function formatNumberWithDots(digitsStr: string, allowDecimals = false): string 
     return noLeadingZeros.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   }
 
-  // Hỗ trợ số thập phân (dấu phẩy hoặc chấm)
-  const normalized = digitsStr.replace(",", ".");
-  const parts = normalized.split(".");
-  const integerPart = parts[0].replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "") || "0";
-  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-
-  if (parts.length > 1) {
-    // Giới hạn tối đa 2 chữ số thập phân (số thập phân hàng trăm)
-    const decimalPart = parts[1].replace(/[^\d]/g, "").slice(0, 2);
-    return `${formattedInteger},${decimalPart}`;
-  }
-
-  return formattedInteger;
+  // Thập phân: "." là phân cách hàng nghìn, "," là dấu thập phân (chuẩn vi-VN), tối đa 2 chữ số lẻ
+  const commaIdx = digitsStr.indexOf(",");
+  const intRaw = commaIdx >= 0 ? digitsStr.slice(0, commaIdx) : digitsStr;
+  const decRaw = commaIdx >= 0 ? digitsStr.slice(commaIdx + 1) : null;
+  const intDigits = intRaw.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "");
+  const formattedInteger = (intDigits || (decRaw !== null ? "0" : "")).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  if (decRaw === null) return formattedInteger;
+  return `${formattedInteger},${decRaw.replace(/[^\d]/g, "").slice(0, 2)}`;
 }
 
 /**
@@ -67,9 +63,10 @@ function parseNumericValue(formattedStr: string, allowDecimals = false): number 
     const digits = formattedStr.replace(/[^\d]/g, "");
     return digits ? parseInt(digits, 10) : 0;
   }
+  // Chuỗi hiển thị chỉ có tối đa 2 chữ số lẻ nên phép đổi này chính xác, không làm tròn.
   const normalized = formattedStr.replace(/\./g, "").replace(",", ".");
   const num = parseFloat(normalized);
-  return isNaN(num) ? 0 : roundToHundredth(num);
+  return isNaN(num) ? 0 : num;
 }
 
 export const SmartCurrencyInput = forwardRef<HTMLInputElement, SmartCurrencyInputProps>(
@@ -79,7 +76,7 @@ export const SmartCurrencyInput = forwardRef<HTMLInputElement, SmartCurrencyInpu
       defaultValue,
       onChangeValue,
       name,
-      allowDecimals = false,
+      allowDecimals = true,
       showQuickButtons = false,
       showWordsPreview = false,
       currencySymbol = "₫",
@@ -105,16 +102,19 @@ export const SmartCurrencyInput = forwardRef<HTMLInputElement, SmartCurrencyInpu
         : 0;
 
     const [rawValue, setRawValue] = useState<number>(initialNumeric);
-    const [displayValue, setDisplayValue] = useState<string>(() =>
-      initialNumeric > 0 ? formatNumberWithDots(String(initialNumeric), allowDecimals) : ""
-    );
+    const toDisplay = (num: number) =>
+      num > 0 ? (allowDecimals ? formatAmountInput(num) : formatNumberWithDots(String(num), false)) : "";
+    const [displayValue, setDisplayValue] = useState<string>(() => toDisplay(initialNumeric));
 
     // Đồng bộ khi controlledValue từ ngoài thay đổi
     useEffect(() => {
       if (controlledValue !== undefined) {
         const num = Number(controlledValue) || 0;
         setRawValue(num);
-        setDisplayValue(num > 0 ? formatNumberWithDots(String(num), allowDecimals) : "");
+        // Không ghi đè khi người dùng đang gõ dở (VD "1.234," hoặc "1.234,5" cùng giá trị)
+        setDisplayValue((prev) =>
+          parseNumericValue(prev, allowDecimals) === num ? prev : num > 0 ? (allowDecimals ? formatAmountInput(num) : formatNumberWithDots(String(num), false)) : ""
+        );
       }
     }, [controlledValue, allowDecimals]);
 
@@ -125,7 +125,7 @@ export const SmartCurrencyInput = forwardRef<HTMLInputElement, SmartCurrencyInpu
       let numeric = parseNumericValue(newDisplayStr, allowDecimals);
       if (numeric > maxAmount) {
         numeric = maxAmount;
-        newDisplayStr = formatNumberWithDots(String(maxAmount), allowDecimals);
+        newDisplayStr = toDisplay(maxAmount);
       }
 
       setRawValue(numeric);
@@ -183,12 +183,20 @@ export const SmartCurrencyInput = forwardRef<HTMLInputElement, SmartCurrencyInpu
       ];
       if (allowedControlKeys.includes(e.key)) return;
 
-      // Cho phép phím phân cách thập phân nếu allowDecimals được bật
-      if (allowDecimals && (e.key === "." || e.key === ",")) {
-        if (!displayValue.includes(",") && !displayValue.includes(".")) {
-          return;
-        }
+      // Phím "." hoặc "," → chèn dấu thập phân "," (dấu "." trong ô là phân cách hàng nghìn)
+      if (allowDecimals && (e.key === "." || e.key === "," || e.key === "Decimal")) {
         e.preventDefault();
+        if (displayValue.includes(",")) return;
+        const el = e.currentTarget;
+        const start = el.selectionStart ?? displayValue.length;
+        const end = el.selectionEnd ?? start;
+        const next = formatNumberWithDots(displayValue.slice(0, start) + "," + displayValue.slice(end), true);
+        updateValueWithCaret(next);
+        // Đặt con trỏ ngay sau dấu thập phân để gõ tiếp phần lẻ
+        requestAnimationFrame(() => {
+          const pos = next.indexOf(",") + 1;
+          inputRef.current?.setSelectionRange(pos, pos);
+        });
         return;
       }
 
@@ -214,13 +222,17 @@ export const SmartCurrencyInput = forwardRef<HTMLInputElement, SmartCurrencyInpu
       e.preventDefault();
       const pastedText = e.clipboardData.getData("text");
       // Trích xuất chỉ số (và dấu phẩy/chấm nếu cho phép thập phân)
-      const cleaned = allowDecimals
-        ? pastedText.replace(/[^\d.,]/g, "")
-        : pastedText.replace(/[^\d]/g, "");
-
+      if (allowDecimals) {
+        // Hiểu cả "1,234,567.89" lẫn "1.234.567,89" — giữ nguyên phần thập phân
+        const parsed = parseAmountString(pastedText);
+        if (!parsed) return;
+        const formatted = formatAmountInput(parsed.value);
+        updateValueWithCaret(formatted, formatted.length);
+        return;
+      }
+      const cleaned = pastedText.replace(/[^\d]/g, "");
       if (!cleaned) return;
-
-      const formatted = formatNumberWithDots(cleaned, allowDecimals);
+      const formatted = formatNumberWithDots(cleaned, false);
       updateValueWithCaret(formatted, formatted.length);
     };
 
@@ -229,9 +241,9 @@ export const SmartCurrencyInput = forwardRef<HTMLInputElement, SmartCurrencyInpu
      */
     const handleQuickAdd = (amountToAdd: number) => {
       if (disabled || readOnly) return;
-      const nextVal = rawValue + amountToAdd;
+      const nextVal = addMoney(rawValue, amountToAdd);
       const clamped = Math.min(nextVal, maxAmount);
-      const formatted = formatNumberWithDots(String(clamped), allowDecimals);
+      const formatted = toDisplay(clamped);
       updateValueWithCaret(formatted, formatted.length);
       inputRef.current?.focus();
     };
@@ -255,7 +267,7 @@ export const SmartCurrencyInput = forwardRef<HTMLInputElement, SmartCurrencyInpu
           <input
             ref={inputRef}
             type="text"
-            inputMode="numeric"
+            inputMode={allowDecimals ? "decimal" : "numeric"}
             autoComplete="off"
             value={displayValue}
             placeholder={placeholder}

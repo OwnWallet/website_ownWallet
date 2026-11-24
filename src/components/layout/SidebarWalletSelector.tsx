@@ -27,6 +27,7 @@ export interface WalletItem {
   id: string;
   name: string;
   bankName?: string | null;
+  type?: string | null;
   accountNumber?: string | null;
   color?: string | null;
   currentBalance?: number;
@@ -91,8 +92,15 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
     });
   }
 
-  function getBankBadge(bank?: string | null, name?: string) {
+  function getBankBadge(bank?: string | null, name?: string, type?: string | null) {
     const text = (bank || name || "").toLowerCase();
+    if (type === "CREDIT") {
+      return {
+        label: "THẺ",
+        bg: "bg-indigo-100 text-indigo-700 border-indigo-200",
+        icon: CreditCard,
+      };
+    }
     if (bank === "CASH" || text.includes("tiền mặt") || text.includes("cash")) {
       return {
         label: "TIỀN",
@@ -129,7 +137,7 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
   }
 
   const activeBadge = selectedWallet
-    ? getBankBadge(selectedWallet.bankName, selectedWallet.name)
+    ? getBankBadge(selectedWallet.bankName, selectedWallet.name, selectedWallet.type)
     : { label: "TẤT CẢ", bg: "bg-orange-100 text-orange-700 border-orange-200", icon: Wallet };
 
   return (
@@ -246,7 +254,8 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
           {/* List of wallets */}
           <div className="max-h-56 overflow-y-auto space-y-0.5 py-0.5">
             {wallets.map((wallet) => {
-              const badge = getBankBadge(wallet.bankName, wallet.name);
+              const badge = getBankBadge(wallet.bankName, wallet.name, wallet.type);
+              const isCredit = wallet.type === "CREDIT";
               const isSelected = selectedWalletId === wallet.id;
               const balance = wallet.currentBalance ?? wallet.balance;
 
@@ -272,9 +281,16 @@ export function SidebarWalletSelector({ wallets = [], isCollapsed = false, onClo
                       <p className="text-sm font-bold text-foreground truncate leading-tight">
                         {wallet.name}
                       </p>
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {wallet.accountNumber ? `STK: ${maskAccountNumber(wallet.accountNumber)}` : "Tài khoản"}
-                        {balance !== undefined && ` · ${formatCurrencyCompact(balance)}`}
+                      <p className="text-xs text-muted-foreground break-words mt-0.5">
+                        {isCredit
+                          ? `Thẻ tín dụng${wallet.accountNumber ? ` •••• ${wallet.accountNumber.slice(-4)}` : ""}`
+                          : wallet.accountNumber
+                          ? `STK: ${maskAccountNumber(wallet.accountNumber)}`
+                          : "Tài khoản"}
+                        {balance !== undefined &&
+                          (isCredit
+                            ? ` · Dư nợ ${formatCurrencyCompact(Math.max(0, -balance))}`
+                            : ` · ${formatCurrencyCompact(balance)}`)}
                       </p>
                     </div>
                   </div>

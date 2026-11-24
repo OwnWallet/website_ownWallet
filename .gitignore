@@ -44,3 +44,6 @@ next-env.d.ts
 # user uploads
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+# Database backups (personal financial data — never commit)
+backups/

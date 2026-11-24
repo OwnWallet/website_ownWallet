@@ -14,7 +14,9 @@
     "db:apply": "prisma db migrate",
     "db:deploy": "prisma db migrate",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:backup": "node scripts/backup-db.mjs",
+    "db:fingerprint": "node scripts/db-fingerprint.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
